@@ -1,0 +1,7 @@
+[requires]
+tetgen/1.5.0@local/tetgen
+
+Catch2/2.10.2@catchorg/stable
+[generators]
+cmake
+

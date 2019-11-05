@@ -1,0 +1,7 @@
+ColumnLimit: 100
+BreakBeforeBraces: Allman
+AlignAfterOpenBracket: AlwaysBreak
+UseTab: Always
+TabWidth: 4
+Language: Cpp
+IndentWidth: 4
