@@ -13,6 +13,7 @@ MeshFile::MeshFile(std::string file_name)
 	m_io = std::make_unique<tetgenio>();
 	m_io->load_node(const_cast<char*>(m_file_name.c_str()));
 	m_io->load_tet(const_cast<char*>(m_file_name.c_str()));
+	m_io->load_face(const_cast<char*>(m_file_name.c_str()));
 }
 MeshFile::~MeshFile() = default;
 
@@ -20,5 +21,17 @@ MeshFile::~MeshFile() = default;
 std::size_t MeshFile::num_simplexes() const
 {
 	return m_io->numberoftetrahedra;
+}
+
+
+std::size_t MeshFile::num_corners() const
+{
+	return m_io->numberofcorners;
+}
+
+
+std::size_t MeshFile::num_trifaces() const
+{
+	return m_io->numberoftrifaces;
 }
 

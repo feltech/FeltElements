@@ -19,6 +19,8 @@ class MeshFile
 	virtual ~MeshFile();
 
 	[[nodiscard]] std::size_t num_simplexes() const;
+	[[nodiscard]] std::size_t num_corners() const;
+	[[nodiscard]] std::size_t num_trifaces() const;
 
   private:
 	std::string m_file_name;
