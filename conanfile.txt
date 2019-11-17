@@ -2,6 +2,7 @@
 tetgen/1.5.0@local/tetgen
 
 Catch2/2.10.2@catchorg/stable
+eigen/3.3.4@conan/stable
 [generators]
 cmake
 
