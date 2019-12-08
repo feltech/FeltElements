@@ -18,24 +18,36 @@ class Tetrahedron
 	struct Node
 	{
 		using Coord = double;
-		using Pos = Eigen::Map<Eigen::Vector3d>;
-		using List = std::array<Pos, 4>;
+		using Pos = Eigen::Vector3d;
+		using PosMap = Eigen::Map<Pos>;
+		using List = std::array<PosMap, 4>;
 		using Index = Eigen::Index;
 	};
 	using GradientMatrix = Eigen::Matrix<Node::Coord, 3, 3>;
-public:
-	Tetrahedron(MeshFile const& mesh, std::size_t tet_idx);
+	using ShapeDerivativeMatrix = Eigen::Matrix<Node::Coord, 4, 3>;
+	using IsoCoordDerivativeMatrix = Eigen::Matrix<Node::Coord, 3, 4>;
 
-	[[nodiscard]] Node::Pos const& vertex(Node::Index idx) const;
-	[[nodiscard]] Node::Pos & displacement(Node::Index idx);
+  public:
+	Tetrahedron(MeshFile const & mesh, std::size_t tet_idx);
 
-	[[nodiscard]] GradientMatrix deformation_gradient() const;
+	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
+	[[nodiscard]] Node::Pos x(Node::Index const idx) const;
+	[[nodiscard]] Node::PosMap const & X(Node::Index const idx) const;
+	[[nodiscard]] Node::PosMap const & u(Node::Index const idx) const;
+	[[nodiscard]] Node::PosMap & u(Node::Index const idx);
 
-private:
+	[[nodiscard]] Tetrahedron::GradientMatrix
+	dx_by_dX(ShapeDerivativeMatrix const & dN_by_dX) const;
+	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix dN_by_dX();
+	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix
+	dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F);
+
+	static IsoCoordDerivativeMatrix const dL_by_dN;
+	static ShapeDerivativeMatrix const dN_by_dL;
+
+  private:
 	Node::List m_vertices;
 	Node::List m_displacements;
-	Eigen::Matrix<Node::Coord, 4, 3> m_dN_by_dX;
-
 };
-}
+} // namespace FeltElements
 #endif // FELTELEMENTS_TETRAHEDRON_HPP
