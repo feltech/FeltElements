@@ -31,23 +31,24 @@ class Tetrahedron
 	Tetrahedron(MeshFile const & mesh, std::size_t tet_idx);
 
 	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
-	[[nodiscard]] Node::Pos x(Node::Index const idx) const;
-	[[nodiscard]] Node::PosMap const & X(Node::Index const idx) const;
-	[[nodiscard]] Node::PosMap const & u(Node::Index const idx) const;
-	[[nodiscard]] Node::PosMap & u(Node::Index const idx);
+	[[nodiscard]] Node::Pos x(Node::Index idx) const;
+	[[nodiscard]] Node::PosMap const & X(Node::Index idx) const;
+	[[nodiscard]] Node::PosMap const & u(Node::Index idx) const;
+	[[nodiscard]] Node::PosMap & u(Node::Index idx);
+	[[nodiscard]] double V() const;
 
+	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix
+	dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX);
 	[[nodiscard]] Tetrahedron::GradientMatrix
 	dx_by_dX(ShapeDerivativeMatrix const & dN_by_dX) const;
 	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix dN_by_dX();
-	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix
-	dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F);
 
 	static IsoCoordDerivativeMatrix const dL_by_dN;
 	static ShapeDerivativeMatrix const dN_by_dL;
-
   private:
-	Node::List m_vertices;
+	Node::List const m_vertices;
 	Node::List m_displacements;
+	double const m_volume;
 };
 } // namespace FeltElements
 #endif // FELTELEMENTS_TETRAHEDRON_HPP

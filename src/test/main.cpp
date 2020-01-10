@@ -75,6 +75,11 @@ SCENARIO("Loading a tetrahedralisation")
 					CHECK(tet.X(2) == Eigen::Vector3d{0, 0, 1});
 					CHECK(tet.X(3) == Eigen::Vector3d{1, 0, 0});
 				}
+
+				THEN("expected volume is reported")
+				{
+					CHECK(tet.V() == 1.0/6);
+				}
 			}
 		}
 	}
@@ -106,6 +111,12 @@ SCENARIO("Loading a tetrahedralisation")
 					CHECK(tet2.X(1) == Eigen::Vector3d{0, 0, 0});
 					CHECK(tet2.X(2) == Eigen::Vector3d{1, 0, 0});
 					CHECK(tet2.X(3) == Eigen::Vector3d{0, 0.5, 0.5});
+				}
+
+				THEN("expected volumes are reported")
+				{
+					CHECK(tet1.V() == 1.0 / 12);
+					CHECK(tet2.V() == 1.0 / 12);
 				}
 			}
 		}
@@ -193,7 +204,7 @@ SCENARIO("Simple deformation gradient")
 
 				AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 				{
-					auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX, F);
+					auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX);
 
 					THEN("derivative is the same as in material coords")
 					{
@@ -239,17 +250,17 @@ SCENARIO("Simple deformation gradient")
 					{
 						Eigen::Matrix3d expected;
 						// clang-format off
-					expected << // NOLINT
-						0.5, -0.5, -0.5,
-						0, 1, 0,
-						0, 0, 1;
+						expected << // NOLINT
+							0.5, -0.5, -0.5,
+							0, 1, 0,
+							0, 0, 1;
 						// clang-format on
 						CHECK(F == expected);
 					}
 
 					AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 					{
-						auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX, F);
+						auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX);
 
 						std::stringstream ss;
 						ss << "dN_by_dX = "  << std::endl << dN_by_dX << std::endl;
@@ -260,11 +271,11 @@ SCENARIO("Simple deformation gradient")
 						{
 							Eigen::Matrix<double, 4, 3> expected;
 							// clang-format off
-						expected << // NOLINT
-							-2, -2, -2,
-							0, -1, 1,
-							2, 1, 1,
-							0, 2, 0;
+							expected << // NOLINT
+								-2, -2, -2,
+								0, -1, 1,
+								2, 1, 1,
+								0, 2, 0;
 							// clang-format on
 							CHECK(dN_by_dx == expected);
 						}

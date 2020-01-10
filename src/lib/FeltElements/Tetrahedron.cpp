@@ -20,10 +20,17 @@ Tetrahedron::Tetrahedron(FeltElements::MeshFile const & mesh, std::size_t const 
 		Node::PosMap{mesh.tet_corner_displacement(tet_idx, 1)},
 		Node::PosMap{mesh.tet_corner_displacement(tet_idx, 2)},
 		Node::PosMap{mesh.tet_corner_displacement(tet_idx, 3)},
+	},
+	m_volume{
+		std::abs(
+			(m_vertices[1] - m_vertices[3])
+			.cross(m_vertices[2] - m_vertices[3])
+			.dot(m_vertices[0] - m_vertices[3])
+		) / 6.0
 	}
 {}
 
-Tetrahedron::IsoCoordDerivativeMatrix const Tetrahedron::dL_by_dN =
+Tetrahedron::IsoCoordDerivativeMatrix const Tetrahedron::dL_by_dN = // NOLINT(cert-err58-cpp)
 	(Eigen::Matrix4d{} <<
 		// clang-format off
 		1, 1, 1, 1,
@@ -32,10 +39,10 @@ Tetrahedron::IsoCoordDerivativeMatrix const Tetrahedron::dL_by_dN =
 		0, 0, 0, 1).finished().block<3, 4>(1, 0);
 	// clang-format on
 
-Tetrahedron::ShapeDerivativeMatrix const Tetrahedron::dN_by_dL =
+Tetrahedron::ShapeDerivativeMatrix const Tetrahedron::dN_by_dL = // NOLINT(cert-err58-cpp)
 	(Eigen::Matrix4d{} <<
-	   // clang-format off
-	   1, 1, 1, 1,
+		// clang-format off
+		1, 1, 1, 1,
 		0, 1, 0, 0,
 		0, 0, 1, 0,
 		0, 0, 0, 1).finished().inverse().block<4, 3>(0, 1);
@@ -86,9 +93,14 @@ Tetrahedron::GradientMatrix Tetrahedron::dx_by_dX(ShapeDerivativeMatrix const & 
 }
 
 Tetrahedron::ShapeDerivativeMatrix
-Tetrahedron::dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F)
+Tetrahedron::dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX)
 {
-	return dN_by_dX * F.inverse();
+	return dN_by_dX * dx_by_dX(dN_by_dX).inverse();
+}
+
+double Tetrahedron::V() const
+{
+	return m_volume;
 }
 
 } // namespace FeltElements
