@@ -1,6 +1,7 @@
 //
 // Created by dave on 07/11/2019.
 //
+#include <boost/range/irange.hpp>
 
 #include "Tetrahedron.hpp"
 #include "MeshFile.hpp"
@@ -101,6 +102,26 @@ Tetrahedron::dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX)
 double Tetrahedron::V() const
 {
 	return m_volume;
+}
+
+Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
+	Tetrahedron::GradientMatrix const & F, double const lambda, double const mu)
+{
+	constexpr std::size_t N = 3;
+	Tetrahedron::ElasticityTensor c;
+	double const J = F.determinant();
+	double const lambda_prime = lambda / J;
+	double const mu_prime = (mu - lambda * std::log(J));
+
+	for (std::size_t i : boost::irange(N))
+		for (std::size_t j : boost::irange(N))
+			for (std::size_t k : boost::irange(N))
+				for (std::size_t l : boost::irange(N))
+				{
+					c(i, j, k, l) = lambda_prime * delta(i, j) * delta(k, l) +
+						mu_prime * (delta(i, k) * delta(j, l) + delta(i, l) * delta(j, k));
+				}
+	return c;
 }
 
 } // namespace FeltElements

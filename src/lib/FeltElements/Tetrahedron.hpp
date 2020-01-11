@@ -8,10 +8,16 @@
 #include <cstddef>
 
 #include <Eigen/Dense>
+#include <unsupported/Eigen/CXX11/Tensor>
 
 namespace FeltElements
 {
 class MeshFile;
+
+template <typename T>
+double delta(T const i, T const j) {
+	return i == j;
+};
 
 class Tetrahedron
 {
@@ -26,8 +32,9 @@ class Tetrahedron
 	using GradientMatrix = Eigen::Matrix<Node::Coord, 3, 3>;
 	using ShapeDerivativeMatrix = Eigen::Matrix<Node::Coord, 4, 3>;
 	using IsoCoordDerivativeMatrix = Eigen::Matrix<Node::Coord, 3, 4>;
-
   public:
+	using ElasticityTensor = Eigen::TensorFixedSize<double, Eigen::Sizes<3, 3, 3, 3>>;
+
 	Tetrahedron(MeshFile const & mesh, std::size_t tet_idx);
 
 	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
@@ -45,6 +52,9 @@ class Tetrahedron
 
 	static IsoCoordDerivativeMatrix const dL_by_dN;
 	static ShapeDerivativeMatrix const dN_by_dL;
+	ElasticityTensor
+	neo_hookian_elasticity(GradientMatrix const & F, double const lambda, double const mu);
+
   private:
 	Node::List const m_vertices;
 	Node::List m_displacements;

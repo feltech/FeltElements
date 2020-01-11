@@ -1,6 +1,8 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, "  ", "\n", "(", ")", "", "")
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
+#include <unsupported/Eigen/CXX11/Tensor>
+#include <boost/range/irange.hpp>
 
 #include <FeltElements/MeshFile.hpp>
 #include <FeltElements/Tetrahedron.hpp>
@@ -211,6 +213,26 @@ SCENARIO("Simple deformation gradient")
 						CHECK(dN_by_dx == dN_by_dX);
 					}
 				}
+
+				WHEN("neo-hookian elasticity tensor is calculated")
+				{
+					// Silicone rubber: https://www.azom.com/properties.aspx?ArticleID=920
+					double const mu = 0.001;  // Shear modulus: 0.0003 - 0.02
+					double const E = 0.01;  // Young's modulus: 0.001 - 0.05
+					// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+					double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+					auto const & c = tet.neo_hookian_elasticity(F, lambda, mu);
+
+					THEN("it is zero")
+					{
+						FeltElements::Tetrahedron::ElasticityTensor expected;
+						expected.setZero();
+						Eigen::Tensor<bool, 0> comparison = (c == expected).all();
+
+						INFO(c);
+						CHECK(comparison(0));
+					}
+				}
 			}
 
 			AND_WHEN("a node is deformed")
@@ -282,6 +304,23 @@ SCENARIO("Simple deformation gradient")
 					}
 				}
 			}
-		}
+		} // WHEN("derivative of shape function wrt material coords is calculated")
+
+
+//		WHEN("Constitutive substiffness matrix is calculated for simple elasticity tensor")
+//		{
+//			constexpr std::size_t N = 3;
+//			Eigen::TensorFixedSize<double, Eigen::Sizes<N, N, N, N>> C;
+//
+//			for (std::size_t i : boost::irange(N))
+//				for (std::size_t j : boost::irange(N))
+//					for (std::size_t k : boost::irange(N))
+//						for (std::size_t l : boost::irange(N))
+//						{
+//							C(i, j, k, l) =
+//						}
+//
+////			Eigen::Matrix3d const Kcab = tet.Kcab(0, 1)
+//		}
 	}
 }
