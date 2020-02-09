@@ -30,6 +30,7 @@ auto end(Tensor1d const & m)
 
 } // namespace Eigen
 
+
 std::ostream& operator << (
 	std::ostream& os, FeltElements::Tetrahedron::ElasticityTensor const& value)
 {
@@ -39,6 +40,7 @@ std::ostream& operator << (
 	  return Eigen::internal::get<
 	      2, FeltElements::Tetrahedron::ElasticityTensor::Dimensions::Base>::value;
 	};
+	// std::to_string has non-configurable precision of too many decimal places.
 	auto to_string = [](auto const f) {
 		std::stringstream ss;
 		ss << f;
@@ -46,22 +48,21 @@ std::ostream& operator << (
 	};
 
 	std::array<std::string, dim(0)> is{};
+	std::array<std::string, dim(1)> js{};
+	std::array<std::string, dim(2)> ks{};
 	for (Index i = 0; i < dim(0); i++)
 	{
-		std::array<std::string, dim(1)> js{};
 		for (Index j = 0; j < dim(1); j++)
 		{
-			std::array<std::string, dim(2)> ks{};
 			for (Index k = 0; k < dim(2); k++)
 			{
 				Eigen::Tensor1d const & vec = value.chip(i, 0).chip(j, 0).chip(k, 0);
-				ks[k] += "{" + join(ranges::views::transform(vec, to_string), ", ") + "}";
+				ks[k] = join(vec | ranges::views::transform(to_string), ", ");
 			}
-			js[j] += "{" + join(ks, ", ") + "}";
+			js[j] = join(ks, "}, {");
 		}
-		is[i] += "\t" + join(js, ",\n\t");
+		is[i] = join(js, "}},\n\t{{");
 	}
-	std::string str = "{\n" + join(is, "\n}, {\n") + "\n}";
-	os << str << std::endl;
+	os << "{\n\t{{" << join(is, "}}\n}, {\n\t{{") << "}}\n}\n";
 	return os;
 }
