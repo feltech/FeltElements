@@ -4,6 +4,7 @@ tetgen/1.5.0@local/tetgen
 boost/1.69.0@conan/stable
 Catch2/2.10.2@catchorg/stable
 eigen/3.3.4@conan/stable
+range-v3/0.10.0@ericniebler/stable
 
 [options]
 boost:header_only=True

@@ -1,14 +1,19 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, "  ", "\n", "(", ")", "", "")
 #define CATCH_CONFIG_MAIN
-#include <catch2/catch.hpp>
 #include <unsupported/Eigen/CXX11/Tensor>
-#include <boost/range/irange.hpp>
 
 #include <FeltElements/MeshFile.hpp>
 #include <FeltElements/Tetrahedron.hpp>
+#include "util.hpp"
+#include <catch2/catch.hpp>
+
 
 SCENARIO("Loading a tetrahedralisation")
 {
+//	char cwd[500];
+//	getcwd(cwd, 500);
+//	std::cerr << "Executing tests in " << cwd << std::endl;
+
 	auto expected_counts = [](const FeltElements::MeshFile & mesh,
 							  auto num_simplexes,
 							  auto num_corners,
@@ -217,18 +222,39 @@ SCENARIO("Simple deformation gradient")
 				WHEN("neo-hookian elasticity tensor is calculated")
 				{
 					// Silicone rubber: https://www.azom.com/properties.aspx?ArticleID=920
-					double const mu = 0.001;  // Shear modulus: 0.0003 - 0.02
-					double const E = 0.01;  // Young's modulus: 0.001 - 0.05
+					double const mu = 0.4;  // Shear modulus: 0.0003 - 0.02
+					double const E = 1;  // Young's modulus: 0.001 - 0.05
 					// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 					double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
 					auto const & c = tet.neo_hookian_elasticity(F, lambda, mu);
 
-					THEN("it is zero")
+					std::stringstream s;
+					s << "Lambda = " << lambda << "; mu = " << mu;
+					INFO(s.str());
+
+					THEN("it has expected values")
 					{
 						FeltElements::Tetrahedron::ElasticityTensor expected;
-						expected.setZero();
-						Eigen::Tensor<bool, 0> comparison = (c == expected).all();
+						expected.setValues({
+							{
+								{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
+								{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+								{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}
+							}, {
+								{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+								{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
+								{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}
+							}, {
+								{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
+								{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
+								{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}
+							}
+						});
+						Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00001).all();
 
+						INFO("Expected:")
+						INFO(expected);
+						INFO("Actual:")
 						INFO(c);
 						CHECK(comparison(0));
 					}
