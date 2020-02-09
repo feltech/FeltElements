@@ -6,6 +6,23 @@
 #include "Tetrahedron.hpp"
 #include "MeshFile.hpp"
 
+namespace
+{
+	auto to_tensor(auto const & matrix, auto const... dims)
+	{
+		using MatrixType = decltype(matrix);
+		constexpr int rank = sizeof... (dims);
+		return Eigen::TensorMap<Eigen::Tensor<double const, rank>>{
+			matrix.data(), {dims...}
+		};
+	}
+
+	auto from_tensor(auto const & tensor)
+	{
+		return Eigen::Map<Eigen::Matrix3d const>{tensor.data(), 3, 3};
+	}
+}
+
 namespace FeltElements
 {
 Tetrahedron::Tetrahedron(FeltElements::MeshFile const & mesh, std::size_t const tet_idx)
@@ -122,6 +139,27 @@ Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
 						mu_prime * (delta(i, k) * delta(j, l) + delta(i, l) * delta(j, k));
 				}
 	return c;
+}
+
+Tetrahedron::GradientMatrix Tetrahedron::Kcab(
+	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
+	Tetrahedron::ElasticityTensor const & c,
+	Tetrahedron::Node::Index const a,
+	Tetrahedron::Node::Index const b)
+{
+	constexpr Eigen::array<Eigen::IndexPair<int>, 1> c_a = {
+			Eigen::IndexPair<int>(1, 0)
+	};
+	constexpr Eigen::array<Eigen::IndexPair<int>, 1> c_b = {
+		Eigen::IndexPair<int>(3, 0)
+	};
+
+	Eigen::Tensor<double, 1> const & dNa_by_dx = to_tensor(dN_by_dx.row(a), 3);
+	Eigen::Tensor<double, 1> const & dNb_by_dx = to_tensor(dN_by_dx.row(b), 3);
+
+	Eigen::Tensor<double, 2> K = c.contract(dNb_by_dx, c_b).contract(dNa_by_dx, c_a);
+
+	return from_tensor(K);
 }
 
 } // namespace FeltElements

@@ -7,6 +7,8 @@
 #include "util.hpp"
 #include <catch2/catch.hpp>
 
+std::string const file_name_single = "resources/single/tet.1";
+std::string const file_name_double = "resources/double/tet.1";
 
 SCENARIO("Loading a tetrahedralisation")
 {
@@ -23,114 +25,107 @@ SCENARIO("Loading a tetrahedralisation")
 		CHECK(mesh.num_trifaces() == num_trifaces);
 	};
 
-	GIVEN("single tetrahedron mesh")
+	GIVEN("single tetrahedron mesh is loaded")
 	{
-		std::string const file_name = "resources/single/tet.1";
-		WHEN("mesh is loaded")
+		auto const & mesh = FeltElements::MeshFile{file_name_single};
+		THEN("expected counts are reported")
 		{
-			auto const & mesh = FeltElements::MeshFile{file_name};
-			THEN("expected counts are reported")
-			{
-				expected_counts(mesh, 1, 4, 4);
-			}
+			expected_counts(mesh, 1, 4, 4);
+		}
 
+		THEN("expected node positions are reported")
+		{
+			CHECK(mesh.points()[3 * mesh.corners()[0]] == 0);
+			CHECK(mesh.points()[3 * mesh.corners()[0] + 1] == 0);
+			CHECK(mesh.points()[3 * mesh.corners()[0] + 2] == 0);
+
+			CHECK(mesh.points()[3 * mesh.corners()[1]] == 0);
+			CHECK(mesh.points()[3 * mesh.corners()[1] + 1] == 1);
+			CHECK(mesh.points()[3 * mesh.corners()[1] + 2] == 0);
+
+			CHECK(mesh.points()[3 * mesh.corners()[2]] == 0);
+			CHECK(mesh.points()[3 * mesh.corners()[2] + 1] == 0);
+			CHECK(mesh.points()[3 * mesh.corners()[2] + 2] == 1);
+
+			CHECK(mesh.points()[3 * mesh.corners()[3]] == 1);
+			CHECK(mesh.points()[3 * mesh.corners()[3] + 1] == 0);
+			CHECK(mesh.points()[3 * mesh.corners()[3] + 2] == 0);
+		}
+
+		THEN("displacements are initially zero")
+		{
+			CHECK(mesh.displacements()[3 * mesh.corners()[0]] == 0);
+			CHECK(mesh.displacements()[3 * mesh.corners()[0] + 1] == 0);
+			CHECK(mesh.displacements()[3 * mesh.corners()[0] + 2] == 0);
+
+			CHECK(mesh.displacements()[3 * mesh.corners()[1]] == 0);
+			CHECK(mesh.displacements()[3 * mesh.corners()[1] + 1] == 0);
+			CHECK(mesh.displacements()[3 * mesh.corners()[1] + 2] == 0);
+
+			CHECK(mesh.displacements()[3 * mesh.corners()[2]] == 0);
+			CHECK(mesh.displacements()[3 * mesh.corners()[2] + 1] == 0);
+			CHECK(mesh.displacements()[3 * mesh.corners()[2] + 2] == 0);
+
+			CHECK(mesh.displacements()[3 * mesh.corners()[3]] == 0);
+			CHECK(mesh.displacements()[3 * mesh.corners()[3] + 1] == 0);
+			CHECK(mesh.displacements()[3 * mesh.corners()[3] + 2] == 0);
+		}
+
+		AND_WHEN("tetrahedron is loaded from mesh")
+		{
+			auto tet = FeltElements::Tetrahedron{mesh, 0};
 			THEN("expected node positions are reported")
 			{
-				CHECK(mesh.points()[3 * mesh.corners()[0]] == 0);
-				CHECK(mesh.points()[3 * mesh.corners()[0] + 1] == 0);
-				CHECK(mesh.points()[3 * mesh.corners()[0] + 2] == 0);
-
-				CHECK(mesh.points()[3 * mesh.corners()[1]] == 0);
-				CHECK(mesh.points()[3 * mesh.corners()[1] + 1] == 1);
-				CHECK(mesh.points()[3 * mesh.corners()[1] + 2] == 0);
-
-				CHECK(mesh.points()[3 * mesh.corners()[2]] == 0);
-				CHECK(mesh.points()[3 * mesh.corners()[2] + 1] == 0);
-				CHECK(mesh.points()[3 * mesh.corners()[2] + 2] == 1);
-
-				CHECK(mesh.points()[3 * mesh.corners()[3]] == 1);
-				CHECK(mesh.points()[3 * mesh.corners()[3] + 1] == 0);
-				CHECK(mesh.points()[3 * mesh.corners()[3] + 2] == 0);
+				CHECK(tet.X(0) == Eigen::Vector3d{0, 0, 0});
+				CHECK(tet.X(1) == Eigen::Vector3d{0, 1, 0});
+				CHECK(tet.X(2) == Eigen::Vector3d{0, 0, 1});
+				CHECK(tet.X(3) == Eigen::Vector3d{1, 0, 0});
 			}
 
-			THEN("displacements are initially zero")
+			THEN("expected volume is reported")
 			{
-				CHECK(mesh.displacements()[3 * mesh.corners()[0]] == 0);
-				CHECK(mesh.displacements()[3 * mesh.corners()[0] + 1] == 0);
-				CHECK(mesh.displacements()[3 * mesh.corners()[0] + 2] == 0);
-
-				CHECK(mesh.displacements()[3 * mesh.corners()[1]] == 0);
-				CHECK(mesh.displacements()[3 * mesh.corners()[1] + 1] == 0);
-				CHECK(mesh.displacements()[3 * mesh.corners()[1] + 2] == 0);
-
-				CHECK(mesh.displacements()[3 * mesh.corners()[2]] == 0);
-				CHECK(mesh.displacements()[3 * mesh.corners()[2] + 1] == 0);
-				CHECK(mesh.displacements()[3 * mesh.corners()[2] + 2] == 0);
-
-				CHECK(mesh.displacements()[3 * mesh.corners()[3]] == 0);
-				CHECK(mesh.displacements()[3 * mesh.corners()[3] + 1] == 0);
-				CHECK(mesh.displacements()[3 * mesh.corners()[3] + 2] == 0);
-			}
-
-			AND_WHEN("tetrahedron is loaded from mesh")
-			{
-				auto tet = FeltElements::Tetrahedron{mesh, 0};
-				THEN("expected node positions are reported")
-				{
-					CHECK(tet.X(0) == Eigen::Vector3d{0, 0, 0});
-					CHECK(tet.X(1) == Eigen::Vector3d{0, 1, 0});
-					CHECK(tet.X(2) == Eigen::Vector3d{0, 0, 1});
-					CHECK(tet.X(3) == Eigen::Vector3d{1, 0, 0});
-				}
-
-				THEN("expected volume is reported")
-				{
-					CHECK(tet.V() == 1.0/6);
-				}
+				CHECK(tet.V() == 1.0/6);
 			}
 		}
 	}
 
-	GIVEN("double quadratic tetrahedron mesh")
+	GIVEN("double quadratic tetrahedron mesh is loaded")
 	{
-		std::string const file_name = "resources/double/tet.1";
-		WHEN("mesh is loaded")
+		auto const & mesh = FeltElements::MeshFile{file_name_double};
+		THEN("expected counts are reported")
 		{
-			auto const & mesh = FeltElements::MeshFile{file_name};
-			THEN("expected counts are reported")
+			expected_counts(mesh, 2, 10, 6);
+		}
+
+		WHEN("tetrahedrons are loaded from mesh")
+		{
+			auto tet1 = FeltElements::Tetrahedron{mesh, 0};
+			auto tet2 = FeltElements::Tetrahedron{mesh, 1};
+
+			THEN("expected node positions are reported")
 			{
-				expected_counts(mesh, 2, 10, 6);
+				CHECK(tet1.X(0) == Eigen::Vector3d{0, 0, 0});
+				CHECK(tet1.X(1) == Eigen::Vector3d{0, 0, 1});
+				CHECK(tet1.X(2) == Eigen::Vector3d{1, 0, 0});
+				CHECK(tet2.X(3) == Eigen::Vector3d{0, 0.5, 0.5});
+
+				CHECK(tet2.X(0) == Eigen::Vector3d{0, 1, 0});
+				CHECK(tet2.X(1) == Eigen::Vector3d{0, 0, 0});
+				CHECK(tet2.X(2) == Eigen::Vector3d{1, 0, 0});
+				CHECK(tet2.X(3) == Eigen::Vector3d{0, 0.5, 0.5});
 			}
 
-			AND_WHEN("tetrahedrons are loaded from mesh")
+			THEN("expected volumes are reported")
 			{
-				auto tet1 = FeltElements::Tetrahedron{mesh, 0};
-				auto tet2 = FeltElements::Tetrahedron{mesh, 1};
-
-				THEN("expected node positions are reported")
-				{
-					CHECK(tet1.X(0) == Eigen::Vector3d{0, 0, 0});
-					CHECK(tet1.X(1) == Eigen::Vector3d{0, 0, 1});
-					CHECK(tet1.X(2) == Eigen::Vector3d{1, 0, 0});
-					CHECK(tet2.X(3) == Eigen::Vector3d{0, 0.5, 0.5});
-
-					CHECK(tet2.X(0) == Eigen::Vector3d{0, 1, 0});
-					CHECK(tet2.X(1) == Eigen::Vector3d{0, 0, 0});
-					CHECK(tet2.X(2) == Eigen::Vector3d{1, 0, 0});
-					CHECK(tet2.X(3) == Eigen::Vector3d{0, 0.5, 0.5});
-				}
-
-				THEN("expected volumes are reported")
-				{
-					CHECK(tet1.V() == 1.0 / 12);
-					CHECK(tet2.V() == 1.0 / 12);
-				}
+				CHECK(tet1.V() == 1.0 / 12);
+				CHECK(tet2.V() == 1.0 / 12);
 			}
 		}
 	}
 }
 
-SCENARIO("Simple deformation gradient")
+
+SCENARIO("Shape function derivatives")
 {
 	GIVEN("simple tetrahedron")
 	{
@@ -219,46 +214,6 @@ SCENARIO("Simple deformation gradient")
 					}
 				}
 
-				WHEN("neo-hookian elasticity tensor is calculated")
-				{
-					// Silicone rubber: https://www.azom.com/properties.aspx?ArticleID=920
-					double const mu = 0.4;  // Shear modulus: 0.0003 - 0.02
-					double const E = 1;  // Young's modulus: 0.001 - 0.05
-					// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-					double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
-					auto const & c = tet.neo_hookian_elasticity(F, lambda, mu);
-
-					std::stringstream s;
-					s << "Lambda = " << lambda << "; mu = " << mu;
-					INFO(s.str());
-
-					THEN("it has expected values")
-					{
-						FeltElements::Tetrahedron::ElasticityTensor expected;
-						expected.setValues({
-							{
-								{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
-								{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
-								{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}
-							}, {
-								{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
-								{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
-								{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}
-							}, {
-								{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
-								{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
-								{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}
-							}
-						});
-						Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00001).all();
-
-						INFO("Expected:")
-						INFO(expected);
-						INFO("Actual:")
-						INFO(c);
-						CHECK(comparison(0));
-					}
-				}
 			}
 
 			AND_WHEN("a node is deformed")
@@ -332,21 +287,72 @@ SCENARIO("Simple deformation gradient")
 			}
 		} // WHEN("derivative of shape function wrt material coords is calculated")
 
+	} // End GIVEN("simple tetrahedron")
+}
 
-//		WHEN("Constitutive substiffness matrix is calculated for simple elasticity tensor")
-//		{
-//			constexpr std::size_t N = 3;
-//			Eigen::TensorFixedSize<double, Eigen::Sizes<N, N, N, N>> C;
-//
-//			for (std::size_t i : boost::irange(N))
-//				for (std::size_t j : boost::irange(N))
-//					for (std::size_t k : boost::irange(N))
-//						for (std::size_t l : boost::irange(N))
-//						{
-//							C(i, j, k, l) =
-//						}
-//
-////			Eigen::Matrix3d const Kcab = tet.Kcab(0, 1)
-//		}
+SCENARIO("Elasticity tensors")
+{
+	GIVEN("material properties")
+	{
+		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
+		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
+		double const E = 1;	   // Young's modulus: 0.001 - 0.05
+		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		auto const & F = FeltElements::Tetrahedron::GradientMatrix::Identity();
+
+		WHEN("neo-hookian elasticity tensor is calculated")
+		{
+			auto const & c = FeltElements::Tetrahedron::neo_hookian_elasticity(F, lambda, mu);
+
+			std::stringstream s;
+			s << "Lambda = " << lambda << "; mu = " << mu;
+			INFO(s.str());
+
+			THEN("it has expected values")
+			{
+				FeltElements::Tetrahedron::ElasticityTensor expected;
+				expected.setValues({{{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
+										{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+										{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}},
+									{{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+										{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
+										{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}},
+									{{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
+										{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
+										{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}}});
+				Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00001).all();
+
+				INFO("Expected:")
+				INFO(expected);
+				INFO("Actual:")
+				INFO(c);
+				CHECK(comparison(0));
+			}
+
+			AND_GIVEN("a tetrahedron")
+			{
+				auto const & mesh = FeltElements::MeshFile{file_name_single};
+				auto tet = FeltElements::Tetrahedron{mesh, 0};
+
+				AND_WHEN("constitutive component of tangent matrix is calculated")
+				{
+					auto const & dN_by_dX = tet.dN_by_dX();
+					auto const & dN_by_dx = tet.dN_by_dx(tet.dN_by_dX());
+					INFO("dN_by_dx:")
+					INFO(dN_by_dx)
+
+					auto const& Kcab = tet.Kcab(dN_by_dx, c, 0, 1);
+
+					THEN("matrix of values are as expected")
+					{
+						Eigen::Matrix3d expected;
+						expected.setZero();
+
+						CHECK(Kcab == expected);
+					}
+				}
+			}
+		}
 	}
 }

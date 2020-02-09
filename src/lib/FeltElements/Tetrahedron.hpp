@@ -29,10 +29,10 @@ class Tetrahedron
 		using List = std::array<PosMap, 4>;
 		using Index = Eigen::Index;
 	};
-	using GradientMatrix = Eigen::Matrix<Node::Coord, 3, 3>;
-	using ShapeDerivativeMatrix = Eigen::Matrix<Node::Coord, 4, 3>;
+	using ShapeDerivativeMatrix = Eigen::Matrix<Node::Coord, 4, 3, Eigen::RowMajor>;
 	using IsoCoordDerivativeMatrix = Eigen::Matrix<Node::Coord, 3, 4>;
   public:
+	using GradientMatrix = Eigen::Matrix<Node::Coord, 3, 3>;
 	using ElasticityTensor = Eigen::TensorFixedSize<double, Eigen::Sizes<3, 3, 3, 3>>;
 
 	Tetrahedron(MeshFile const & mesh, std::size_t tet_idx);
@@ -52,8 +52,14 @@ class Tetrahedron
 
 	static IsoCoordDerivativeMatrix const dL_by_dN;
 	static ShapeDerivativeMatrix const dN_by_dL;
-	ElasticityTensor
+	static ElasticityTensor
 	neo_hookian_elasticity(GradientMatrix const & F, double const lambda, double const mu);
+
+	Tetrahedron::GradientMatrix Kcab(
+		Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
+		Tetrahedron::ElasticityTensor const & c,
+		Tetrahedron::Node::Index a,
+		Tetrahedron::Node::Index b);
 
   private:
 	Node::List const m_vertices;
