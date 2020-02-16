@@ -8,19 +8,25 @@
 
 namespace
 {
-	auto to_tensor(auto const & matrix, auto const... dims)
-	{
-		using MatrixType = decltype(matrix);
-		constexpr int rank = sizeof... (dims);
-		return Eigen::TensorMap<Eigen::Tensor<double const, rank>>{
-			matrix.data(), {dims...}
-		};
-	}
 
-	auto from_tensor(auto const & tensor)
-	{
-		return Eigen::Map<Eigen::Matrix3d const>{tensor.data(), 3, 3};
-	}
+template <typename T>
+double delta(T const i, T const j) {
+	return i == j;
+};
+
+auto to_tensor(auto const & matrix, auto const... dims)
+{
+	using MatrixType = decltype(matrix);
+	constexpr int rank = sizeof... (dims);
+	return Eigen::TensorMap<Eigen::Tensor<double const, rank>>{
+		matrix.data(), {dims...}
+	};
+}
+
+auto from_tensor(auto const & tensor)
+{
+	return Eigen::Map<Eigen::Matrix3d const>{tensor.data(), 3, 3};
+}
 }
 
 namespace FeltElements
@@ -55,7 +61,7 @@ Tetrahedron::IsoCoordDerivativeMatrix const Tetrahedron::dL_by_dN = // NOLINT(ce
 		0, 1, 0, 0,
 		0, 0, 1, 0,
 		0, 0, 0, 1).finished().block<3, 4>(1, 0);
-	// clang-format on
+		// clang-format on
 
 Tetrahedron::ShapeDerivativeMatrix const Tetrahedron::dN_by_dL = // NOLINT(cert-err58-cpp)
 	(Eigen::Matrix4d{} <<
@@ -64,9 +70,9 @@ Tetrahedron::ShapeDerivativeMatrix const Tetrahedron::dN_by_dL = // NOLINT(cert-
 		0, 1, 0, 0,
 		0, 0, 1, 0,
 		0, 0, 0, 1).finished().inverse().block<4, 3>(0, 1);
-	// clang-format on
+		// clang-format on
 
-Tetrahedron::ShapeDerivativeMatrix Tetrahedron::dN_by_dX()
+Tetrahedron::ShapeDerivativeMatrix Tetrahedron::dN_by_dX() const
 {
 	Eigen::Matrix4d dX_by_dN;
 	// Interpolation: (1, x, y, z)^T = dX_by_dN * N, where N is 4x natural coordinates (corners).
@@ -105,15 +111,26 @@ Tetrahedron::Node::PosMap const & Tetrahedron::u(Tetrahedron::Node::Index const 
 	return m_displacements[idx];
 }
 
-Tetrahedron::GradientMatrix Tetrahedron::dx_by_dX(ShapeDerivativeMatrix const & dN_by_dX) const
+Tetrahedron::GradientMatrix Tetrahedron::dx_by_dX(
+	IsoCoordDerivativeMatrix const & dx_by_dN, ShapeDerivativeMatrix const & dN_by_dX)
 {
-	return dx_by_dN() * dN_by_dX;
+	return dx_by_dN * dN_by_dX;
+}
+
+double Tetrahedron::J(Tetrahedron::GradientMatrix const & F)
+{
+	return F.determinant();
+}
+
+Tetrahedron::GradientMatrix Tetrahedron::b(Tetrahedron::GradientMatrix const & F)
+{
+	return F * F.transpose();
 }
 
 Tetrahedron::ShapeDerivativeMatrix
-Tetrahedron::dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX)
+Tetrahedron::dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F)
 {
-	return dN_by_dX * dx_by_dX(dN_by_dX).inverse();
+	return dN_by_dX * F.inverse();
 }
 
 double Tetrahedron::V() const
@@ -122,23 +139,43 @@ double Tetrahedron::V() const
 }
 
 Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
-	Tetrahedron::GradientMatrix const & F, double const lambda, double const mu)
+	double const J, double const lambda, double const mu)
 {
-	constexpr std::size_t N = 3;
-	Tetrahedron::ElasticityTensor c;
-	double const J = F.determinant();
 	double const lambda_prime = lambda / J;
 	double const mu_prime = (mu - lambda * std::log(J));
 
-	for (std::size_t i : boost::irange(N))
-		for (std::size_t j : boost::irange(N))
-			for (std::size_t k : boost::irange(N))
-				for (std::size_t l : boost::irange(N))
-				{
-					c(i, j, k, l) = lambda_prime * delta(i, j) * delta(k, l) +
-						mu_prime * (delta(i, k) * delta(j, l) + delta(i, l) * delta(j, k));
-				}
-	return c;
+	static const ElasticityTensor c_lambda = ([]() {
+		std::size_t const N = 3;
+		ElasticityTensor c;
+		for (std::size_t i : boost::irange(N))
+			for (std::size_t j : boost::irange(N))
+				for (std::size_t k : boost::irange(N))
+					for (std::size_t l : boost::irange(N))
+						c(i, j, k, l) = delta(i, j) * delta(k, l);
+
+		return c;
+	}());
+
+	static const ElasticityTensor c_mu = ([]() {
+		std::size_t const N = 3;
+		ElasticityTensor c;
+		for (std::size_t i : boost::irange(N))
+			for (std::size_t j : boost::irange(N))
+				for (std::size_t k : boost::irange(N))
+					for (std::size_t l : boost::irange(N))
+						c(i, j, k, l) = delta(i, k) * delta(j, l) + delta(i, l) * delta(j, k);
+
+		return c;
+	}());
+
+	return lambda_prime * c_lambda + mu_prime * c_mu;
+}
+
+Tetrahedron::GradientMatrix Tetrahedron::neo_hookian_stress(
+	double const J, Tetrahedron::GradientMatrix const & b, double const lambda, double const mu)
+{
+	static auto const I = GradientMatrix::Identity();
+	return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
 }
 
 Tetrahedron::GradientMatrix Tetrahedron::Kcab(

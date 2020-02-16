@@ -14,11 +14,6 @@ namespace FeltElements
 {
 class MeshFile;
 
-template <typename T>
-double delta(T const i, T const j) {
-	return i == j;
-};
-
 class Tetrahedron
 {
 	struct Node
@@ -37,6 +32,9 @@ class Tetrahedron
 
 	Tetrahedron(MeshFile const & mesh, std::size_t tet_idx);
 
+	static IsoCoordDerivativeMatrix const dL_by_dN;
+	static ShapeDerivativeMatrix const dN_by_dL;
+	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix dN_by_dX() const;
 	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
 	[[nodiscard]] Node::Pos x(Node::Index idx) const;
 	[[nodiscard]] Node::PosMap const & X(Node::Index idx) const;
@@ -44,24 +42,24 @@ class Tetrahedron
 	[[nodiscard]] Node::PosMap & u(Node::Index idx);
 	[[nodiscard]] double V() const;
 
-	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix
-	dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX);
-	[[nodiscard]] Tetrahedron::GradientMatrix
-	dx_by_dX(ShapeDerivativeMatrix const & dN_by_dX) const;
-	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix dN_by_dX();
+	[[nodiscard]] static Tetrahedron::GradientMatrix dx_by_dX(
+		IsoCoordDerivativeMatrix const & dx_by_dN, ShapeDerivativeMatrix const & dN_by_dX);
+	[[nodiscard]] static Tetrahedron::ShapeDerivativeMatrix dN_by_dx(
+		ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F);
+	[[nodiscard]] static double J(GradientMatrix const & F);
+	[[nodiscard]] static Tetrahedron::GradientMatrix b(GradientMatrix const & F);
+	[[nodiscard]] static ElasticityTensor
+	neo_hookian_elasticity(double J, double lambda, double mu);
+	[[nodiscard]] static GradientMatrix
+	neo_hookian_stress(double J, GradientMatrix const & b, double lambda, double mu);
 
-	static IsoCoordDerivativeMatrix const dL_by_dN;
-	static ShapeDerivativeMatrix const dN_by_dL;
-	static ElasticityTensor
-	neo_hookian_elasticity(GradientMatrix const & F, double const lambda, double const mu);
-
-	Tetrahedron::GradientMatrix Kcab(
+	static Tetrahedron::GradientMatrix Kcab(
 		Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
 		Tetrahedron::ElasticityTensor const & c,
 		Tetrahedron::Node::Index a,
 		Tetrahedron::Node::Index b);
 
-  private:
+private:
 	Node::List const m_vertices;
 	Node::List m_displacements;
 	double const m_volume;

@@ -1,4 +1,4 @@
-#define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, "  ", "\n", "(", ")", "", "")
+#define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
 #define CATCH_CONFIG_MAIN
 #include <unsupported/Eigen/CXX11/Tensor>
 
@@ -9,6 +9,9 @@
 
 std::string const file_name_single = "resources/single/tet.1";
 std::string const file_name_double = "resources/double/tet.1";
+
+using namespace FeltElements;
+
 
 SCENARIO("Loading a tetrahedralisation")
 {
@@ -197,7 +200,8 @@ SCENARIO("Shape function derivatives")
 
 			AND_WHEN("deformation gradient is calculated")
 			{
-				auto const & F = tet.dx_by_dX(dN_by_dX);
+				auto const & dx_by_dN = tet.dx_by_dN();
+				auto const & F = Tetrahedron::dx_by_dX(dx_by_dN, dN_by_dX);
 
 				THEN("deformation gradient is the identity matrix")
 				{
@@ -206,7 +210,7 @@ SCENARIO("Shape function derivatives")
 
 				AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 				{
-					auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX);
+					auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX, F);
 
 					THEN("derivative is the same as in material coords")
 					{
@@ -247,7 +251,8 @@ SCENARIO("Shape function derivatives")
 				}
 				AND_WHEN("deformation gradient is calculated")
 				{
-					auto const & F = tet.dx_by_dX(dN_by_dX);
+					auto const & dx_by_dN = tet.dx_by_dN();
+					auto const & F = tet.dx_by_dX(dx_by_dN, dN_by_dX);
 
 					THEN("deformation gradient is correct")
 					{
@@ -261,9 +266,37 @@ SCENARIO("Shape function derivatives")
 						CHECK(F == expected);
 					}
 
+					AND_WHEN("Jacobian of deformation gradient is calculated")
+					{
+						double const J = Tetrahedron::J(F);
+
+						THEN("value is correct")
+						{
+							CHECK(J == 0.5);
+						}
+					}
+
+					AND_WHEN("Left Cauchy-Green / Finger tensor is calculated")
+					{
+						Tetrahedron::GradientMatrix const & b = Tetrahedron::b(F);
+						INFO(b)
+
+						THEN("value is correct")
+						{
+							Tetrahedron::GradientMatrix expected;
+							// clang-format off
+							expected << // NOLINT
+								 0.75, -0.5, -0.5,
+								-0.5,    1,    0,
+								-0.5,    0,    1;
+							// clang-format on
+							CHECK(b.isApprox(expected));
+						}
+					}
+
 					AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 					{
-						auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX);
+						auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX, F);
 
 						std::stringstream ss;
 						ss << "dN_by_dX = "  << std::endl << dN_by_dX << std::endl;
@@ -294,20 +327,21 @@ SCENARIO("Elasticity tensors")
 {
 	GIVEN("material properties")
 	{
+		using namespace FeltElements;
+
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
 		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
 		double const E = 1;	   // Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
-		auto const & F = FeltElements::Tetrahedron::GradientMatrix::Identity();
+
+		std::stringstream s;
+		s << "Lambda = " << lambda << "; mu = " << mu;
+		INFO(s.str());
 
 		WHEN("neo-hookian elasticity tensor is calculated")
 		{
-			auto const & c = FeltElements::Tetrahedron::neo_hookian_elasticity(F, lambda, mu);
-
-			std::stringstream s;
-			s << "Lambda = " << lambda << "; mu = " << mu;
-			INFO(s.str());
+			auto const & c = Tetrahedron::neo_hookian_elasticity(1, lambda, mu);
 
 			THEN("it has expected values")
 			{
@@ -330,27 +364,55 @@ SCENARIO("Elasticity tensors")
 				CHECK(comparison(0));
 			}
 
-			AND_GIVEN("a tetrahedron")
+		} // End WHEN("neo-hookian elasticity tensor is calculated")
+//
+
+		AND_GIVEN("a tetrahedron")
+		{
+			auto const mesh = FeltElements::MeshFile{file_name_single};
+			auto const tet = FeltElements::Tetrahedron{mesh, 0};
+			auto const & dN_by_dX = tet.dN_by_dX();
+			auto const & dx_by_dN = tet.dx_by_dN();
+			auto const & F = Tetrahedron::dx_by_dX(dx_by_dN, dN_by_dX);
+			auto const J = Tetrahedron::J(F);
+			auto const & b = Tetrahedron::b(F);
+
+			WHEN("constitutive component of tangent matrix is calculated")
 			{
-				auto const & mesh = FeltElements::MeshFile{file_name_single};
-				auto tet = FeltElements::Tetrahedron{mesh, 0};
+				auto const & dN_by_dx = Tetrahedron::dN_by_dx(dN_by_dX, F);
+				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
 
-				AND_WHEN("constitutive component of tangent matrix is calculated")
+				INFO("dN_by_dx:")
+				INFO(dN_by_dx)
+
+				auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, c, 0, 1);
+
+				THEN("matrix of values are as expected")
 				{
-					auto const & dN_by_dX = tet.dN_by_dX();
-					auto const & dN_by_dx = tet.dN_by_dx(tet.dN_by_dX());
-					INFO("dN_by_dx:")
-					INFO(dN_by_dx)
+					Eigen::Matrix3d expected;
+					expected <<
+					// clang-format off
+						-0.4, -0.4,  0,
+						-0.4, -1.2, -0.4,
+						0, -0.4, -0.4;
+					// clang-format on
+					CHECK(Kcab.isApprox(expected));
+				}
+			}
 
-					auto const& Kcab = tet.Kcab(dN_by_dx, c, 0, 1);
+			WHEN("neo-hookian Cauchy stress tensor is calculated")
+			{
+				Tetrahedron::GradientMatrix const & sigma = Tetrahedron::neo_hookian_stress(
+					J, b, lambda, mu);
 
-					THEN("matrix of values are as expected")
-					{
-						Eigen::Matrix3d expected;
-						expected.setZero();
+				INFO("sigma:")
+				INFO(sigma)
 
-						CHECK(Kcab == expected);
-					}
+				THEN("stress is zero")
+				{
+					Eigen::Matrix3d expected;
+					expected.setZero();
+					CHECK(sigma == expected);
 				}
 			}
 		}
