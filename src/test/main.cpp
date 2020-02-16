@@ -460,16 +460,24 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 				THEN("it has expected values")
 				{
 					FeltElements::Tetrahedron::ElasticityTensor expected;
-					expected.setValues({{{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
-											{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
-											{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}},
-										{{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
-											{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
-											{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}},
-										{{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
-											{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
-											{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}}});
-					Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00001).all();
+					expected.setValues({
+						// clang-format off
+						{
+							{{2.15452, 0, 0}, {0, 0.8, 0}, {0, 0, 0.8}},
+							{{0, 0.677259, 0}, {0.677259, 0, 0}, {0, 0, 0}},
+							{{0, 0, 0.677259}, {0, 0, 0}, {0.677259, 0, 0}}
+						}, {
+							{{0, 0.677259, 0}, {0.677259, 0, 0}, {0, 0, 0}},
+							{{0.8, 0, 0}, {0, 2.15452, 0}, {0, 0, 0.8}},
+							{{0, 0, 0}, {0, 0, 0.677259}, {0, 0.677259, 0}}
+						}, {
+							{{0, 0, 0.677259}, {0, 0, 0}, {0.677259, 0, 0}},
+							{{0, 0, 0}, {0, 0, 0.677259}, {0, 0.677259, 0}},
+							{{0.8, 0, 0}, {0, 0.8, 0}, {0, 0, 2.15452}}
+						}
+						// clang-format on
+					});
+					Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00005).all();
 
 					INFO("Expected:")
 					INFO(expected);
@@ -489,12 +497,12 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 					{
 						Eigen::Matrix3d expected;
 						expected <<
-								 // clang-format off
-								 -0.0667, -0.0667,    0,
-							-0.0667, -0.2, -0.0667,
-							0, -0.0667, -0.0667;
+						// clang-format off
+							-0.113, -0.133,      0,
+							-0.113, -0.359, -0.113,
+							0, -0.133, -0.113;
 						// clang-format on
-						CHECK(Kcab.isApprox(expected, 0.0005));
+						CHECK(Kcab.isApprox(expected, 0.002));
 					}
 				}
 
@@ -508,11 +516,16 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 				INFO("sigma:")
 				INFO(sigma)
 
-				THEN("Cauchy stress tensor is zero")
+				THEN("Cauchy stress tensor is correct")
 				{
 					Eigen::Matrix3d expected;
-					expected.setZero();
-					CHECK(sigma == expected);
+					expected <<
+					// clang-format off
+						-0.755,   -0.4,   -0.4,
+						-0.4, -0.555,      0,
+						-0.4,      0, -0.555;
+					// clang-format on
+					CHECK(sigma.isApprox(expected, 0.002));
 				}
 
 				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
@@ -520,14 +533,22 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 					Tetrahedron::GradientMatrix const & Ksab = Tetrahedron::Ksab(
 						dN_by_dx, sigma, v, 0, 1);
 
-					THEN("stress component is zero")
+					INFO("Ksab:")
+					INFO(Ksab)
+
+					THEN("stress component is correct")
 					{
 						Eigen::Matrix3d expected;
-						expected.setZero();
-						CHECK(Ksab == expected);
+						expected <<
+						// clang-format off
+							0.159,  0,		0,
+							0,		0.159,  0,
+							0,		0,		0.159;
+						// clang-format on
+						CHECK(Ksab.isApprox(expected, 0.001));
 					}
 				}
 			}
-		} // End AND_GIVEN("an undeformed tetrahedron")
+		} // End AND_GIVEN("a deformed tetrahedron")
 	}
 }
