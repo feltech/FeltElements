@@ -41,6 +41,7 @@ class Tetrahedron
 	[[nodiscard]] Node::PosMap const & u(Node::Index idx) const;
 	[[nodiscard]] Node::PosMap & u(Node::Index idx);
 	[[nodiscard]] double V() const;
+	[[nodiscard]] double v() const;
 
 	[[nodiscard]] static Tetrahedron::GradientMatrix dx_by_dX(
 		IsoCoordDerivativeMatrix const & dx_by_dN, ShapeDerivativeMatrix const & dN_by_dX);
@@ -53,11 +54,19 @@ class Tetrahedron
 	[[nodiscard]] static GradientMatrix
 	neo_hookian_stress(double J, GradientMatrix const & b, double lambda, double mu);
 
-	static Tetrahedron::GradientMatrix Kcab(
-		Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
-		Tetrahedron::ElasticityTensor const & c,
-		Tetrahedron::Node::Index a,
-		Tetrahedron::Node::Index b);
+	static GradientMatrix Kcab(
+		ShapeDerivativeMatrix const & dN_by_dx,
+		ElasticityTensor const & c,
+		double v,
+		Node::Index a,
+		Node::Index b);
+
+	static GradientMatrix Ksab(
+		ShapeDerivativeMatrix const & dN_by_dx,
+		GradientMatrix const & sigma,
+		double v,
+		Node::Index a,
+		Node::Index b);
 
 private:
 	Node::List const m_vertices;

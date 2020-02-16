@@ -85,9 +85,14 @@ SCENARIO("Loading a tetrahedralisation")
 				CHECK(tet.X(3) == Eigen::Vector3d{1, 0, 0});
 			}
 
-			THEN("expected volume is reported")
+			THEN("expected initial volume is reported")
 			{
 				CHECK(tet.V() == 1.0/6);
+			}
+
+			THEN("deformed volume matches initial volume")
+			{
+				CHECK(tet.v() == tet.V());
 			}
 		}
 	}
@@ -210,7 +215,7 @@ SCENARIO("Shape function derivatives")
 
 				AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 				{
-					auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX, F);
+					auto const & dN_by_dx = Tetrahedron::dN_by_dx(dN_by_dX, F);
 
 					THEN("derivative is the same as in material coords")
 					{
@@ -238,6 +243,11 @@ SCENARIO("Shape function derivatives")
 					CHECK(tet.x(1) == Eigen::Vector3d{0, 0, 1});
 					CHECK(tet.x(2) == Eigen::Vector3d{1, 0, 0});
 					CHECK(tet.x(3) == Eigen::Vector3d{0, 0.5, 0.5});
+				}
+
+				THEN("spatial volume has changed")
+				{
+					CHECK(tet.v() == tet.V() / 2);
 				}
 
 				AND_WHEN("derivative of shape function wrt material coords is calculated")
@@ -323,7 +333,7 @@ SCENARIO("Shape function derivatives")
 	} // End GIVEN("simple tetrahedron")
 }
 
-SCENARIO("Elasticity tensors")
+SCENARIO("Neo-hookian tangent stiffness matrix")
 {
 	GIVEN("material properties")
 	{
@@ -339,66 +349,64 @@ SCENARIO("Elasticity tensors")
 		s << "Lambda = " << lambda << "; mu = " << mu;
 		INFO(s.str());
 
-		WHEN("neo-hookian elasticity tensor is calculated")
-		{
-			auto const & c = Tetrahedron::neo_hookian_elasticity(1, lambda, mu);
-
-			THEN("it has expected values")
-			{
-				FeltElements::Tetrahedron::ElasticityTensor expected;
-				expected.setValues({{{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
-										{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
-										{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}},
-									{{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
-										{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
-										{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}},
-									{{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
-										{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
-										{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}}});
-				Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00001).all();
-
-				INFO("Expected:")
-				INFO(expected);
-				INFO("Actual:")
-				INFO(c);
-				CHECK(comparison(0));
-			}
-
-		} // End WHEN("neo-hookian elasticity tensor is calculated")
-//
-
-		AND_GIVEN("a tetrahedron")
+		AND_GIVEN("an undeformed tetrahedron")
 		{
 			auto const mesh = FeltElements::MeshFile{file_name_single};
 			auto const tet = FeltElements::Tetrahedron{mesh, 0};
+			auto const v = tet.v();
 			auto const & dN_by_dX = tet.dN_by_dX();
 			auto const & dx_by_dN = tet.dx_by_dN();
 			auto const & F = Tetrahedron::dx_by_dX(dx_by_dN, dN_by_dX);
+			auto const & dN_by_dx = Tetrahedron::dN_by_dx(dN_by_dX, F);
 			auto const J = Tetrahedron::J(F);
 			auto const & b = Tetrahedron::b(F);
 
-			WHEN("constitutive component of tangent matrix is calculated")
+			WHEN("neo-hookian elasticity tensor is calculated")
 			{
-				auto const & dN_by_dx = Tetrahedron::dN_by_dx(dN_by_dX, F);
 				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
 
-				INFO("dN_by_dx:")
-				INFO(dN_by_dx)
-
-				auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, c, 0, 1);
-
-				THEN("matrix of values are as expected")
+				THEN("it has expected values")
 				{
-					Eigen::Matrix3d expected;
-					expected <<
-					// clang-format off
-						-0.4, -0.4,  0,
-						-0.4, -1.2, -0.4,
-						0, -0.4, -0.4;
-					// clang-format on
-					CHECK(Kcab.isApprox(expected));
+					FeltElements::Tetrahedron::ElasticityTensor expected;
+					expected.setValues({{{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
+											{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+											{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}},
+										{{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+											{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
+											{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}},
+										{{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
+											{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
+											{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}}});
+					Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00001).all();
+
+					INFO("Expected:")
+					INFO(expected);
+					INFO("Actual:")
+					INFO(c);
+					CHECK(comparison(0));
 				}
-			}
+
+				AND_WHEN("constitutive component of tangent matrix is calculated")
+				{
+					auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, c, v, 0, 1);
+
+					INFO("Kcab:")
+					INFO(Kcab)
+
+					THEN("matrix of values are as expected")
+					{
+						Eigen::Matrix3d expected;
+						expected <<
+						// clang-format off
+							-0.0667, -0.0667,    0,
+							-0.0667, -0.2, -0.0667,
+							0, -0.0667, -0.0667;
+						// clang-format on
+						CHECK(Kcab.isApprox(expected, 0.0005));
+					}
+				}
+
+			} // End WHEN("neo-hookian elasticity tensor is calculated")
 
 			WHEN("neo-hookian Cauchy stress tensor is calculated")
 			{
@@ -408,13 +416,118 @@ SCENARIO("Elasticity tensors")
 				INFO("sigma:")
 				INFO(sigma)
 
-				THEN("stress is zero")
+				THEN("Cauchy stress tensor is zero")
 				{
 					Eigen::Matrix3d expected;
 					expected.setZero();
 					CHECK(sigma == expected);
 				}
+
+				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
+				{
+					Tetrahedron::GradientMatrix const & Ksab = Tetrahedron::Ksab(
+						dN_by_dx, sigma, v, 0, 1);
+
+					THEN("stress component is zero")
+					{
+						Eigen::Matrix3d expected;
+						expected.setZero();
+						CHECK(Ksab == expected);
+					}
+				}
 			}
-		}
+		} // End AND_GIVEN("an undeformed tetrahedron")
+
+		AND_GIVEN("a deformed tetrahedron")
+		{
+			auto const mesh = FeltElements::MeshFile{file_name_single};
+			auto tet = FeltElements::Tetrahedron{mesh, 0};
+			// Do the deformation.
+			tet.u(0) += Eigen::Vector3d{0.5, 0, 0};
+
+			auto const v = tet.v();
+			auto const & dN_by_dX = tet.dN_by_dX();
+			auto const & dx_by_dN = tet.dx_by_dN();
+			auto const & F = Tetrahedron::dx_by_dX(dx_by_dN, dN_by_dX);
+			auto const & dN_by_dx = Tetrahedron::dN_by_dx(dN_by_dX, F);
+			auto const J = Tetrahedron::J(F);
+			auto const & b = Tetrahedron::b(F);
+
+			WHEN("neo-hookian elasticity tensor is calculated")
+			{
+				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
+
+				THEN("it has expected values")
+				{
+					FeltElements::Tetrahedron::ElasticityTensor expected;
+					expected.setValues({{{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
+											{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+											{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}},
+										{{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+											{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
+											{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}},
+										{{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
+											{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
+											{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}}});
+					Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00001).all();
+
+					INFO("Expected:")
+					INFO(expected);
+					INFO("Actual:")
+					INFO(c);
+					CHECK(comparison(0));
+				}
+
+				AND_WHEN("constitutive component of tangent matrix is calculated")
+				{
+					auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, c, v, 0, 1);
+
+					INFO("Kcab:")
+					INFO(Kcab)
+
+					THEN("matrix of values are as expected")
+					{
+						Eigen::Matrix3d expected;
+						expected <<
+								 // clang-format off
+								 -0.0667, -0.0667,    0,
+							-0.0667, -0.2, -0.0667,
+							0, -0.0667, -0.0667;
+						// clang-format on
+						CHECK(Kcab.isApprox(expected, 0.0005));
+					}
+				}
+
+			} // End WHEN("neo-hookian elasticity tensor is calculated")
+
+			WHEN("neo-hookian Cauchy stress tensor is calculated")
+			{
+				Tetrahedron::GradientMatrix const & sigma = Tetrahedron::neo_hookian_stress(
+					J, b, lambda, mu);
+
+				INFO("sigma:")
+				INFO(sigma)
+
+				THEN("Cauchy stress tensor is zero")
+				{
+					Eigen::Matrix3d expected;
+					expected.setZero();
+					CHECK(sigma == expected);
+				}
+
+				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
+				{
+					Tetrahedron::GradientMatrix const & Ksab = Tetrahedron::Ksab(
+						dN_by_dx, sigma, v, 0, 1);
+
+					THEN("stress component is zero")
+					{
+						Eigen::Matrix3d expected;
+						expected.setZero();
+						CHECK(Ksab == expected);
+					}
+				}
+			}
+		} // End AND_GIVEN("an undeformed tetrahedron")
 	}
 }

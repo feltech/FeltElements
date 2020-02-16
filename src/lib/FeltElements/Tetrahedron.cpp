@@ -138,6 +138,15 @@ double Tetrahedron::V() const
 	return m_volume;
 }
 
+double Tetrahedron::v() const
+{
+	return std::abs(
+			(x(1) - x(3))
+				.cross(x(2) - x(3))
+				.dot(x(0) - x(3))
+		) / 6.0;
+}
+
 Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
 	double const J, double const lambda, double const mu)
 {
@@ -181,6 +190,7 @@ Tetrahedron::GradientMatrix Tetrahedron::neo_hookian_stress(
 Tetrahedron::GradientMatrix Tetrahedron::Kcab(
 	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
 	Tetrahedron::ElasticityTensor const & c,
+	double const v,
 	Tetrahedron::Node::Index const a,
 	Tetrahedron::Node::Index const b)
 {
@@ -194,9 +204,23 @@ Tetrahedron::GradientMatrix Tetrahedron::Kcab(
 	Eigen::Tensor<double, 1> const & dNa_by_dx = to_tensor(dN_by_dx.row(a), 3);
 	Eigen::Tensor<double, 1> const & dNb_by_dx = to_tensor(dN_by_dx.row(b), 3);
 
-	Eigen::Tensor<double, 2> K = c.contract(dNb_by_dx, c_b).contract(dNa_by_dx, c_a);
+	Eigen::Tensor<double, 2> K = v * c.contract(dNb_by_dx, c_b).contract(dNa_by_dx, c_a);
 
 	return from_tensor(K);
+}
+
+Tetrahedron::GradientMatrix Tetrahedron::Ksab(
+	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
+	Tetrahedron::GradientMatrix const & sigma,
+	double v,
+	Tetrahedron::Node::Index a,
+	Tetrahedron::Node::Index b)
+{
+	static auto const I = GradientMatrix::Identity();
+	Eigen::Vector3d const & dNa_by_dx = dN_by_dx.row(a);
+	Eigen::Vector3d const & dNb_by_dx = dN_by_dx.row(b);
+
+	return v * dNa_by_dx.dot(sigma * dNb_by_dx) * I;
 }
 
 } // namespace FeltElements
