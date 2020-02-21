@@ -3,27 +3,29 @@
 //
 #include <boost/range/irange.hpp>
 
+#include "TetGenIO.hpp"
 #include "Tetrahedron.hpp"
-#include "MeshFile.hpp"
 
 namespace
 {
 
-template <typename T>
-double delta(T const i, T const j) {
+template <typename Index>
+auto delta(Index const i, Index const j)
+{
 	return i == j;
 };
 
-auto to_tensor(auto const & matrix, auto const... dims)
+template <typename Matrix, typename ...Dim>
+auto to_tensor(Matrix const & matrix, Dim const... dims)
 {
-	using MatrixType = decltype(matrix);
 	constexpr int rank = sizeof... (dims);
-	return Eigen::TensorMap<Eigen::Tensor<double const, rank>>{
+	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, rank>>{
 		matrix.data(), {dims...}
 	};
 }
 
-auto from_tensor(auto const & tensor)
+template <typename Tensor>
+auto from_tensor(Tensor const & tensor)
 {
 	return Eigen::Map<Eigen::Matrix3d const>{tensor.data(), 3, 3};
 }
@@ -31,7 +33,7 @@ auto from_tensor(auto const & tensor)
 
 namespace FeltElements
 {
-Tetrahedron::Tetrahedron(FeltElements::MeshFile const & mesh, std::size_t const tet_idx)
+Tetrahedron::Tetrahedron(FeltElements::TetGenIO const & mesh, std::size_t const tet_idx)
 	:
 	m_vertices{
 		Node::PosMap{mesh.tet_corner_point(tet_idx, 0)},
@@ -45,7 +47,7 @@ Tetrahedron::Tetrahedron(FeltElements::MeshFile const & mesh, std::size_t const 
 		Node::PosMap{mesh.tet_corner_displacement(tet_idx, 2)},
 		Node::PosMap{mesh.tet_corner_displacement(tet_idx, 3)},
 	},
-	m_volume{
+	m_material_volume{
 		std::abs(
 			(m_vertices[1] - m_vertices[3])
 			.cross(m_vertices[2] - m_vertices[3])
@@ -117,7 +119,7 @@ Tetrahedron::GradientMatrix Tetrahedron::dx_by_dX(
 	return dx_by_dN * dN_by_dX;
 }
 
-double Tetrahedron::J(Tetrahedron::GradientMatrix const & F)
+Tetrahedron::Scalar Tetrahedron::J(Tetrahedron::GradientMatrix const & F)
 {
 	return F.determinant();
 }
@@ -133,12 +135,12 @@ Tetrahedron::dN_by_dx(ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix con
 	return dN_by_dX * F.inverse();
 }
 
-double Tetrahedron::V() const
+Tetrahedron::Scalar Tetrahedron::V() const
 {
-	return m_volume;
+	return m_material_volume;
 }
 
-double Tetrahedron::v() const
+Tetrahedron::Scalar Tetrahedron::v() const
 {
 	return std::abs(
 			(x(1) - x(3))
@@ -148,13 +150,13 @@ double Tetrahedron::v() const
 }
 
 Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
-	double const J, double const lambda, double const mu)
+	Tetrahedron::Scalar const J, Tetrahedron::Scalar const lambda, Tetrahedron::Scalar const mu)
 {
-	double const lambda_prime = lambda / J;
-	double const mu_prime = (mu - lambda * std::log(J));
+	Tetrahedron::Scalar const lambda_prime = lambda / J;
+	Tetrahedron::Scalar const mu_prime = (mu - lambda * std::log(J));
 
 	static const ElasticityTensor c_lambda = ([]() {
-		std::size_t const N = 3;
+		std::size_t constexpr N = 3;
 		ElasticityTensor c;
 		for (std::size_t i : boost::irange(N))
 			for (std::size_t j : boost::irange(N))
@@ -166,7 +168,7 @@ Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
 	}());
 
 	static const ElasticityTensor c_mu = ([]() {
-		std::size_t const N = 3;
+		std::size_t constexpr N = 3;
 		ElasticityTensor c;
 		for (std::size_t i : boost::irange(N))
 			for (std::size_t j : boost::irange(N))
@@ -180,17 +182,18 @@ Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
 	return lambda_prime * c_lambda + mu_prime * c_mu;
 }
 
-Tetrahedron::GradientMatrix Tetrahedron::neo_hookian_stress(
-	double const J, Tetrahedron::GradientMatrix const & b, double const lambda, double const mu)
+Tetrahedron::StressMatrix Tetrahedron::neo_hookian_stress(
+	Tetrahedron::Scalar const J, Tetrahedron::GradientMatrix const & b,
+	Tetrahedron::Scalar const lambda, Tetrahedron::Scalar const mu)
 {
-	static auto const I = GradientMatrix::Identity();
+	static auto const I = StressMatrix::Identity();
 	return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
 }
 
-Tetrahedron::GradientMatrix Tetrahedron::Kcab(
+Tetrahedron::StiffnessMatrix Tetrahedron::Kcab(
 	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
+	Tetrahedron::Scalar const v,
 	Tetrahedron::ElasticityTensor const & c,
-	double const v,
 	Tetrahedron::Node::Index const a,
 	Tetrahedron::Node::Index const b)
 {
@@ -201,26 +204,28 @@ Tetrahedron::GradientMatrix Tetrahedron::Kcab(
 		Eigen::IndexPair<int>(3, 0)
 	};
 
-	Eigen::Tensor<double, 1> const & dNa_by_dx = to_tensor(dN_by_dx.row(a), 3);
-	Eigen::Tensor<double, 1> const & dNb_by_dx = to_tensor(dN_by_dx.row(b), 3);
+	auto const & dNa_by_dx = to_tensor(dN_by_dx.row(a), 3);
+	auto const & dNb_by_dx = to_tensor(dN_by_dx.row(b), 3);
 
-	Eigen::Tensor<double, 2> K = v * c.contract(dNb_by_dx, c_b).contract(dNa_by_dx, c_a);
+	using Tensor2 = Eigen::TensorFixedSize<Tetrahedron::Scalar, Eigen::Sizes<3, 3>>;
+
+	Tensor2 K = v * c.contract(dNb_by_dx, c_b).contract(dNa_by_dx, c_a);
 
 	return from_tensor(K);
 }
 
-Tetrahedron::GradientMatrix Tetrahedron::Ksab(
+Tetrahedron::StiffnessMatrix Tetrahedron::Ksab(
 	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
-	Tetrahedron::GradientMatrix const & sigma,
-	double v,
-	Tetrahedron::Node::Index a,
-	Tetrahedron::Node::Index b)
+	Tetrahedron::Scalar const v,
+	Tetrahedron::StressMatrix const & sigma,
+	Tetrahedron::Node::Index const a,
+	Tetrahedron::Node::Index const b)
 {
 	static auto const I = GradientMatrix::Identity();
-	Eigen::Vector3d const & dNa_by_dx = dN_by_dx.row(a);
-	Eigen::Vector3d const & dNb_by_dx = dN_by_dx.row(b);
+	auto const & dNa_by_dxT = dN_by_dx.row(a);
+	auto const & dNb_by_dx = dN_by_dx.row(b).transpose();
 
-	return v * dNa_by_dx.dot(sigma * dNb_by_dx) * I;
+	return v * dNa_by_dxT * sigma * dNb_by_dx * I;
 }
 
 } // namespace FeltElements

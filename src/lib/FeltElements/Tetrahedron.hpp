@@ -12,13 +12,15 @@
 
 namespace FeltElements
 {
-class MeshFile;
+class TetGenIO;
 
 class Tetrahedron
 {
+public:
+	using Scalar = double;
 	struct Node
 	{
-		using Coord = double;
+		using Coord = Scalar;
 		using Pos = Eigen::Vector3d;
 		using PosMap = Eigen::Map<Pos>;
 		using List = std::array<PosMap, 4>;
@@ -26,11 +28,12 @@ class Tetrahedron
 	};
 	using ShapeDerivativeMatrix = Eigen::Matrix<Node::Coord, 4, 3, Eigen::RowMajor>;
 	using IsoCoordDerivativeMatrix = Eigen::Matrix<Node::Coord, 3, 4>;
-  public:
 	using GradientMatrix = Eigen::Matrix<Node::Coord, 3, 3>;
-	using ElasticityTensor = Eigen::TensorFixedSize<double, Eigen::Sizes<3, 3, 3, 3>>;
+	using StressMatrix = GradientMatrix;
+	using StiffnessMatrix = GradientMatrix;
+	using ElasticityTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<3, 3, 3, 3>>;
 
-	Tetrahedron(MeshFile const & mesh, std::size_t tet_idx);
+	Tetrahedron(TetGenIO const & mesh, std::size_t tet_idx);
 
 	static IsoCoordDerivativeMatrix const dL_by_dN;
 	static ShapeDerivativeMatrix const dN_by_dL;
@@ -40,38 +43,38 @@ class Tetrahedron
 	[[nodiscard]] Node::PosMap const & X(Node::Index idx) const;
 	[[nodiscard]] Node::PosMap const & u(Node::Index idx) const;
 	[[nodiscard]] Node::PosMap & u(Node::Index idx);
-	[[nodiscard]] double V() const;
-	[[nodiscard]] double v() const;
+	[[nodiscard]] Scalar V() const;
+	[[nodiscard]] Scalar v() const;
 
 	[[nodiscard]] static Tetrahedron::GradientMatrix dx_by_dX(
 		IsoCoordDerivativeMatrix const & dx_by_dN, ShapeDerivativeMatrix const & dN_by_dX);
 	[[nodiscard]] static Tetrahedron::ShapeDerivativeMatrix dN_by_dx(
 		ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F);
-	[[nodiscard]] static double J(GradientMatrix const & F);
+	[[nodiscard]] static Scalar J(GradientMatrix const & F);
 	[[nodiscard]] static Tetrahedron::GradientMatrix b(GradientMatrix const & F);
 	[[nodiscard]] static ElasticityTensor
-	neo_hookian_elasticity(double J, double lambda, double mu);
-	[[nodiscard]] static GradientMatrix
-	neo_hookian_stress(double J, GradientMatrix const & b, double lambda, double mu);
+	neo_hookian_elasticity(Scalar J, Scalar lambda, Scalar mu);
+	[[nodiscard]] static StressMatrix
+	neo_hookian_stress(Scalar J, GradientMatrix const & b, Scalar lambda, Scalar mu);
 
-	static GradientMatrix Kcab(
+	static StiffnessMatrix Kcab(
 		ShapeDerivativeMatrix const & dN_by_dx,
+		Scalar v,
 		ElasticityTensor const & c,
-		double v,
 		Node::Index a,
 		Node::Index b);
 
-	static GradientMatrix Ksab(
+	static StiffnessMatrix Ksab(
 		ShapeDerivativeMatrix const & dN_by_dx,
+		Scalar v,
 		GradientMatrix const & sigma,
-		double v,
 		Node::Index a,
 		Node::Index b);
 
 private:
 	Node::List const m_vertices;
 	Node::List m_displacements;
-	double const m_volume;
+	Scalar const m_material_volume;
 };
 } // namespace FeltElements
 #endif // FELTELEMENTS_TETRAHEDRON_HPP

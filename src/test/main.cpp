@@ -1,14 +1,18 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
 #define CATCH_CONFIG_MAIN
-#include <unsupported/Eigen/CXX11/Tensor>
-
-#include <FeltElements/MeshFile.hpp>
-#include <FeltElements/Tetrahedron.hpp>
-#include "util.hpp"
 #include <catch2/catch.hpp>
+#include <unsupported/Eigen/CXX11/Tensor>
+#include <OpenVolumeMesh/Geometry/VectorT.hh>
+#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include <boost/range/irange.hpp>
 
-std::string const file_name_single = "resources/single/tet.1";
-std::string const file_name_double = "resources/double/tet.1";
+#include "util.hpp"
+#include <FeltElements/TetGenIO.hpp>
+#include <FeltElements/Tetrahedron.hpp>
+
+char const * file_name_one = "resources/single/tet.1";
+char const * file_name_two = "resources/two/tet.1";
+char const * file_name_two_quadratic = "resources/double/tet.1";
 
 using namespace FeltElements;
 
@@ -19,21 +23,22 @@ SCENARIO("Loading a tetrahedralisation")
 //	getcwd(cwd, 500);
 //	std::cerr << "Executing tests in " << cwd << std::endl;
 
-	auto expected_counts = [](const FeltElements::MeshFile & mesh,
+	auto expected_counts = [](const TetGenIO & mesh,
+							  auto num_points,
 							  auto num_simplexes,
-							  auto num_corners,
-							  auto num_trifaces) {
+							  auto num_corners) {
+		CHECK(mesh.num_points() == num_points);
 		CHECK(mesh.num_simplexes() == num_simplexes);
 		CHECK(mesh.num_corners() == num_corners);
-		CHECK(mesh.num_trifaces() == num_trifaces);
 	};
+
 
 	GIVEN("single tetrahedron mesh is loaded")
 	{
-		auto const & mesh = FeltElements::MeshFile{file_name_single};
+		auto const & mesh = TetGenIO{file_name_one};
 		THEN("expected counts are reported")
 		{
-			expected_counts(mesh, 1, 4, 4);
+			expected_counts(mesh, 4, 1, 4);
 		}
 
 		THEN("expected node positions are reported")
@@ -76,7 +81,7 @@ SCENARIO("Loading a tetrahedralisation")
 
 		AND_WHEN("tetrahedron is loaded from mesh")
 		{
-			auto tet = FeltElements::Tetrahedron{mesh, 0};
+			auto tet = Tetrahedron{mesh, 0};
 			THEN("expected node positions are reported")
 			{
 				CHECK(tet.X(0) == Eigen::Vector3d{0, 0, 0});
@@ -99,16 +104,16 @@ SCENARIO("Loading a tetrahedralisation")
 
 	GIVEN("double quadratic tetrahedron mesh is loaded")
 	{
-		auto const & mesh = FeltElements::MeshFile{file_name_double};
+		auto const & mesh = TetGenIO{file_name_two_quadratic};
 		THEN("expected counts are reported")
 		{
-			expected_counts(mesh, 2, 10, 6);
+			expected_counts(mesh, 14, 2, 10);
 		}
 
 		WHEN("tetrahedrons are loaded from mesh")
 		{
-			auto tet1 = FeltElements::Tetrahedron{mesh, 0};
-			auto tet2 = FeltElements::Tetrahedron{mesh, 1};
+			auto tet1 = Tetrahedron{mesh, 0};
+			auto tet2 = Tetrahedron{mesh, 1};
 
 			THEN("expected node positions are reported")
 			{
@@ -130,6 +135,42 @@ SCENARIO("Loading a tetrahedralisation")
 			}
 		}
 	}
+
+	GIVEN("two-tetrahedron mesh is loaded")
+	{
+		auto const & mesh = TetGenIO{file_name_two};
+
+		THEN("expected counts are reported")
+		{
+			expected_counts(mesh, 5, 2, 4);
+		}
+
+		WHEN("an OpenVolumeMesh is constructed")
+		{
+			auto const & ovm = mesh.to_mesh();
+			
+			THEN("mesh has correct number of elements")
+			{
+				CHECK(ovm.n_cells() == 2);
+				CHECK(ovm.n_faces() == 7);
+				CHECK(ovm.n_vertices() == 5);
+			}
+			THEN("expected node positions are reported")
+			{
+				auto const & vtxs1 = ovm.get_cell_vertices(OpenVolumeMesh::CellHandle{0});
+				CHECK(ovm.vertex(vtxs1[0]) == OpenVolumeMesh::Vec3d{0, 0, 0});
+				CHECK(ovm.vertex(vtxs1[1]) == OpenVolumeMesh::Vec3d{0, 0, 1});
+				CHECK(ovm.vertex(vtxs1[2]) == OpenVolumeMesh::Vec3d{1, 0, 0});
+				CHECK(ovm.vertex(vtxs1[3]) == OpenVolumeMesh::Vec3d{0, 0.5, 0.5});
+
+				auto const & vtxs2 = ovm.get_cell_vertices(OpenVolumeMesh::CellHandle{1});
+				CHECK(ovm.vertex(vtxs2[0]) == OpenVolumeMesh::Vec3d{0, 1, 0});
+				CHECK(ovm.vertex(vtxs2[1]) == OpenVolumeMesh::Vec3d{0, 0, 0});
+				CHECK(ovm.vertex(vtxs2[2]) == OpenVolumeMesh::Vec3d{1, 0, 0});
+				CHECK(ovm.vertex(vtxs2[3]) == OpenVolumeMesh::Vec3d{0, 0.5, 0.5});
+			}
+		}
+	}
 }
 
 
@@ -137,10 +178,8 @@ SCENARIO("Shape function derivatives")
 {
 	GIVEN("simple tetrahedron")
 	{
-//		std::string const file_name = "resources/single/tet.1";
-		std::string const file_name = "resources/double/tet.1";
-		auto const & mesh = FeltElements::MeshFile{file_name};
-		auto tet = FeltElements::Tetrahedron{mesh, 0};
+		auto const & mesh = TetGenIO{file_name_two};
+		auto tet = Tetrahedron{mesh, 0};
 
 		std::stringstream ss;
 		ss << "Tetrahedron vertices: ";
@@ -351,7 +390,7 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 
 		AND_GIVEN("an undeformed tetrahedron")
 		{
-			auto const mesh = FeltElements::MeshFile{file_name_single};
+			auto const mesh = FeltElements::TetGenIO{file_name_one};
 			auto const tet = FeltElements::Tetrahedron{mesh, 0};
 			auto const v = tet.v();
 			auto const & dN_by_dX = tet.dN_by_dX();
@@ -388,7 +427,7 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 
 				AND_WHEN("constitutive component of tangent matrix is calculated")
 				{
-					auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, c, v, 0, 1);
+					auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, v, c, 0, 1);
 
 					INFO("Kcab:")
 					INFO(Kcab)
@@ -426,7 +465,7 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
 				{
 					Tetrahedron::GradientMatrix const & Ksab = Tetrahedron::Ksab(
-						dN_by_dx, sigma, v, 0, 1);
+						dN_by_dx, v, sigma, 0, 1);
 
 					THEN("stress component is zero")
 					{
@@ -440,7 +479,7 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 
 		AND_GIVEN("a deformed tetrahedron")
 		{
-			auto const mesh = FeltElements::MeshFile{file_name_single};
+			auto const mesh = FeltElements::TetGenIO{file_name_one};
 			auto tet = FeltElements::Tetrahedron{mesh, 0};
 			// Do the deformation.
 			tet.u(0) += Eigen::Vector3d{0.5, 0, 0};
@@ -488,7 +527,7 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 
 				AND_WHEN("constitutive component of tangent matrix is calculated")
 				{
-					auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, c, v, 0, 1);
+					auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, v, c, 0, 1);
 
 					INFO("Kcab:")
 					INFO(Kcab)
@@ -510,8 +549,7 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 
 			WHEN("neo-hookian Cauchy stress tensor is calculated")
 			{
-				Tetrahedron::GradientMatrix const & sigma = Tetrahedron::neo_hookian_stress(
-					J, b, lambda, mu);
+				auto const & sigma = Tetrahedron::neo_hookian_stress(J, b, lambda, mu);
 
 				INFO("sigma:")
 				INFO(sigma)
@@ -530,8 +568,7 @@ SCENARIO("Neo-hookian tangent stiffness matrix")
 
 				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
 				{
-					Tetrahedron::GradientMatrix const & Ksab = Tetrahedron::Ksab(
-						dN_by_dx, sigma, v, 0, 1);
+					auto const & Ksab = Tetrahedron::Ksab(dN_by_dx, v, sigma, 0, 1);
 
 					INFO("Ksab:")
 					INFO(Ksab)
