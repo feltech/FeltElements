@@ -10,6 +10,7 @@
 #include <Eigen/Dense>
 #include <unsupported/Eigen/CXX11/Tensor>
 
+
 namespace FeltElements
 {
 class TetGenIO;
@@ -18,6 +19,9 @@ class Tetrahedron
 {
 public:
 	using Scalar = double;
+	using Mesh = OpenVolumeMesh::GeometricTetrahedralMeshV3d;
+	using CellHandle = OpenVolumeMesh::CellHandle;
+
 	struct Node
 	{
 		using Coord = Scalar;
@@ -25,6 +29,8 @@ public:
 		using PosMap = Eigen::Map<Pos>;
 		using List = std::array<PosMap, 4>;
 		using Index = Eigen::Index;
+		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<4, 3>>;
+		using PosProperty = OpenVolumeMesh::VertexPropertyT<Pos>;
 	};
 	using ShapeDerivativeMatrix = Eigen::Matrix<Node::Coord, 4, 3, Eigen::RowMajor>;
 	using IsoCoordDerivativeMatrix = Eigen::Matrix<Node::Coord, 3, 4>;
@@ -32,15 +38,22 @@ public:
 	using StressMatrix = GradientMatrix;
 	using StiffnessMatrix = GradientMatrix;
 	using ElasticityTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<3, 3, 3, 3>>;
+	template <Eigen::Index dim = 3>
+	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim, dim>>;
 
+	Tetrahedron() = default;
 	Tetrahedron(TetGenIO const & mesh, std::size_t tet_idx);
+	void init(Mesh const & mesh, CellHandle const & tet_h);
 
 	static IsoCoordDerivativeMatrix const dL_by_dN;
 	static ShapeDerivativeMatrix const dN_by_dL;
 	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix dN_by_dX() const;
 	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
 	[[nodiscard]] Node::Pos x(Node::Index idx) const;
+	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const cellh);
 	[[nodiscard]] Node::PosMap const & X(Node::Index idx) const;
+	[[nodiscard]] static Node::Positions u(
+		Mesh const & mesh, Node::PosProperty const & displacements, CellHandle const cellh);
 	[[nodiscard]] Node::PosMap const & u(Node::Index idx) const;
 	[[nodiscard]] Node::PosMap & u(Node::Index idx);
 	[[nodiscard]] Scalar V() const;
@@ -72,9 +85,18 @@ public:
 		Node::Index b);
 
 private:
-	Node::List const m_vertices;
-	Node::List m_displacements;
-	Scalar const m_material_volume;
+	static Node::Pos null_pos;
+	Node::List m_vertices = {
+		Node::PosMap{null_pos.data(), null_pos.size()},
+		Node::PosMap{null_pos.data(), null_pos.size()},
+		Node::PosMap{null_pos.data(), null_pos.size()},
+		Node::PosMap{null_pos.data(), null_pos.size()}};
+	Node::List m_displacements = {
+		Node::PosMap{null_pos.data(), null_pos.size()},
+			Node::PosMap{null_pos.data(), null_pos.size()},
+			Node::PosMap{null_pos.data(), null_pos.size()},
+			Node::PosMap{null_pos.data(), null_pos.size()}};
+	Scalar m_material_volume;
 };
 } // namespace FeltElements
 #endif // FELTELEMENTS_TETRAHEDRON_HPP

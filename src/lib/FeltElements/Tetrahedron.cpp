@@ -1,8 +1,6 @@
 //
 // Created by dave on 07/11/2019.
 //
-#include <boost/range/irange.hpp>
-
 #include "TetGenIO.hpp"
 #include "Tetrahedron.hpp"
 
@@ -24,15 +22,16 @@ auto to_tensor(Matrix const & matrix, Dim const... dims)
 	};
 }
 
-template <typename Tensor>
-auto from_tensor(Tensor const & tensor)
+template <typename Tensor, Eigen::Index dim = 3>
+auto to_matrix(Tensor const & tensor)
 {
-	return Eigen::Map<Eigen::Matrix3d const>{tensor.data(), 3, 3};
+	return Eigen::Map<Eigen::Matrix3d const>{tensor.data(), dim, dim};
 }
 }
 
 namespace FeltElements
 {
+
 Tetrahedron::Tetrahedron(FeltElements::TetGenIO const & mesh, std::size_t const tet_idx)
 	:
 	m_vertices{
@@ -55,6 +54,13 @@ Tetrahedron::Tetrahedron(FeltElements::TetGenIO const & mesh, std::size_t const 
 		) / 6.0
 	}
 {}
+
+
+void init(Tetrahedron::Mesh const & mesh, Tetrahedron::CellHandle const & tet_h)
+{
+
+}
+
 
 Tetrahedron::IsoCoordDerivativeMatrix const Tetrahedron::dL_by_dN = // NOLINT(cert-err58-cpp)
 	(Eigen::Matrix4d{} <<
@@ -98,9 +104,34 @@ Tetrahedron::Node::Pos Tetrahedron::x(Tetrahedron::Node::Index const idx) const
 	return X(idx) + u(idx);
 }
 
+Tetrahedron::Node::Positions Tetrahedron::X(Mesh const & mesh, CellHandle const cellh)
+{
+	Node::Positions p;
+	std::size_t node_idx = 0;
+	for (OpenVolumeMesh::CellVertexIter iter = mesh.cv_iter(cellh); iter.valid(); iter++)
+	{
+		OpenVolumeMesh::Vec3d const & vtx = mesh.vertex(*iter);
+		p.chip(node_idx++, 0) = to_tensor(vtx, 3);
+	}
+	return p;
+}
+
 Tetrahedron::Node::PosMap const & Tetrahedron::X(Node::Index const idx) const
 {
 	return m_vertices[idx];
+}
+
+Tetrahedron::Node::Positions Tetrahedron::u(
+	Mesh const & mesh, Node::PosProperty const & displacements, CellHandle const cellh)
+{
+	Node::Positions p;
+	std::size_t node_idx = 0;
+	for (OpenVolumeMesh::CellVertexIter iter = mesh.cv_iter(cellh); iter.valid(); iter++)
+	{
+		Node::Pos const & vtx = displacements[*iter];
+		p.chip(node_idx++, 0) = to_tensor(vtx, 3);
+	}
+	return p;
 }
 
 Tetrahedron::Node::PosMap & Tetrahedron::u(Tetrahedron::Node::Index const idx)
@@ -142,11 +173,26 @@ Tetrahedron::Scalar Tetrahedron::V() const
 
 Tetrahedron::Scalar Tetrahedron::v() const
 {
-	return std::abs(
-			(x(1) - x(3))
-				.cross(x(2) - x(3))
-				.dot(x(0) - x(3))
-		) / 6.0;
+	Node::Positions xs;
+	xs.chip(0, 0) = to_tensor(Node::Pos{x(0)}, 3);
+	xs.chip(1, 0) = to_tensor(Node::Pos{x(1)}, 3);
+	xs.chip(2, 0) = to_tensor(Node::Pos{x(2)}, 3);
+	xs.chip(3, 0) = to_tensor(Node::Pos{x(3)}, 3);
+
+	using Indices = Eigen::array<Eigen::Index, 2>;
+	auto const & start_3x3 = xs.slice(Indices{0, 0}, Indices{3, 3});
+	auto const & end_1x3 = xs.slice(Indices{3, 0}, Indices{1, 3});
+	auto const & end_3x3 = end_1x3.broadcast(Indices{3, 1});
+
+	MatrixTensor<> const delta = start_3x3 - end_3x3;
+	auto const & mat_delta = to_matrix(delta);
+	return std::abs(mat_delta.determinant()) / 6.0;
+
+//	return std::abs(
+//			(x(1) - x(3))
+//				.cross(x(2) - x(3))
+//				.dot(x(0) - x(3))
+//		) / 6.0;
 }
 
 Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
@@ -155,25 +201,26 @@ Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
 	Tetrahedron::Scalar const lambda_prime = lambda / J;
 	Tetrahedron::Scalar const mu_prime = (mu - lambda * std::log(J));
 
+	std::size_t constexpr N = 3;
+
 	static const ElasticityTensor c_lambda = ([]() {
 		std::size_t constexpr N = 3;
 		ElasticityTensor c;
-		for (std::size_t i : boost::irange(N))
-			for (std::size_t j : boost::irange(N))
-				for (std::size_t k : boost::irange(N))
-					for (std::size_t l : boost::irange(N))
+		for (std::size_t i = 0; i < N; i++)
+			for (std::size_t j = 0; j < N; j++)
+				for (std::size_t k = 0; k < N; k++)
+					for (std::size_t l = 0; l < N; l++)
 						c(i, j, k, l) = delta(i, j) * delta(k, l);
 
 		return c;
 	}());
 
 	static const ElasticityTensor c_mu = ([]() {
-		std::size_t constexpr N = 3;
 		ElasticityTensor c;
-		for (std::size_t i : boost::irange(N))
-			for (std::size_t j : boost::irange(N))
-				for (std::size_t k : boost::irange(N))
-					for (std::size_t l : boost::irange(N))
+		for (std::size_t i = 0; i < N; i++)
+			for (std::size_t j = 0; j < N; j++)
+				for (std::size_t k = 0; k < N; k++)
+					for (std::size_t l = 0; l < N; l++)
 						c(i, j, k, l) = delta(i, k) * delta(j, l) + delta(i, l) * delta(j, k);
 
 		return c;
@@ -211,7 +258,7 @@ Tetrahedron::StiffnessMatrix Tetrahedron::Kcab(
 
 	Tensor2 K = v * c.contract(dNb_by_dx, c_b).contract(dNa_by_dx, c_a);
 
-	return from_tensor(K);
+	return to_matrix(K);
 }
 
 Tetrahedron::StiffnessMatrix Tetrahedron::Ksab(
@@ -227,5 +274,5 @@ Tetrahedron::StiffnessMatrix Tetrahedron::Ksab(
 
 	return v * dNa_by_dxT * sigma * dNb_by_dx * I;
 }
-
+Tetrahedron::Node::Pos Tetrahedron::null_pos{0,0,0};
 } // namespace FeltElements

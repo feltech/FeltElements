@@ -1,14 +1,16 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
 #define CATCH_CONFIG_MAIN
-#include <catch2/catch.hpp>
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <OpenVolumeMesh/Geometry/VectorT.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include <OpenVolumeMesh/Core/PropertyDefines.hh>
 #include <boost/range/irange.hpp>
 
-#include "util.hpp"
 #include <FeltElements/TetGenIO.hpp>
 #include <FeltElements/Tetrahedron.hpp>
+
+#include "util.hpp"
+#include <catch2/catch.hpp>
 
 char const * file_name_one = "resources/single/tet.1";
 char const * file_name_two = "resources/two/tet.1";
@@ -31,7 +33,6 @@ SCENARIO("Loading a tetrahedralisation")
 		CHECK(mesh.num_simplexes() == num_simplexes);
 		CHECK(mesh.num_corners() == num_corners);
 	};
-
 
 	GIVEN("single tetrahedron mesh is loaded")
 	{
@@ -135,20 +136,18 @@ SCENARIO("Loading a tetrahedralisation")
 			}
 		}
 	}
+}
 
-	GIVEN("two-tetrahedron mesh is loaded")
+SCENARIO("OpenVolumeMesh construction")
+{
+	GIVEN("two-element mesh is loaded")
 	{
-		auto const & mesh = TetGenIO{file_name_two};
-
-		THEN("expected counts are reported")
-		{
-			expected_counts(mesh, 5, 2, 4);
-		}
+		auto const & io = TetGenIO{file_name_two};
 
 		WHEN("an OpenVolumeMesh is constructed")
 		{
-			auto const & ovm = mesh.to_mesh();
-			
+			auto ovm = io.to_mesh();
+
 			THEN("mesh has correct number of elements")
 			{
 				CHECK(ovm.n_cells() == 2);
@@ -168,6 +167,79 @@ SCENARIO("Loading a tetrahedralisation")
 				CHECK(ovm.vertex(vtxs2[1]) == OpenVolumeMesh::Vec3d{0, 0, 0});
 				CHECK(ovm.vertex(vtxs2[2]) == OpenVolumeMesh::Vec3d{1, 0, 0});
 				CHECK(ovm.vertex(vtxs2[3]) == OpenVolumeMesh::Vec3d{0, 0.5, 0.5});
+			}
+		}
+	}
+} // End SCENARIO("OpenVolumeMesh construction")
+
+
+SCENARIO("Tensor attributes of mesh elements")
+{
+	GIVEN("A two-element mesh")
+	{
+		auto mesh = TetGenIO{file_name_two}.to_mesh();
+
+		WHEN("material node position tensor is constructed")
+		{
+			Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, 0);
+
+			THEN("expected positions are reported")
+			{
+				Tetrahedron::Node::Positions expected;
+				expected.setValues({
+									   {0, 0, 0},
+									   {1, 0, 0},
+									   {0, 0, 1},
+									   {0, 0.5, 0.5}
+								   });
+
+				INFO("X:")
+				INFO(X)
+				CHECK(equal(X, expected));
+			}
+
+		}
+	}
+
+	GIVEN("a one-element mesh")
+	{
+		auto mesh = TetGenIO{file_name_one}.to_mesh();
+
+		WHEN("material node position tensor is constructed")
+		{
+			Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, 0);
+
+			THEN("expected positions are reported")
+			{
+				Tetrahedron::Node::Positions expected;
+				expected.setValues({{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}});
+
+				INFO("X:")
+				INFO(X)
+				CHECK(equal(X, expected));
+			}
+		}
+
+		AND_GIVEN("displacements")
+		{
+			Tetrahedron::Node::PosProperty displacements =
+				mesh.request_vertex_property<Tetrahedron::Node::Pos>("displacement");
+			displacements->set_persistent(true);
+
+			WHEN("displacement tensor is constructed")
+			{
+				Tetrahedron::Node::Positions u = Tetrahedron::u(mesh, displacements, 0);
+
+				THEN("displacements are zero")
+				{
+
+					Tetrahedron::Node::Positions expected;
+					expected.setZero();
+
+					INFO("u:")
+					INFO(u)
+					CHECK(equal(u, expected));
+				}
 			}
 		}
 	}

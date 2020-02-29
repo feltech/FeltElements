@@ -33,6 +33,7 @@ conan_cmake_run(
 	BASIC_SETUP # Run conan_basic_setup
 	BUILD missing
 	PROFILE default PROFILE_AUTO build_type # Use default profile override with Debug/Release
+	BUILD missing
 )
 include(${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS)
@@ -97,7 +98,10 @@ include_directories(src/lib vendor ${_luadist_cache_root}/include ${CONAN_INCLUD
 target_link_libraries(app ${LIBLUA})
 conan_target_link_libraries(app)
 # Add a compile definition to the location of lua libraries in the binary directory.
-add_compile_definitions(LUA_LIBRARY_DIR=\"${RUNTIME_LUA_LIBRARY_DIR}\")
+add_compile_definitions(
+	LUA_LIBRARY_DIR=\"${RUNTIME_LUA_LIBRARY_DIR}\"
+	INCLUDE_TEMPLATES=1
+)
 ###################################
 # Configure test target
 enable_testing()
