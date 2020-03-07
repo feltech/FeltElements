@@ -13,19 +13,50 @@ auto delta(Index const i, Index const j)
 	return i == j;
 };
 
-template <typename Matrix, typename ...Dim>
-auto to_tensor(Matrix const & matrix, Dim const... dims)
+template <typename Matrix>
+using is_matrix = typename std::enable_if<
+    (Matrix::RowsAtCompileTime > 1 && Matrix::ColsAtCompileTime > 1), void*>::type;
+
+template <typename Matrix>
+using is_vector = typename std::enable_if<
+	(Matrix::RowsAtCompileTime == 1 || Matrix::ColsAtCompileTime == 1), void*>::type;
+
+template <typename Matrix>
+using is_ovm_vector = typename std::enable_if<
+	(std::is_same<Matrix, typename Matrix::vector_type>::value), void*>::type;
+
+template <typename Matrix, is_matrix<Matrix> = nullptr>
+auto to_tensor(Matrix const & matrix)
 {
-	constexpr int rank = sizeof... (dims);
-	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, rank>>{
-		matrix.data(), {dims...}
+	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 2>>{
+		matrix.data(), {Matrix::RowsAtCompileTime, Matrix::ColsAtCompileTime}
 	};
 }
 
-template <typename Tensor, Eigen::Index dim = 3>
+template <typename Matrix, is_vector<Matrix> = nullptr >
+auto to_tensor(Matrix const & matrix)
+{
+	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 1>>{
+		matrix.data(), {std::max(Matrix::RowsAtCompileTime, Matrix::ColsAtCompileTime)}
+	};
+}
+
+template <typename Matrix, is_ovm_vector<Matrix> = nullptr >
+auto to_tensor(Matrix const & matrix)
+{
+	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 1>>{
+		matrix.data(), {static_cast<Eigen::Index>(matrix.size())}
+	};
+}
+
+template <class Tensor, std::size_t idx>
+Eigen::Index const size = Eigen::internal::get<idx, typename Tensor::Dimensions::Base>::value;
+
+template <typename Tensor>
 auto to_matrix(Tensor const & tensor)
 {
-	return Eigen::Map<Eigen::Matrix3d const>{tensor.data(), dim, dim};
+	return Eigen::Map<Eigen::Matrix<double, size<Tensor, 0>, size<Tensor, 1>> const>{
+		tensor.data(), size<Tensor, 0>, size<Tensor, 1>};
 }
 }
 
@@ -55,13 +86,6 @@ Tetrahedron::Tetrahedron(FeltElements::TetGenIO const & mesh, std::size_t const 
 	}
 {}
 
-
-void init(Tetrahedron::Mesh const & mesh, Tetrahedron::CellHandle const & tet_h)
-{
-
-}
-
-
 Tetrahedron::IsoCoordDerivativeMatrix const Tetrahedron::dL_by_dN = // NOLINT(cert-err58-cpp)
 	(Eigen::Matrix4d{} <<
 		// clang-format off
@@ -80,6 +104,22 @@ Tetrahedron::ShapeDerivativeMatrix const Tetrahedron::dN_by_dL = // NOLINT(cert-
 		0, 0, 0, 1).finished().inverse().block<4, 3>(0, 1);
 		// clang-format on
 
+Tetrahedron::ShapeDerivativeTensor Tetrahedron::dN_by_dX(Node::Positions const & X)
+{
+	// Interpolation: (1, x, y, z)^T = N_to_x * N, where N is 4x natural coordinates (corners).
+	using Tensor4x4 = Eigen::TensorFixedSize<Node::Coord, Eigen::Sizes<4, 4>>;
+	using TensorXxY = Eigen::Tensor<Node::Coord const, 2>;
+	using Padding = Eigen::array<std::pair<Eigen::Index, Eigen::Index>, 2>;
+	using Matrix4x3 = Eigen::Matrix<Node::Coord, 4, 3>;
+
+	Padding padding{{{0, 0}, {1, 0}}};
+	Tensor4x4 N_to_x = Eigen::TensorMap<TensorXxY>{
+		X.data(), {4, 3}}.pad(padding, 1.0);
+	// Invert then strip constant terms, leaving just coefficients, i.e. the derivative.
+	Matrix4x3 dN_by_dX = to_matrix(N_to_x).inverse().block<4, 3>(0, 1);
+	return to_tensor(dN_by_dX);
+}
+
 Tetrahedron::ShapeDerivativeMatrix Tetrahedron::dN_by_dX() const
 {
 	Eigen::Matrix4d dX_by_dN;
@@ -90,7 +130,8 @@ Tetrahedron::ShapeDerivativeMatrix Tetrahedron::dN_by_dX() const
 		X(0), X(1), X(2), X(3);
 	// clang-format on
 
-	// dN_i/dX_j, where i is row, j is column
+	// dN_i/dX_j, where i is row, j is column.
+	// Strip constant terms, leaving just coefficients, i.e. the derivative.
 	return dX_by_dN.inverse().block<4, 3>(0, 1);
 }
 
@@ -99,19 +140,24 @@ Tetrahedron::IsoCoordDerivativeMatrix Tetrahedron::dx_by_dN() const
 	return (IsoCoordDerivativeMatrix() << x(0), x(1), x(2), x(3)).finished();
 }
 
+Tetrahedron::Node::Positions Tetrahedron::x(Node::Positions const & X, Node::Positions const & u)
+{
+	return X + u;
+}
+
 Tetrahedron::Node::Pos Tetrahedron::x(Tetrahedron::Node::Index const idx) const
 {
 	return X(idx) + u(idx);
 }
 
-Tetrahedron::Node::Positions Tetrahedron::X(Mesh const & mesh, CellHandle const cellh)
+Tetrahedron::Node::Positions Tetrahedron::X(Mesh const & mesh, CellHandle const & cellh)
 {
 	Node::Positions p;
 	std::size_t node_idx = 0;
 	for (OpenVolumeMesh::CellVertexIter iter = mesh.cv_iter(cellh); iter.valid(); iter++)
 	{
 		OpenVolumeMesh::Vec3d const & vtx = mesh.vertex(*iter);
-		p.chip(node_idx++, 0) = to_tensor(vtx, 3);
+		p.chip(node_idx++, 0) = to_tensor(vtx);
 	}
 	return p;
 }
@@ -122,14 +168,14 @@ Tetrahedron::Node::PosMap const & Tetrahedron::X(Node::Index const idx) const
 }
 
 Tetrahedron::Node::Positions Tetrahedron::u(
-	Mesh const & mesh, Node::PosProperty const & displacements, CellHandle const cellh)
+	Mesh const & mesh, Node::PosProperty const & displacements, CellHandle const & cellh)
 {
 	Node::Positions p;
 	std::size_t node_idx = 0;
 	for (OpenVolumeMesh::CellVertexIter iter = mesh.cv_iter(cellh); iter.valid(); iter++)
 	{
 		Node::Pos const & vtx = displacements[*iter];
-		p.chip(node_idx++, 0) = to_tensor(vtx, 3);
+		p.chip(node_idx++, 0) = to_tensor(vtx);
 	}
 	return p;
 }
@@ -174,17 +220,17 @@ Tetrahedron::Scalar Tetrahedron::V() const
 Tetrahedron::Scalar Tetrahedron::v() const
 {
 	Node::Positions xs;
-	xs.chip(0, 0) = to_tensor(Node::Pos{x(0)}, 3);
-	xs.chip(1, 0) = to_tensor(Node::Pos{x(1)}, 3);
-	xs.chip(2, 0) = to_tensor(Node::Pos{x(2)}, 3);
-	xs.chip(3, 0) = to_tensor(Node::Pos{x(3)}, 3);
+	xs.chip(0, 0) = to_tensor(Node::Pos{x(0)});
+	xs.chip(1, 0) = to_tensor(Node::Pos{x(1)});
+	xs.chip(2, 0) = to_tensor(Node::Pos{x(2)});
+	xs.chip(3, 0) = to_tensor(Node::Pos{x(3)});
 
 	using Indices = Eigen::array<Eigen::Index, 2>;
 	auto const & start_3x3 = xs.slice(Indices{0, 0}, Indices{3, 3});
 	auto const & end_1x3 = xs.slice(Indices{3, 0}, Indices{1, 3});
 	auto const & end_3x3 = end_1x3.broadcast(Indices{3, 1});
 
-	MatrixTensor<> const delta = start_3x3 - end_3x3;
+	MatrixTensor<3, 3> const delta = start_3x3 - end_3x3;
 	auto const & mat_delta = to_matrix(delta);
 	return std::abs(mat_delta.determinant()) / 6.0;
 
@@ -251,8 +297,8 @@ Tetrahedron::StiffnessMatrix Tetrahedron::Kcab(
 		Eigen::IndexPair<int>(3, 0)
 	};
 
-	auto const & dNa_by_dx = to_tensor(dN_by_dx.row(a), 3);
-	auto const & dNb_by_dx = to_tensor(dN_by_dx.row(b), 3);
+	auto const & dNa_by_dx = to_tensor(dN_by_dx.row(a));
+	auto const & dNb_by_dx = to_tensor(dN_by_dx.row(b));
 
 	using Tensor2 = Eigen::TensorFixedSize<Tetrahedron::Scalar, Eigen::Sizes<3, 3>>;
 

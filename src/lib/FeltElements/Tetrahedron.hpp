@@ -32,39 +32,43 @@ public:
 		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<4, 3>>;
 		using PosProperty = OpenVolumeMesh::VertexPropertyT<Pos>;
 	};
+	using ShapeDerivativeTensor = Eigen::TensorFixedSize<Node::Coord, Eigen::Sizes<4, 3>>;
 	using ShapeDerivativeMatrix = Eigen::Matrix<Node::Coord, 4, 3, Eigen::RowMajor>;
 	using IsoCoordDerivativeMatrix = Eigen::Matrix<Node::Coord, 3, 4>;
 	using GradientMatrix = Eigen::Matrix<Node::Coord, 3, 3>;
 	using StressMatrix = GradientMatrix;
 	using StiffnessMatrix = GradientMatrix;
 	using ElasticityTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<3, 3, 3, 3>>;
+	template <Eigen::Index... dim>
+	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim...>>;
 	template <Eigen::Index dim = 3>
-	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim, dim>>;
+	using VectorTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim>>;
 
 	Tetrahedron() = default;
 	Tetrahedron(TetGenIO const & mesh, std::size_t tet_idx);
-	void init(Mesh const & mesh, CellHandle const & tet_h);
 
 	static IsoCoordDerivativeMatrix const dL_by_dN;
 	static ShapeDerivativeMatrix const dN_by_dL;
-	[[nodiscard]] Tetrahedron::ShapeDerivativeMatrix dN_by_dX() const;
+	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(Node::Positions const & X);
+	[[nodiscard]] ShapeDerivativeMatrix dN_by_dX() const;
 	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
+	[[nodiscard]] static Node::Positions x(Node::Positions const & X, Node::Positions const & u);
 	[[nodiscard]] Node::Pos x(Node::Index idx) const;
-	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const cellh);
+	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const & cellh);
 	[[nodiscard]] Node::PosMap const & X(Node::Index idx) const;
 	[[nodiscard]] static Node::Positions u(
-		Mesh const & mesh, Node::PosProperty const & displacements, CellHandle const cellh);
+		Mesh const & mesh, Node::PosProperty const & displacements, CellHandle const & cellh);
 	[[nodiscard]] Node::PosMap const & u(Node::Index idx) const;
 	[[nodiscard]] Node::PosMap & u(Node::Index idx);
 	[[nodiscard]] Scalar V() const;
 	[[nodiscard]] Scalar v() const;
 
-	[[nodiscard]] static Tetrahedron::GradientMatrix dx_by_dX(
+	[[nodiscard]] static GradientMatrix dx_by_dX(
 		IsoCoordDerivativeMatrix const & dx_by_dN, ShapeDerivativeMatrix const & dN_by_dX);
-	[[nodiscard]] static Tetrahedron::ShapeDerivativeMatrix dN_by_dx(
+	[[nodiscard]] static ShapeDerivativeMatrix dN_by_dx(
 		ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F);
 	[[nodiscard]] static Scalar J(GradientMatrix const & F);
-	[[nodiscard]] static Tetrahedron::GradientMatrix b(GradientMatrix const & F);
+	[[nodiscard]] static GradientMatrix b(GradientMatrix const & F);
 	[[nodiscard]] static ElasticityTensor
 	neo_hookian_elasticity(Scalar J, Scalar lambda, Scalar mu);
 	[[nodiscard]] static StressMatrix

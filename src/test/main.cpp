@@ -218,27 +218,80 @@ SCENARIO("Tensor attributes of mesh elements")
 				INFO(X)
 				CHECK(equal(X, expected));
 			}
-		}
 
-		AND_GIVEN("displacements")
-		{
-			Tetrahedron::Node::PosProperty displacements =
-				mesh.request_vertex_property<Tetrahedron::Node::Pos>("displacement");
-			displacements->set_persistent(true);
-
-			WHEN("displacement tensor is constructed")
+			AND_WHEN("derivative of shape function wrt material coords is calculated")
 			{
-				Tetrahedron::Node::Positions u = Tetrahedron::u(mesh, displacements, 0);
+				auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 
-				THEN("displacements are zero")
+				THEN("derivative is correct")
 				{
+					Tetrahedron::ShapeDerivativeTensor expected;
+					// clang-format of
+					expected.setValues({
+						 {0, 0, 0},
+						 {1, 0, 0},
+						 {0, 1, 0},
+						 {0, 0, 1}
+					 });
+					// clang-format on
+					INFO("dN_by_dX:")
+					INFO(dN_by_dX)
+					CHECK(equal(dN_by_dX, expected));
+				}
+			}
 
-					Tetrahedron::Node::Positions expected;
-					expected.setZero();
+			AND_GIVEN("displacements")
+			{
+				Tetrahedron::Node::PosProperty displacements =
+					mesh.request_vertex_property<Tetrahedron::Node::Pos>("displacement");
+				displacements->set_persistent(true);
 
-					INFO("u:")
-					INFO(u)
-					CHECK(equal(u, expected));
+				WHEN("displacement tensor is constructed")
+				{
+					Tetrahedron::Node::Positions u = Tetrahedron::u(mesh, displacements, 0);
+
+					THEN("displacements are zero")
+					{
+
+						Tetrahedron::Node::Positions expected;
+						expected.setZero();
+
+						INFO("u:")
+						INFO(u)
+						CHECK(equal(u, expected));
+					}
+
+					AND_WHEN("spatial node position tensor is calculated")
+					{
+						Tetrahedron::Node::Positions x = Tetrahedron::x(X, u);
+
+						THEN("spatial position is equal to material position")
+						{
+							CHECK(equal(X, x));
+						}
+					}
+
+					AND_WHEN("a node is deformed")
+					{
+						Tetrahedron::VectorTensor<> delta;
+						delta.setValues({0.5, 0, 0});
+						u.chip(0, 0) += delta;
+
+						AND_WHEN("spatial node position tensor is calculated")
+						{
+							Tetrahedron::Node::Positions x = Tetrahedron::x(X, u);
+
+							THEN("spatial position is updated")
+							{
+								Tetrahedron::Node::Positions expected;
+								expected.setValues({{0.5, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}});
+
+								INFO("x:")
+								INFO(x)
+								CHECK(equal(x, expected));
+							}
+						}
+					}
 				}
 			}
 		}

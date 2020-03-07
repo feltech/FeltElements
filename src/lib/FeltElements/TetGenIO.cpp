@@ -73,23 +73,25 @@ int * TetGenIO::corners() const
 	return m_io.tetrahedronlist;
 }
 
-double * TetGenIO::tet_corner_point(std::size_t tet_idx, std::size_t corner_idx) const
+double * TetGenIO::tet_corner_point(
+	std::size_t const tet_idx, std::size_t const corner_idx) const
 {
 	return &points()[point_idx(tet_vertex_idx(tet_idx, corner_idx))];
 }
 
-double * TetGenIO::tet_corner_displacement(std::size_t tet_idx, std::size_t corner_idx) const
+double * TetGenIO::tet_corner_displacement(
+	std::size_t const tet_idx, std::size_t const corner_idx) const
 {
 	return &displacements()[point_idx(tet_vertex_idx(tet_idx, corner_idx))];
 }
 
-std::array<double, 3> TetGenIO::vertex(std::size_t vertex_idx) const
+std::array<double, 3> TetGenIO::vertex(std::size_t const vertex_idx) const
 {
 	std::size_t const idx = point_idx(vertex_idx);
 	return std::array<double, 3>{points()[idx], points()[idx + 1], points()[idx + 2]};
 }
 
-std::size_t TetGenIO::tet_vertex_idx(std::size_t tet_idx, std::size_t corner_idx) const
+std::size_t TetGenIO::tet_vertex_idx(std::size_t const tet_idx, std::size_t const corner_idx) const
 {
 	return corners()[tet_idx * num_corners() + corner_idx];
 }
