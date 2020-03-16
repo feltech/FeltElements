@@ -31,6 +31,7 @@ public:
 		using Index = Eigen::Index;
 		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<4, 3>>;
 		using PosProperty = OpenVolumeMesh::VertexPropertyT<Pos>;
+		using SpatialCoordProp = OpenVolumeMesh::VertexPropertyT<OpenVolumeMesh::Vec3d>;
 	};
 	template <Eigen::Index rows = 3, Eigen::Index cols = rows, int options = 0>
 	using Matrix = Eigen::Matrix<Scalar, rows, cols, options>;
@@ -59,6 +60,9 @@ public:
 	static IsoCoordDerivativeTensor const dL_by_dN;
 	static ShapeDerivativeTensor const dN_by_dL;
 
+	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const & cellh);
+	[[nodiscard]] static Node::SpatialCoordProp x(Mesh & mesh);
+
 	[[nodiscard]] static GradientTensor dX_by_dL(Node::Positions const & X);
 	[[nodiscard]] static GradientTensor dL_by_dX(GradientTensor const & dX_by_dL);
 	[[nodiscard]] static ShapeCartesianTransform N_to_x(Node::Positions const & X);
@@ -71,7 +75,6 @@ public:
 	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
 	[[nodiscard]] static Node::Positions x(Node::Positions const & X, Node::Positions const & u);
 	[[nodiscard]] Node::Pos x(Node::Index idx) const;
-	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const & cellh);
 	[[nodiscard]] Node::PosMap const & X(Node::Index idx) const;
 	[[nodiscard]] static Node::Positions u(
 		Mesh const & mesh, Node::PosProperty const & displacements, CellHandle const & cellh);

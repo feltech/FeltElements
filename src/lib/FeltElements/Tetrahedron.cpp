@@ -205,6 +205,20 @@ Tetrahedron::Node::Positions Tetrahedron::X(Mesh const & mesh, CellHandle const 
 	return p;
 }
 
+Tetrahedron::Node::SpatialCoordProp Tetrahedron::x(Mesh & mesh)
+{
+	Node::SpatialCoordProp x_prop =
+		mesh.request_vertex_property<OpenVolumeMesh::Vec3d>("x");
+	x_prop->set_persistent(true);
+
+	for (
+		OpenVolumeMesh::VertexIter it_vtx = mesh.vertices_begin(); it_vtx != mesh.vertices_end();
+		it_vtx++)
+		x_prop[*it_vtx] = mesh.vertex(*it_vtx);
+
+	return x_prop;
+}
+
 Tetrahedron::Node::PosMap const & Tetrahedron::X(Node::Index const idx) const
 {
 	return m_vertices[idx];

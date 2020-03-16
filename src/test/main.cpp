@@ -167,6 +167,28 @@ SCENARIO("OpenVolumeMesh construction")
 				CHECK(ovm.vertex(vtxs2[2]) == OpenVolumeMesh::Vec3d{1, 0, 0});
 				CHECK(ovm.vertex(vtxs2[3]) == OpenVolumeMesh::Vec3d{0, 0.5, 0.5});
 			}
+
+			AND_WHEN("spatial coordinate property is created")
+			{
+				using namespace OpenVolumeMesh;
+				VertexPropertyT<Vec3d> const & x_prop = Tetrahedron::x(ovm);
+
+				THEN("spatial coordinates equal material coordinates")
+				{
+					std::vector<Vec3d> X{};
+					std::vector<Vec3d> x{};
+
+					for (
+						VertexIter it_vtx = ovm.vertices_begin(); it_vtx != ovm.vertices_end();
+						it_vtx++)
+					{
+						X.push_back(ovm.vertex(*it_vtx));
+						x.push_back(x_prop[*it_vtx]);
+					}
+
+					CHECK(X == x);
+				}
+			}
 		}
 	}
 } // End SCENARIO("OpenVolumeMesh construction")
