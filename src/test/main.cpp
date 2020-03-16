@@ -168,25 +168,53 @@ SCENARIO("OpenVolumeMesh construction")
 				CHECK(ovm.vertex(vtxs2[3]) == OpenVolumeMesh::Vec3d{0, 0.5, 0.5});
 			}
 
-			AND_WHEN("spatial coordinate property is created")
+			AND_WHEN("material node position tensor is constructed")
 			{
-				using namespace OpenVolumeMesh;
-				VertexPropertyT<Vec3d> const & x_prop = Tetrahedron::x(ovm);
+				Tetrahedron::Node::Positions X = Tetrahedron::X(ovm, 0);
 
-				THEN("spatial coordinates equal material coordinates")
+				THEN("expected positions are reported")
 				{
-					std::vector<Vec3d> X{};
-					std::vector<Vec3d> x{};
+					// clang-format off
+					check_equal(X, "X", {
+						{0, 0, 0},
+						{1, 0, 0},
+						{0, 1, 0},
+						{0, 0, 1}
+					});
+					// clang-format on
+				}
 
-					for (
-						VertexIter it_vtx = ovm.vertices_begin(); it_vtx != ovm.vertices_end();
-						it_vtx++)
+				AND_WHEN("spatial coordinate property is created")
+				{
+					using namespace OpenVolumeMesh;
+					VertexPropertyT<Vec3d> const & x_prop = Tetrahedron::x(ovm);
+
+					THEN("spatial coordinates equal material coordinates")
 					{
-						X.push_back(ovm.vertex(*it_vtx));
-						x.push_back(x_prop[*it_vtx]);
+						std::vector<Vec3d> all_X{};
+						std::vector<Vec3d> all_x{};
+
+						for (VertexIter it_vtx = ovm.vertices_begin(); it_vtx != ovm.vertices_end();
+							 it_vtx++)
+						{
+							all_X.push_back(ovm.vertex(*it_vtx));
+							all_x.push_back(x_prop[*it_vtx]);
+						}
+
+						CHECK(all_X == all_x);
 					}
 
-					CHECK(X == x);
+					AND_WHEN("spatial node position tensor is constructed")
+					{
+						Tetrahedron::Node::Positions x = Tetrahedron::x(ovm, 0, x_prop);
+
+						THEN("expected positions are reported")
+						{
+							// clang-format off
+							check_equal(x, "x", X, "X");
+							// clang-format on
+						}
+					}
 				}
 			}
 		}
@@ -225,17 +253,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 		WHEN("material node position tensor is constructed")
 		{
-			Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, 0);
-
-			THEN("expected positions are reported")
-			{
-				Tetrahedron::Node::Positions expected;
-				expected.setValues({{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}});
-
-				INFO("X:")
-				INFO(X)
-				CHECK(equal(X, expected));
-			}
+			Tetrahedron::Node::Positions const & X = Tetrahedron::X(mesh, 0);
 
 			AND_WHEN("derivative of material wrt local coords is calculated")
 			{

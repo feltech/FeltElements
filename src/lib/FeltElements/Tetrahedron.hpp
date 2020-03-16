@@ -62,6 +62,8 @@ public:
 
 	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const & cellh);
 	[[nodiscard]] static Node::SpatialCoordProp x(Mesh & mesh);
+	[[nodiscard]] static Node::Positions x(
+		Mesh const & mesh, CellHandle const & cellh, Node::SpatialCoordProp const & x_prop);
 
 	[[nodiscard]] static GradientTensor dX_by_dL(Node::Positions const & X);
 	[[nodiscard]] static GradientTensor dL_by_dX(GradientTensor const & dX_by_dL);

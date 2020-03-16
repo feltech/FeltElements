@@ -219,6 +219,19 @@ Tetrahedron::Node::SpatialCoordProp Tetrahedron::x(Mesh & mesh)
 	return x_prop;
 }
 
+Tetrahedron::Node::Positions Tetrahedron::x(
+	Mesh const & mesh, CellHandle const & cellh, Node::SpatialCoordProp const & x_prop)
+{
+	Node::Positions p;
+	std::size_t node_idx = 0;
+	for (OpenVolumeMesh::CellVertexIter iter = mesh.cv_iter(cellh); iter.valid(); iter++)
+	{
+		OpenVolumeMesh::Vec3d const & vtx = x_prop[*iter];
+		p.chip(node_idx++, 0) = to_tensor(vtx);
+	}
+	return p;
+}
+
 Tetrahedron::Node::PosMap const & Tetrahedron::X(Node::Index const idx) const
 {
 	return m_vertices[idx];
