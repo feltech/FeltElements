@@ -32,23 +32,40 @@ public:
 		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<4, 3>>;
 		using PosProperty = OpenVolumeMesh::VertexPropertyT<Pos>;
 	};
-	using ShapeDerivativeTensor = Eigen::TensorFixedSize<Node::Coord, Eigen::Sizes<4, 3>>;
-	using ShapeDerivativeMatrix = Eigen::Matrix<Node::Coord, 4, 3, Eigen::RowMajor>;
-	using IsoCoordDerivativeMatrix = Eigen::Matrix<Node::Coord, 3, 4>;
-	using GradientMatrix = Eigen::Matrix<Node::Coord, 3, 3>;
+	template <Eigen::Index rows = 3, Eigen::Index cols = rows, int options = 0>
+	using Matrix = Eigen::Matrix<Scalar, rows, cols, options>;
+	using GradientMatrix = Matrix<3, 3>;
 	using StressMatrix = GradientMatrix;
 	using StiffnessMatrix = GradientMatrix;
-	using ElasticityTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<3, 3, 3, 3>>;
-	template <Eigen::Index... dim>
-	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim...>>;
+	using ShapeDerivativeMatrix = Matrix<4, 3>;
+	using IsoCoordDerivativeMatrix = Matrix<3, 4>;
+	template <Eigen::Index rows = 3, Eigen::Index cols = 3>
+	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<rows, cols>>;
 	template <Eigen::Index dim = 3>
 	using VectorTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim>>;
+	using IsoCoordDerivativeTensor = MatrixTensor<3, 4>;
+	using ShapeDerivativeTensor = MatrixTensor<4, 3>;
+	using ElasticityTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<3, 3, 3, 3>>;
+	using ShapeCartesianTransform = MatrixTensor<4, 4>;
+	using CartesianDerivativeTensor = MatrixTensor<3, 4>;
+	using GradientTensor = MatrixTensor<3, 3>;
+	using IndexPair = Eigen::IndexPair<Eigen::Index>;
+	template <Eigen::Index num_pairs>
+	using IndexPairs = Eigen::array<IndexPair, num_pairs>;
 
 	Tetrahedron() = default;
 	Tetrahedron(TetGenIO const & mesh, std::size_t tet_idx);
 
-	static IsoCoordDerivativeMatrix const dL_by_dN;
-	static ShapeDerivativeMatrix const dN_by_dL;
+	static IsoCoordDerivativeTensor const dL_by_dN;
+	static ShapeDerivativeTensor const dN_by_dL;
+
+	[[nodiscard]] static GradientTensor dX_by_dL(Node::Positions const & X);
+	[[nodiscard]] static GradientTensor dL_by_dX(GradientTensor const & dX_by_dL);
+	[[nodiscard]] static ShapeCartesianTransform N_to_x(Node::Positions const & X);
+	[[nodiscard]] static CartesianDerivativeTensor dx_by_dN(ShapeCartesianTransform const & N_to_x);
+	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(
+		Tetrahedron::GradientTensor const & dL_by_dX);
+	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(ShapeCartesianTransform const & N_to_x);
 	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(Node::Positions const & X);
 	[[nodiscard]] ShapeDerivativeMatrix dN_by_dX() const;
 	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
@@ -63,6 +80,10 @@ public:
 	[[nodiscard]] Scalar V() const;
 	[[nodiscard]] Scalar v() const;
 
+	[[nodiscard]] static GradientTensor dx_by_dX(
+		Node::Positions const & x, ShapeDerivativeTensor const & dN_by_dX);
+	[[nodiscard]] static GradientTensor dx_by_dX(
+		GradientTensor const & dx_by_dL, GradientTensor const & dL_by_dX);
 	[[nodiscard]] static GradientMatrix dx_by_dX(
 		IsoCoordDerivativeMatrix const & dx_by_dN, ShapeDerivativeMatrix const & dN_by_dX);
 	[[nodiscard]] static ShapeDerivativeMatrix dN_by_dx(

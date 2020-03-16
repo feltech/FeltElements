@@ -28,7 +28,14 @@ using is_ovm_vector = typename std::enable_if<
 template <typename Matrix, is_matrix<Matrix> = nullptr>
 auto to_tensor(Matrix const & matrix)
 {
-	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 2>>{
+	static_assert(
+		!(Matrix::Options & Eigen::RowMajor),
+		"Cannot map a row-major matrix to a tensor since row-major tensors are not yet"
+  		" supported by Eigen");
+
+	return Eigen::TensorMap<
+	    Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 2,
+	    Matrix::Options & Eigen::RowMajor ? Eigen::RowMajor : Eigen::ColMajor>>{
 		matrix.data(), {Matrix::RowsAtCompileTime, Matrix::ColsAtCompileTime}
 	};
 }
@@ -55,7 +62,8 @@ Eigen::Index const size = Eigen::internal::get<idx, typename Tensor::Dimensions:
 template <typename Tensor>
 auto to_matrix(Tensor const & tensor)
 {
-	return Eigen::Map<Eigen::Matrix<double, size<Tensor, 0>, size<Tensor, 1>> const>{
+	return Eigen::Map<
+		Eigen::Matrix<double, size<Tensor, 0>, size<Tensor, 1>, Tensor::Layout> const>{
 		tensor.data(), size<Tensor, 0>, size<Tensor, 1>};
 }
 }
@@ -86,43 +94,78 @@ Tetrahedron::Tetrahedron(FeltElements::TetGenIO const & mesh, std::size_t const 
 	}
 {}
 
-Tetrahedron::IsoCoordDerivativeMatrix const Tetrahedron::dL_by_dN = // NOLINT(cert-err58-cpp)
-	(Eigen::Matrix4d{} <<
+Tetrahedron::IsoCoordDerivativeTensor const Tetrahedron::dL_by_dN = // NOLINT(cert-err58-cpp)
+	to_tensor(IsoCoordDerivativeMatrix{(Eigen::Matrix4d{} <<
 		// clang-format off
 		1, 1, 1, 1,
 		0, 1, 0, 0,
 		0, 0, 1, 0,
-		0, 0, 0, 1).finished().block<3, 4>(1, 0);
+		0, 0, 0, 1).finished().block<3, 4>(1, 0)});
 		// clang-format on
 
-Tetrahedron::ShapeDerivativeMatrix const Tetrahedron::dN_by_dL = // NOLINT(cert-err58-cpp)
-	(Eigen::Matrix4d{} <<
+Tetrahedron::ShapeDerivativeTensor const Tetrahedron::dN_by_dL = // NOLINT(cert-err58-cpp)
+	to_tensor(ShapeDerivativeMatrix{(Eigen::Matrix4d{} <<
 		// clang-format off
 		1, 1, 1, 1,
 		0, 1, 0, 0,
 		0, 0, 1, 0,
-		0, 0, 0, 1).finished().inverse().block<4, 3>(0, 1);
+		0, 0, 0, 1).finished().inverse().block<4, 3>(0, 1)});
 		// clang-format on
+
 
 Tetrahedron::ShapeDerivativeTensor Tetrahedron::dN_by_dX(Node::Positions const & X)
 {
-	// Interpolation: (1, x, y, z)^T = N_to_x * N, where N is 4x natural coordinates (corners).
-	using Tensor4x4 = Eigen::TensorFixedSize<Node::Coord, Eigen::Sizes<4, 4>>;
-	using TensorXxY = Eigen::Tensor<Node::Coord const, 2>;
-	using Padding = Eigen::array<std::pair<Eigen::Index, Eigen::Index>, 2>;
-	using Matrix4x3 = Eigen::Matrix<Node::Coord, 4, 3>;
+	auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+	auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
+	return Tetrahedron::dN_by_dX(dL_by_dX);
+}
 
-	Padding padding{{{0, 0}, {1, 0}}};
-	Tensor4x4 N_to_x = Eigen::TensorMap<TensorXxY>{
-		X.data(), {4, 3}}.pad(padding, 1.0);
+Tetrahedron::CartesianDerivativeTensor Tetrahedron::dx_by_dN(
+	ShapeCartesianTransform const & N_to_x)
+{
+	Matrix<3, 4> dx_by_dN = to_matrix(N_to_x).block<3, 4>(1, 0);
+	return to_tensor(dx_by_dN);
+}
+
+Tetrahedron::ShapeDerivativeTensor Tetrahedron::dN_by_dX(
+	Tetrahedron::GradientTensor const & dL_by_dX)
+{
+	// dN/dX = dX/dL^(-T) * dN/dL = dN/dL^T * dX/dL^(-1) = dN/dL^T * dL/dX^T
+	constexpr IndexPairs<1> dN_dL{{{1, 0}}};
+	return dN_by_dL.contract(dL_by_dX, dN_dL);
+}
+
+Tetrahedron::GradientTensor Tetrahedron::dL_by_dX(GradientTensor const & dX_by_dL)
+{
+	return to_tensor(GradientMatrix{to_matrix(dX_by_dL).inverse()});
+}
+
+Tetrahedron::GradientTensor Tetrahedron::dX_by_dL(Node::Positions const & X)
+{
+	constexpr IndexPairs<1> X_L{{{0, 0}}};
+	return X.contract(dN_by_dL, X_L);
+}
+
+Tetrahedron::ShapeDerivativeTensor Tetrahedron::dN_by_dX(ShapeCartesianTransform const & N_to_x)
+{
+	// Interpolation: (1, x, y, z)^T = N_to_x * N, where N is 4x natural coordinates (corners).
 	// Invert then strip constant terms, leaving just coefficients, i.e. the derivative.
-	Matrix4x3 dN_by_dX = to_matrix(N_to_x).inverse().block<4, 3>(0, 1);
+	Matrix<4, 3> dN_by_dX = to_matrix(N_to_x).inverse().block<4, 3>(0, 1);
 	return to_tensor(dN_by_dX);
+}
+
+Tetrahedron::ShapeCartesianTransform Tetrahedron::N_to_x(Node::Positions const & X)
+{
+	using Shuffle = Eigen::array<Eigen::Index, 2>;
+	using Padding = Eigen::array<std::pair<Eigen::Index, Eigen::Index>, 2>;
+	Shuffle transpose{{1, 0}};
+	Padding padding{{{1, 0}, {0, 0}}};
+	return X.shuffle(transpose).pad(padding, 1.0);
 }
 
 Tetrahedron::ShapeDerivativeMatrix Tetrahedron::dN_by_dX() const
 {
-	Eigen::Matrix4d dX_by_dN;
+	Eigen::Matrix<Scalar, 4, 4, Eigen::RowMajor> dX_by_dN;
 	// Interpolation: (1, x, y, z)^T = dX_by_dN * N, where N is 4x natural coordinates (corners).
 	// clang-format off
 	dX_by_dN <<
@@ -188,6 +231,20 @@ Tetrahedron::Node::PosMap & Tetrahedron::u(Tetrahedron::Node::Index const idx)
 Tetrahedron::Node::PosMap const & Tetrahedron::u(Tetrahedron::Node::Index const idx) const
 {
 	return m_displacements[idx];
+}
+
+Tetrahedron::GradientTensor Tetrahedron::dx_by_dX(
+	Node::Positions const & x, ShapeDerivativeTensor const & dN_by_dX)
+{
+	constexpr IndexPairs<1> x_dN{{{0, 0}}};
+	return x.contract(dN_by_dX, x_dN);
+}
+
+Tetrahedron::GradientTensor Tetrahedron::dx_by_dX(
+	GradientTensor const & dx_by_dL, GradientTensor const & dL_by_dX)
+{
+	constexpr IndexPairs<1> x_X{{{0, 1}}};
+	return dx_by_dL.contract(dL_by_dX, x_X);
 }
 
 Tetrahedron::GradientMatrix Tetrahedron::dx_by_dX(
@@ -290,12 +347,8 @@ Tetrahedron::StiffnessMatrix Tetrahedron::Kcab(
 	Tetrahedron::Node::Index const a,
 	Tetrahedron::Node::Index const b)
 {
-	constexpr Eigen::array<Eigen::IndexPair<int>, 1> c_a = {
-			Eigen::IndexPair<int>(1, 0)
-	};
-	constexpr Eigen::array<Eigen::IndexPair<int>, 1> c_b = {
-		Eigen::IndexPair<int>(3, 0)
-	};
+	constexpr IndexPairs<1> c_a{{{1, 0}}};
+	constexpr IndexPairs<1> c_b{{{3, 0}}};
 
 	auto const & dNa_by_dx = to_tensor(dN_by_dx.row(a));
 	auto const & dNb_by_dx = to_tensor(dN_by_dx.row(b));
@@ -314,7 +367,7 @@ Tetrahedron::StiffnessMatrix Tetrahedron::Ksab(
 	Tetrahedron::Node::Index const a,
 	Tetrahedron::Node::Index const b)
 {
-	static auto const I = GradientMatrix::Identity();
+	auto const I = GradientMatrix::Identity();
 	auto const & dNa_by_dxT = dN_by_dx.row(a);
 	auto const & dNb_by_dx = dN_by_dx.row(b).transpose();
 

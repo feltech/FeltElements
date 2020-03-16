@@ -1,5 +1,4 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
-#define CATCH_CONFIG_MAIN
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <OpenVolumeMesh/Geometry/VectorT.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
@@ -9,8 +8,8 @@
 #include <FeltElements/TetGenIO.hpp>
 #include <FeltElements/Tetrahedron.hpp>
 
-#include "util.hpp"
-#include <catch2/catch.hpp>
+#define CATCH_CONFIG_MAIN
+#include "common.hpp"
 
 char const * file_name_one = "resources/single/tet.1";
 char const * file_name_two = "resources/two/tet.1";
@@ -173,32 +172,29 @@ SCENARIO("OpenVolumeMesh construction")
 } // End SCENARIO("OpenVolumeMesh construction")
 
 
-SCENARIO("Tensor attributes of mesh elements")
+SCENARIO("Coordinate derivatives in undeformed mesh")
 {
-	GIVEN("A two-element mesh")
+	THEN("derivative of shape wrt local coords is correct")
 	{
-		auto mesh = TetGenIO{file_name_two}.to_mesh();
+		check_equal(Tetrahedron::dN_by_dL, "dN_by_dL", {
+				// clang-format off
+				{-1, -1, -1},
+				{1, 0, 0},
+				{0, 1, 0},
+				{0, 0, 1}
+				// clang-format on
+		});
+	}
 
-		WHEN("material node position tensor is constructed")
-		{
-			Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, 0);
-
-			THEN("expected positions are reported")
-			{
-				Tetrahedron::Node::Positions expected;
-				expected.setValues({
-									   {0, 0, 0},
-									   {1, 0, 0},
-									   {0, 0, 1},
-									   {0, 0.5, 0.5}
-								   });
-
-				INFO("X:")
-				INFO(X)
-				CHECK(equal(X, expected));
-			}
-
-		}
+	THEN("derivative of local wrt shape coords is correct")
+	{
+		check_equal(Tetrahedron::dL_by_dN, "dL_by_dN", {
+				// clang-format off
+				{0, 1, 0, 0},
+				{0, 0, 1, 0},
+				{0, 0, 0, 1}
+				// clang-format on
+		});
 	}
 
 	GIVEN("a one-element mesh")
@@ -219,77 +215,282 @@ SCENARIO("Tensor attributes of mesh elements")
 				CHECK(equal(X, expected));
 			}
 
-			AND_WHEN("derivative of shape function wrt material coords is calculated")
+			AND_WHEN("derivative of material wrt local coords is calculated")
+			{
+				auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+
+				THEN("derivative is correct")
+				{
+					// clang-format off
+					check_equal(dX_by_dL, "dX_by_dL", {
+						{1, 0, 0},
+						{0, 1, 0},
+						{0, 0, 1}
+					});
+					// clang-format on
+				}
+
+				AND_WHEN("derivative of local wrt material coords is calculated")
+				{
+					auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
+
+					THEN("derivative is correct")
+					{
+						// clang-format off
+						check_equal(dL_by_dX, "dL_by_dX", {
+							{1, 0, 0},
+							{0, 1, 0},
+							{0, 0, 1}
+						});
+						// clang-format on
+					}
+
+					AND_WHEN("derivative of material wrt shape coords is calculated")
+					{
+						auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
+
+						THEN("derivative is correct")
+						{
+							// clang-format off
+							check_equal(dN_by_dX, "dN_by_dX", {
+								{-1, -1, -1},
+								{1, 0, 0},
+								{0, 1, 0},
+								{0, 0, 1}
+							});
+							// clang-format on
+						}
+					}
+				}
+			}
+
+			AND_WHEN("transformation from natural to cartesian coordinates is calculated")
+			{
+				auto const & N_to_x = Tetrahedron::N_to_x(X);
+
+				THEN("matrix is correct")
+				{
+					// clang-format off
+					check_equal(N_to_x, "N_to_x", {
+						{1, 1, 1, 1},
+						{0, 1, 0, 0},
+						{0, 0, 1, 0},
+						{0, 0, 0, 1}
+					});
+					// clang-format on
+				}
+
+				AND_WHEN("derivative of natural wrt cartesian coords is calculated")
+				{
+					auto const & dN_by_dX = Tetrahedron::dN_by_dX(N_to_x);
+
+					THEN("derivative is correct")
+					{
+						// clang-format off
+						check_equal(dN_by_dX, "dN_by_dX", {
+							 {-1, -1, -1},
+							 {1, 0, 0},
+							 {0, 1, 0},
+							 {0, 0, 1}
+						 });
+						// clang-format on
+					}
+				}
+
+				AND_WHEN("derivative of cartesian wrt natural coords is calculated")
+				{
+					auto const & dx_by_dN = Tetrahedron::dx_by_dN(N_to_x);
+
+					THEN("derivative is correct")
+					{
+						// clang-format off
+						check_equal(dx_by_dN, "dx_by_dN", {
+							{0, 1, 0, 0},
+							{0, 0, 1, 0},
+							{0, 0, 0, 1}
+						});
+						// clang-format on
+					}
+				}
+			}
+		}
+	}
+
+	GIVEN("First element of a two-element mesh")
+	{
+		auto mesh = TetGenIO{file_name_two}.to_mesh();
+
+		WHEN("material node position tensor is constructed")
+		{
+			Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, 0);
+
+			THEN("expected positions are reported")
+			{
+				Tetrahedron::Node::Positions expected;
+				expected.setValues({{0, 0, 0}, {1, 0, 0}, {0, 0, 1}, {0, 0.5, 0.5}});
+
+				INFO("X:")
+				INFO(X)
+				CHECK(equal(X, expected));
+			}
+
+			WHEN("derivative of material wrt local coords is calculated")
+			{
+				auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+
+				THEN("derivative is correct")
+				{
+					// clang-format off
+					check_equal(dX_by_dL, "dX_by_dL", {
+							{1, 0, 0},
+							{0, 0, 0.5},
+							{0, 1, 0.5}
+					});
+					// clang-format on
+				}
+
+				AND_WHEN("derivative of local wrt material coords is calculated")
+				{
+					auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
+
+					THEN("derivative is correct")
+					{
+						// clang-format off
+						check_equal(dL_by_dX, "dL_by_dX", {
+								{1, 0, 0},
+								{0, -1, 1},
+								{0, 2, 0}
+						});
+						// clang-format on
+					}
+
+					AND_WHEN("derivative of natural wrt material coords is calculated")
+					{
+						auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
+
+						THEN("derivative is correct")
+						{
+							// clang-format off
+							check_equal(dN_by_dX, "dN_by_dX", {
+									{-1, -1, -1},
+									{1, 0, 0},
+									{0, -1, 1},
+									{0, 2, 0}
+							});
+							// clang-format on
+						}
+					}
+				}
+			}
+
+			AND_WHEN("derivative of natural wrt material coords is calculated")
 			{
 				auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 
 				THEN("derivative is correct")
 				{
-					Tetrahedron::ShapeDerivativeTensor expected;
-					// clang-format of
-					expected.setValues({
-						 {0, 0, 0},
-						 {1, 0, 0},
-						 {0, 1, 0},
-						 {0, 0, 1}
-					 });
+					// clang-format off
+					check_equal(dN_by_dX, "dN_by_dX", {
+							{-1, -1, -1},
+							{1, 0, 0},
+							{0, -1, 1},
+							{0, 2, 0}
+					});
 					// clang-format on
-					INFO("dN_by_dX:")
-					INFO(dN_by_dX)
-					CHECK(equal(dN_by_dX, expected));
 				}
 			}
 
-			AND_GIVEN("displacements")
+			AND_WHEN("transformation from natural to cartesian coordinates is calculated")
 			{
-				Tetrahedron::Node::PosProperty displacements =
-					mesh.request_vertex_property<Tetrahedron::Node::Pos>("displacement");
-				displacements->set_persistent(true);
+				auto const & N_to_x = Tetrahedron::N_to_x(X);
 
-				WHEN("displacement tensor is constructed")
+				THEN("matrix is correct")
 				{
-					Tetrahedron::Node::Positions u = Tetrahedron::u(mesh, displacements, 0);
+					// clang-format off
+					check_equal(N_to_x, "N_to_x", {
+							{1, 1, 1, 1},
+							{0, 1, 0, 0},
+							{0, 0, 0, 0.5},
+							{0, 0, 1, 0.5}
+					});
+					// clang-format on
+				}
 
-					THEN("displacements are zero")
+				AND_WHEN("derivative of natural wrt material coords is calculated")
+				{
+					auto const & dN_by_dX = Tetrahedron::dN_by_dX(N_to_x);
+
+					THEN("derivative is correct")
 					{
-
-						Tetrahedron::Node::Positions expected;
-						expected.setZero();
-
-						INFO("u:")
-						INFO(u)
-						CHECK(equal(u, expected));
+						// clang-format off
+						check_equal(dN_by_dX, "dN_by_dX", {
+								{-1, -1, -1},
+								{1, 0, 0},
+								{0, -1, 1},
+								{0, 2, 0}
+						});
+						// clang-format on
 					}
+				}
+			}
+		}
+	}
+}
+
+SCENARIO("Displacements")
+{
+	GIVEN("a one-element mesh")
+	{
+		auto mesh = TetGenIO{file_name_one}.to_mesh();
+		Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, 0);
+
+		AND_GIVEN("uninitialised displacements")
+		{
+			Tetrahedron::Node::PosProperty displacements =
+				mesh.request_vertex_property<Tetrahedron::Node::Pos>("displacement");
+			displacements->set_persistent(true);
+
+			WHEN("displacement tensor is constructed")
+			{
+				Tetrahedron::Node::Positions u = Tetrahedron::u(mesh, displacements, 0);
+
+				THEN("displacements are zero")
+				{
+					Tetrahedron::Node::Positions expected;
+					expected.setZero();
+					check_equal(u, "u", expected, "zero");
+				}
+
+				AND_WHEN("spatial node position tensor is calculated")
+				{
+					Tetrahedron::Node::Positions x = Tetrahedron::x(X, u);
+
+					THEN("spatial position is equal to material position")
+					{
+						check_equal(X, "X", x, "x");
+					}
+				}
+
+				AND_WHEN("a node is displaced")
+				{
+					Tetrahedron::VectorTensor<> delta;
+					delta.setValues({0.5, 0, 0});
+					u.chip(0, 0) += delta;
 
 					AND_WHEN("spatial node position tensor is calculated")
 					{
 						Tetrahedron::Node::Positions x = Tetrahedron::x(X, u);
 
-						THEN("spatial position is equal to material position")
+						THEN("spatial position is updated")
 						{
-							CHECK(equal(X, x));
-						}
-					}
-
-					AND_WHEN("a node is deformed")
-					{
-						Tetrahedron::VectorTensor<> delta;
-						delta.setValues({0.5, 0, 0});
-						u.chip(0, 0) += delta;
-
-						AND_WHEN("spatial node position tensor is calculated")
-						{
-							Tetrahedron::Node::Positions x = Tetrahedron::x(X, u);
-
-							THEN("spatial position is updated")
-							{
-								Tetrahedron::Node::Positions expected;
-								expected.setValues({{0.5, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}});
-
-								INFO("x:")
-								INFO(x)
-								CHECK(equal(x, expected));
-							}
+							// clang-format off
+							check_equal(x, "x", {
+								{0.5, 0, 0},
+								{1, 0, 0},
+								{0, 1, 0},
+								{0, 0, 1}
+							});
+							// clang-format on
 						}
 					}
 				}
@@ -299,203 +500,194 @@ SCENARIO("Tensor attributes of mesh elements")
 }
 
 
-SCENARIO("Shape function derivatives")
+SCENARIO("Deformation gradient of undeformed element")
 {
-	GIVEN("simple tetrahedron")
+	GIVEN("first element of two-element mesh")
 	{
-		auto const & mesh = TetGenIO{file_name_two};
-		auto tet = Tetrahedron{mesh, 0};
+		auto const & io = TetGenIO{file_name_two};
+		auto const & mesh = io.to_mesh();
+
+		auto const & X = Tetrahedron::X(mesh, 0);
 
 		std::stringstream ss;
-		ss << "Tetrahedron vertices: ";
-		for (std::size_t i = 0; i < 4; i++)
-			ss << tet.X(i).transpose() << " ; ";
-		ss << std::endl;
-		INFO(ss.str());
+		INFO("Tetrahedron vertices:")
+		INFO(X);
 
-		THEN("derivative of shape function wrt isoparametric coords is correct")
+		WHEN("deformation gradient is calculated from natural coordinate derivative")
 		{
-			Eigen::Matrix<double, 4, 3> expected;
-			// clang-format off
-			expected << // NOLINT
-				-1, -1, -1,
-				1, 0, 0,
-				0, 1, 0,
-				0, 0, 1;
-			// clang-format on
-			CHECK(tet.dN_by_dL == expected);
+			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+			auto const & dx_by_dX = Tetrahedron::dx_by_dX(X, dN_by_dX);
+
+			THEN("gradient is identity")
+			{
+				// clang-format off
+				check_equal(dx_by_dX, "dx_by_dX", {
+					{1, 0, 0},
+					{0, 1, 0},
+					{0, 0, 1}
+				});
+				// clang-format on
+			}
 		}
 
-		THEN("derivative of isoparametric coords wrt shape function is correct")
+		WHEN("deformation gradient is calculated from local coordinate derivative")
 		{
-			Eigen::Matrix<double, 3, 4> expected;
-			// clang-format off
-			expected << // NOLINT
-				0, 1, 0, 0,
-				0, 0, 1, 0,
-				0, 0, 0, 1;
-			// clang-format on
-			CHECK(tet.dL_by_dN == expected);
+			auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+			auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
+			auto const & dx_by_dX = Tetrahedron::dx_by_dX(dX_by_dL, dL_by_dX);
+
+			THEN("gradient is identity")
+			{
+				// clang-format off
+				check_equal(dx_by_dX, "dx_by_dX", {
+					{1, 0, 0},
+					{0, 1, 0},
+					{0, 0, 1}
+				});
+				// clang-format on
+			}
 		}
-
-		WHEN("derivative of shape function wrt material coords is calculated")
-		{
-			auto const & dN_by_dX = tet.dN_by_dX();
-
-			THEN("derivative is correct")
-			{
-				Eigen::Matrix<double, 4, 3> expected;
-				// clang-format off
-				expected << // NOLINT
-					-1, -1, -1,
-					0, -1, 1,
-					1, 0, 0,
-					0, 2, 0;
-				// clang-format on
-				CHECK(dN_by_dX == expected);
-			}
-
-			THEN("derivative of isoparametric wrt material coords is correct")
-			{
-				Eigen::Matrix3d expected;
-				// clang-format off
-				expected << // NOLINT
-					0, -1, 1,
-					1, 0, 0,
-					0, 2, 0;
-				// clang-format on
-				CHECK(tet.dL_by_dN * dN_by_dX == expected);
-			}
-
-			AND_WHEN("deformation gradient is calculated")
-			{
-				auto const & dx_by_dN = tet.dx_by_dN();
-				auto const & F = Tetrahedron::dx_by_dX(dx_by_dN, dN_by_dX);
-
-				THEN("deformation gradient is the identity matrix")
-				{
-					CHECK(F == Eigen::Matrix3d::Identity());
-				}
-
-				AND_WHEN("derivative of shape function wrt spatial coords is calculated")
-				{
-					auto const & dN_by_dx = Tetrahedron::dN_by_dx(dN_by_dX, F);
-
-					THEN("derivative is the same as in material coords")
-					{
-						CHECK(dN_by_dx == dN_by_dX);
-					}
-				}
-
-			}
-
-			AND_WHEN("a node is deformed")
-			{
-				tet.u(0) += Eigen::Vector3d{0.5, 0, 0};
-
-				THEN("material coords are unchanged")
-				{
-					CHECK(tet.X(0) == Eigen::Vector3d{0, 0, 0});
-					CHECK(tet.X(1) == Eigen::Vector3d{0, 0, 1});
-					CHECK(tet.X(2) == Eigen::Vector3d{1, 0, 0});
-					CHECK(tet.X(3) == Eigen::Vector3d{0, 0.5, 0.5});
-				}
-
-				THEN("spatial coords equal material with deformation")
-				{
-					CHECK(tet.x(0) == Eigen::Vector3d{0.5, 0, 0});
-					CHECK(tet.x(1) == Eigen::Vector3d{0, 0, 1});
-					CHECK(tet.x(2) == Eigen::Vector3d{1, 0, 0});
-					CHECK(tet.x(3) == Eigen::Vector3d{0, 0.5, 0.5});
-				}
-
-				THEN("spatial volume has changed")
-				{
-					CHECK(tet.v() == tet.V() / 2);
-				}
-
-				AND_WHEN("derivative of shape function wrt material coords is calculated")
-				{
-					auto const & dN_by_dX_deformed = tet.dN_by_dX();
-
-					THEN("derivative is unchanged from before it was deformed")
-					{
-						CHECK(dN_by_dX_deformed == dN_by_dX);
-					}
-				}
-				AND_WHEN("deformation gradient is calculated")
-				{
-					auto const & dx_by_dN = tet.dx_by_dN();
-					auto const & F = tet.dx_by_dX(dx_by_dN, dN_by_dX);
-
-					THEN("deformation gradient is correct")
-					{
-						Eigen::Matrix3d expected;
-						// clang-format off
-						expected << // NOLINT
-							0.5, -0.5, -0.5,
-							0, 1, 0,
-							0, 0, 1;
-						// clang-format on
-						CHECK(F == expected);
-					}
-
-					AND_WHEN("Jacobian of deformation gradient is calculated")
-					{
-						double const J = Tetrahedron::J(F);
-
-						THEN("value is correct")
-						{
-							CHECK(J == 0.5);
-						}
-					}
-
-					AND_WHEN("Left Cauchy-Green / Finger tensor is calculated")
-					{
-						Tetrahedron::GradientMatrix const & b = Tetrahedron::b(F);
-						INFO(b)
-
-						THEN("value is correct")
-						{
-							Tetrahedron::GradientMatrix expected;
-							// clang-format off
-							expected << // NOLINT
-								 0.75, -0.5, -0.5,
-								-0.5,    1,    0,
-								-0.5,    0,    1;
-							// clang-format on
-							CHECK(b.isApprox(expected));
-						}
-					}
-
-					AND_WHEN("derivative of shape function wrt spatial coords is calculated")
-					{
-						auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX, F);
-
-						std::stringstream ss;
-						ss << "dN_by_dX = "  << std::endl << dN_by_dX << std::endl;
-						ss << "F^-1 = "  << std::endl << F.inverse() << std::endl;
-						INFO(ss.str());
-
-						THEN("derivative is correct")
-						{
-							Eigen::Matrix<double, 4, 3> expected;
-							// clang-format off
-							expected << // NOLINT
-								-2, -2, -2,
-								0, -1, 1,
-								2, 1, 1,
-								0, 2, 0;
-							// clang-format on
-							CHECK(dN_by_dx == expected);
-						}
-					}
-				}
-			}
-		} // WHEN("derivative of shape function wrt material coords is calculated")
-
-	} // End GIVEN("simple tetrahedron")
+	}
 }
+
+SCENARIO("Deformation gradient of deformed element")
+{
+	GIVEN("first element of two-element mesh")
+	{
+		auto const & io = TetGenIO{file_name_two};
+		Tetrahedron tet{io, 0};
+		auto mesh = io.to_mesh();
+
+		auto const & X = Tetrahedron::X(mesh, 0);
+
+		std::stringstream ss;
+		INFO("Tetrahedron vertices:")
+		INFO(X);
+
+		//		WHEN("a node is deformed")
+		//		{
+		//			// Create displacement per vertex.
+		//			Tetrahedron::Node::PosProperty displacements =
+		//					mesh.request_vertex_property<Tetrahedron::Node::Pos>("displacement");
+		//			displacements->set_persistent(true);
+		//
+		//			// Fetch displacements of element as a tensor.
+		//			Tetrahedron::Node::Positions u = Tetrahedron::u(mesh, displacements, 0);
+		//
+		//			// Update element displacements.
+		//			Tetrahedron::VectorTensor<> delta;
+		//			delta.setValues({0.5, 0, 0});
+		//			u.chip(0, 0) += delta;
+		//
+		//			Tetrahedron::Node::Positions x = Tetrahedron::x(X, u);
+		//
+		//		}
+	}
+}
+//			AND_WHEN("a node is deformed")
+//			{
+//				tet.u(0) += Eigen::Vector3d{0.5, 0, 0};
+//
+//				THEN("material coords are unchanged")
+//				{
+//					CHECK(tet.X(0) == Eigen::Vector3d{0, 0, 0});
+//					CHECK(tet.X(1) == Eigen::Vector3d{0, 0, 1});
+//					CHECK(tet.X(2) == Eigen::Vector3d{1, 0, 0});
+//					CHECK(tet.X(3) == Eigen::Vector3d{0, 0.5, 0.5});
+//				}
+//
+//				THEN("spatial coords equal material with deformation")
+//				{
+//					CHECK(tet.x(0) == Eigen::Vector3d{0.5, 0, 0});
+//					CHECK(tet.x(1) == Eigen::Vector3d{0, 0, 1});
+//					CHECK(tet.x(2) == Eigen::Vector3d{1, 0, 0});
+//					CHECK(tet.x(3) == Eigen::Vector3d{0, 0.5, 0.5});
+//				}
+//
+//				THEN("spatial volume has changed")
+//				{
+//					CHECK(tet.v() == tet.V() / 2);
+//				}
+//
+//				AND_WHEN("derivative of shape function wrt material coords is calculated")
+//				{
+//					auto const & dN_by_dX_deformed = tet.dN_by_dX();
+//
+//					THEN("derivative is unchanged from before it was deformed")
+//					{
+//						CHECK(dN_by_dX_deformed == dN_by_dX);
+//					}
+//				}
+//				AND_WHEN("deformation gradient is calculated")
+//				{
+//					auto const & dx_by_dN = tet.dx_by_dN();
+//					auto const & F = tet.dx_by_dX(dx_by_dN, dN_by_dX);
+//
+//					THEN("deformation gradient is correct")
+//					{
+//						Eigen::Matrix3d expected;
+//						// clang-format off
+//						expected << // NOLINT
+//							0.5, -0.5, -0.5,
+//							0, 1, 0,
+//							0, 0, 1;
+//						// clang-format on
+//						CHECK(F == expected);
+//					}
+//
+//					AND_WHEN("Jacobian of deformation gradient is calculated")
+//					{
+//						double const J = Tetrahedron::J(F);
+//
+//						THEN("value is correct")
+//						{
+//							CHECK(J == 0.5);
+//						}
+//					}
+//
+//					AND_WHEN("Left Cauchy-Green / Finger tensor is calculated")
+//					{
+//						Tetrahedron::GradientMatrix const & b = Tetrahedron::b(F);
+//						INFO(b)
+//
+//						THEN("value is correct")
+//						{
+//							Tetrahedron::GradientMatrix expected;
+//							// clang-format off
+//							expected << // NOLINT
+//								 0.75, -0.5, -0.5,
+//								-0.5,    1,    0,
+//								-0.5,    0,    1;
+//							// clang-format on
+//							CHECK(b.isApprox(expected));
+//						}
+//					}
+//
+//					AND_WHEN("derivative of shape function wrt spatial coords is calculated")
+//					{
+//						auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX, F);
+//
+//						std::stringstream ss;
+//						ss << "dN_by_dX = "  << std::endl << dN_by_dX << std::endl;
+//						ss << "F^-1 = "  << std::endl << F.inverse() << std::endl;
+//						INFO(ss.str());
+//
+//						THEN("derivative is correct")
+//						{
+//							Eigen::Matrix<double, 4, 3> expected;
+//							// clang-format off
+//							expected << // NOLINT
+//								-2, -2, -2,
+//								0, -1, 1,
+//								2, 1, 1,
+//								0, 2, 0;
+//							// clang-format on
+//							CHECK(dN_by_dx == expected);
+//						}
+//					}
+//				}
+//			}
+//}
 
 SCENARIO("Neo-hookian tangent stiffness matrix")
 {

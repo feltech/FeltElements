@@ -1,4 +1,5 @@
 #include <ostream>
+
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <range/v3/view/transform.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -62,6 +63,9 @@ auto const to_string = [](auto const f) {
 
 template <class Tensor, Eigen::Index N>
 using ostream_if = std::enable_if_t<Tensor::NumIndices == N, std::ostream &>;
+
+template <class Tensor>
+using InitList = typename Eigen::internal::Initializer<Tensor, Tensor::NumIndices>::InitList;
 }
 
 auto equal = [](auto const & a, auto const & b)
@@ -114,4 +118,28 @@ ostream_if<Tensor, 2> operator<< (std::ostream& os, Tensor const& value)
 	}
 	os << "{\n\t{" << join(is, "},\n\t{") << "}\n}";
 	return os;
+}
+
+#include <catch2/catch.hpp>  // Must come after `operator<<` definitions.
+
+template <class Tensor>
+void check_equal( Tensor const & in, char const* desc, InitList<Tensor> const values)
+{
+	Tensor expected{};
+	expected.setValues(values);
+	INFO(desc)
+	INFO(in)
+	CHECK(equal(in, expected));
+}
+
+template <class Tensor>
+void check_equal(
+	Tensor const & in, char const * desc_in, Tensor const & expected, char const * desc_expected)
+{
+	INFO(desc_in)
+	INFO(in)
+	INFO("==")
+	INFO(desc_expected)
+	INFO(expected)
+	CHECK(equal(in, expected));
 }
