@@ -54,36 +54,18 @@ public:
 	template <Eigen::Index num_pairs>
 	using IndexPairs = Eigen::array<IndexPair, num_pairs>;
 
-	Tetrahedron() = default;
-	Tetrahedron(TetGenIO const & mesh, std::size_t tet_idx);
-
 	static IsoCoordDerivativeTensor const dL_by_dN;
 	static ShapeDerivativeTensor const dN_by_dL;
 
-	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const & cellh);
-	[[nodiscard]] static Node::SpatialCoordProp x(Mesh & mesh);
-	[[nodiscard]] static Node::Positions x(
-		Mesh const & mesh, CellHandle const & cellh, Node::SpatialCoordProp const & x_prop);
 
-	[[nodiscard]] static GradientTensor dX_by_dL(Node::Positions const & X);
-	[[nodiscard]] static GradientTensor dL_by_dX(GradientTensor const & dX_by_dL);
-	[[nodiscard]] static ShapeCartesianTransform N_to_x(Node::Positions const & X);
-	[[nodiscard]] static CartesianDerivativeTensor dx_by_dN(ShapeCartesianTransform const & N_to_x);
-	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(
-		Tetrahedron::GradientTensor const & dL_by_dX);
-	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(ShapeCartesianTransform const & N_to_x);
-	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(Node::Positions const & X);
-	[[nodiscard]] ShapeDerivativeMatrix dN_by_dX() const;
-	[[nodiscard]] IsoCoordDerivativeMatrix dx_by_dN() const;
-	[[nodiscard]] static Node::Positions x(Node::Positions const & X, Node::Positions const & u);
-	[[nodiscard]] Node::Pos x(Node::Index idx) const;
-	[[nodiscard]] Node::PosMap const & X(Node::Index idx) const;
-	[[nodiscard]] static Node::Positions u(
-		Mesh const & mesh, Node::PosProperty const & displacements, CellHandle const & cellh);
-	[[nodiscard]] Node::PosMap const & u(Node::Index idx) const;
-	[[nodiscard]] Node::PosMap & u(Node::Index idx);
-	[[nodiscard]] Scalar V() const;
-	[[nodiscard]] Scalar v() const;
+
+	[[nodiscard]] static ElasticityTensor
+	neo_hookian_elasticity(Scalar J, Scalar lambda, Scalar mu);
+	[[nodiscard]] static StressMatrix
+	neo_hookian_stress(Scalar J, GradientMatrix const & b, Scalar lambda, Scalar mu);
+
+	[[nodiscard]] static Scalar J(GradientTensor const & F);
+	[[nodiscard]] static GradientTensor b(GradientTensor const & F);
 
 	[[nodiscard]] static GradientTensor dx_by_dX(
 		Node::Positions const & x, ShapeDerivativeTensor const & dN_by_dX);
@@ -93,12 +75,25 @@ public:
 		IsoCoordDerivativeMatrix const & dx_by_dN, ShapeDerivativeMatrix const & dN_by_dX);
 	[[nodiscard]] static ShapeDerivativeMatrix dN_by_dx(
 		ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F);
-	[[nodiscard]] static Scalar J(GradientMatrix const & F);
-	[[nodiscard]] static GradientMatrix b(GradientMatrix const & F);
-	[[nodiscard]] static ElasticityTensor
-	neo_hookian_elasticity(Scalar J, Scalar lambda, Scalar mu);
-	[[nodiscard]] static StressMatrix
-	neo_hookian_stress(Scalar J, GradientMatrix const & b, Scalar lambda, Scalar mu);
+
+	[[nodiscard]] static Scalar V(Node::Positions const & x);
+
+	[[nodiscard]] static GradientTensor dX_by_dL(Node::Positions const & X);
+	[[nodiscard]] static GradientTensor dL_by_dX(GradientTensor const & dX_by_dL);
+	[[nodiscard]] static CartesianDerivativeTensor dx_by_dN(ShapeCartesianTransform const & N_to_x);
+	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(
+		Tetrahedron::GradientTensor const & dL_by_dX);
+
+	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(ShapeCartesianTransform const & N_to_x);
+	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(Node::Positions const & X);
+
+	[[nodiscard]] static ShapeCartesianTransform N_to_x(Node::Positions const & X);
+
+	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const & cellh);
+	[[nodiscard]] static Node::SpatialCoordProp x(Mesh & mesh);
+	[[nodiscard]] static Node::Positions x(
+		Mesh const & mesh, CellHandle const & cellh, Node::SpatialCoordProp const & x_prop);
+
 
 	static StiffnessMatrix Kcab(
 		ShapeDerivativeMatrix const & dN_by_dx,
@@ -113,20 +108,6 @@ public:
 		GradientMatrix const & sigma,
 		Node::Index a,
 		Node::Index b);
-
-private:
-	static Node::Pos null_pos;
-	Node::List m_vertices = {
-		Node::PosMap{null_pos.data(), null_pos.size()},
-		Node::PosMap{null_pos.data(), null_pos.size()},
-		Node::PosMap{null_pos.data(), null_pos.size()},
-		Node::PosMap{null_pos.data(), null_pos.size()}};
-	Node::List m_displacements = {
-		Node::PosMap{null_pos.data(), null_pos.size()},
-			Node::PosMap{null_pos.data(), null_pos.size()},
-			Node::PosMap{null_pos.data(), null_pos.size()},
-			Node::PosMap{null_pos.data(), null_pos.size()}};
-	Scalar m_material_volume;
 };
 } // namespace FeltElements
 #endif // FELTELEMENTS_TETRAHEDRON_HPP
