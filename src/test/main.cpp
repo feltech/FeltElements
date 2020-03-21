@@ -558,23 +558,17 @@ SCENARIO("Deformation gradient of deformed element")
 			{
 				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
 
-//				std::stringstream ss;
-//				ss << "dN_by_dX = "  << std::endl << dN_by_dX << std::endl;
-//				ss << "F^-1 = "  << std::endl << F.inverse() << std::endl;
-//				INFO(ss.str());
-//
-//				THEN("derivative is correct")
-//				{
-//					Eigen::Matrix<double, 4, 3> expected;
-//					// clang-format off
-//					expected << // NOLINT
-//						-2, -2, -2,
-//						0, -1, 1,
-//						2, 1, 1,
-//						0, 2, 0;
-//					// clang-format on
-//					CHECK(dN_by_dx == expected);
-//				}
+				THEN("derivative is correct")
+				{
+					// clang-format off
+					check_equal(dN_by_dx, "dN_by_dx", {
+						{-2, -2, -2},
+						{2, 1, 1},
+						{0, -1, 1},
+						{0, 2, 0}
+					});
+					// clang-format on
+				}
 			}
 			AND_WHEN("deformation gradient is calculated")
 			{
@@ -620,110 +614,68 @@ SCENARIO("Deformation gradient of deformed element")
 		}
 	}
 }
-//			AND_WHEN("a node is deformed")
-//			{
-//				tet.u(0) += Eigen::Vector3d{0.5, 0, 0};
-//
-//				THEN("material coords are unchanged")
-//				{
-//					CHECK(tet.X(0) == Eigen::Vector3d{0, 0, 0});
-//					CHECK(tet.X(1) == Eigen::Vector3d{0, 0, 1});
-//					CHECK(tet.X(2) == Eigen::Vector3d{1, 0, 0});
-//					CHECK(tet.X(3) == Eigen::Vector3d{0, 0.5, 0.5});
-//				}
-//
-//				THEN("spatial coords equal material with deformation")
-//				{
-//					CHECK(tet.x(0) == Eigen::Vector3d{0.5, 0, 0});
-//					CHECK(tet.x(1) == Eigen::Vector3d{0, 0, 1});
-//					CHECK(tet.x(2) == Eigen::Vector3d{1, 0, 0});
-//					CHECK(tet.x(3) == Eigen::Vector3d{0, 0.5, 0.5});
-//				}
-//
-//				THEN("spatial volume has changed")
-//				{
-//					CHECK(tet.v() == tet.V() / 2);
-//				}
-//
-//				AND_WHEN("derivative of shape function wrt material coords is calculated")
-//				{
-//					auto const & dN_by_dX_deformed = tet.dN_by_dX();
-//
-//					THEN("derivative is unchanged from before it was deformed")
-//					{
-//						CHECK(dN_by_dX_deformed == dN_by_dX);
-//					}
-//				}
-//				AND_WHEN("deformation gradient is calculated")
-//				{
-//					auto const & dx_by_dN = tet.dx_by_dN();
-//					auto const & F = tet.dx_by_dX(dx_by_dN, dN_by_dX);
-//
-//					THEN("deformation gradient is correct")
-//					{
-//						Eigen::Matrix3d expected;
-//						// clang-format off
-//						expected << // NOLINT
-//							0.5, -0.5, -0.5,
-//							0, 1, 0,
-//							0, 0, 1;
-//						// clang-format on
-//						CHECK(F == expected);
-//					}
-//
-//					AND_WHEN("Jacobian of deformation gradient is calculated")
-//					{
-//						double const J = Tetrahedron::J(F);
-//
-//						THEN("value is correct")
-//						{
-//							CHECK(J == 0.5);
-//						}
-//					}
-//
-//					AND_WHEN("Left Cauchy-Green / Finger tensor is calculated")
-//					{
-//						Tetrahedron::GradientMatrix const & b = Tetrahedron::b(F);
-//						INFO(b)
-//
-//						THEN("value is correct")
-//						{
-//							Tetrahedron::GradientMatrix expected;
-//							// clang-format off
-//							expected << // NOLINT
-//								 0.75, -0.5, -0.5,
-//								-0.5,    1,    0,
-//								-0.5,    0,    1;
-//							// clang-format on
-//							CHECK(b.isApprox(expected));
-//						}
-//					}
-//
-//					AND_WHEN("derivative of shape function wrt spatial coords is calculated")
-//					{
-//						auto const & dN_by_dx = tet.dN_by_dx(dN_by_dX, F);
-//
-//						std::stringstream ss;
-//						ss << "dN_by_dX = "  << std::endl << dN_by_dX << std::endl;
-//						ss << "F^-1 = "  << std::endl << F.inverse() << std::endl;
-//						INFO(ss.str());
-//
-//						THEN("derivative is correct")
-//						{
-//							Eigen::Matrix<double, 4, 3> expected;
-//							// clang-format off
-//							expected << // NOLINT
-//								-2, -2, -2,
-//								0, -1, 1,
-//								2, 1, 1,
-//								0, 2, 0;
-//							// clang-format on
-//							CHECK(dN_by_dx == expected);
-//						}
-//					}
-//				}
-//			}
-//}
+
+
+SCENARIO("Internal nodal force")
+{
+	GIVEN("an undeformed one-element mesh")
+	{
+		auto mesh = TetGenIO{file_name_one}.to_mesh();
+		auto const & X = Tetrahedron::X(mesh, 0);
+		auto const & x_prop = Tetrahedron::x(mesh);
+		auto x = Tetrahedron::x(mesh, 0, x_prop);
+		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+		Tetrahedron::Scalar const lambda = 1;
+		Tetrahedron::Scalar const mu = 1;
+
+		WHEN("neo-hookean stress is calculated")
+		{
+			auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
+			auto const J = Tetrahedron::J(F);
+			auto const & b = Tetrahedron::b(F);
+
+			auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+
+			THEN("stress is zero")
+			{
+				// clang-format off
+				check_equal(sigma, "sigma", {
+					{0, 0, 0},
+					{0, 0, 0},
+					{0, 0, 0}
+				});
+				// clang-format on
+			}
+		}
+
+		WHEN("a node is deformed")
+		{
+			x(0, 0) += 0.5;
+
+			AND_WHEN("neo-hookean stress is calculated")
+			{
+				auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
+				auto const J = Tetrahedron::J(F);
+				auto const & b = Tetrahedron::b(F);
+
+				auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+
+				THEN("stress is correct")
+				{
+					// clang-format off
+					check_equal(sigma, "sigma", {
+						{-1.88629, -1, -1},
+						{-1, -1.38629, 0},
+						{-1, 0, -1.38629}
+					});
+					// clang-format on
+				}
+			}
+		}
+	}
+}
+
+
 
 //SCENARIO("Neo-hookian tangent stiffness matrix")
 //{

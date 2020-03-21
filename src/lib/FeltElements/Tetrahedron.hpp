@@ -36,7 +36,6 @@ public:
 	template <Eigen::Index rows = 3, Eigen::Index cols = rows, int options = 0>
 	using Matrix = Eigen::Matrix<Scalar, rows, cols, options>;
 	using GradientMatrix = Matrix<3, 3>;
-	using StressMatrix = GradientMatrix;
 	using StiffnessMatrix = GradientMatrix;
 	using ShapeDerivativeMatrix = Matrix<4, 3>;
 	using IsoCoordDerivativeMatrix = Matrix<3, 4>;
@@ -50,6 +49,7 @@ public:
 	using ShapeCartesianTransform = MatrixTensor<4, 4>;
 	using CartesianDerivativeTensor = MatrixTensor<3, 4>;
 	using GradientTensor = MatrixTensor<3, 3>;
+	using StressTensor = GradientTensor;
 	using IndexPair = Eigen::IndexPair<Eigen::Index>;
 	template <Eigen::Index num_pairs>
 	using IndexPairs = Eigen::array<IndexPair, num_pairs>;
@@ -61,8 +61,8 @@ public:
 
 	[[nodiscard]] static ElasticityTensor
 	neo_hookian_elasticity(Scalar J, Scalar lambda, Scalar mu);
-	[[nodiscard]] static StressMatrix
-	neo_hookian_stress(Scalar J, GradientMatrix const & b, Scalar lambda, Scalar mu);
+	[[nodiscard]] static StressTensor
+	sigma(Scalar const J, GradientTensor const & b, Scalar const lambda, Scalar const mu);
 
 	[[nodiscard]] static Scalar J(GradientTensor const & F);
 	[[nodiscard]] static GradientTensor b(GradientTensor const & F);
@@ -95,19 +95,19 @@ public:
 		Mesh const & mesh, CellHandle const & cellh, Node::SpatialCoordProp const & x_prop);
 
 
-	static StiffnessMatrix Kcab(
-		ShapeDerivativeMatrix const & dN_by_dx,
-		Scalar v,
-		ElasticityTensor const & c,
-		Node::Index a,
-		Node::Index b);
-
-	static StiffnessMatrix Ksab(
-		ShapeDerivativeMatrix const & dN_by_dx,
-		Scalar v,
-		GradientMatrix const & sigma,
-		Node::Index a,
-		Node::Index b);
+//	static StiffnessMatrix Kcab(
+//		ShapeDerivativeMatrix const & dN_by_dx,
+//		Scalar v,
+//		ElasticityTensor const & c,
+//		Node::Index a,
+//		Node::Index b);
+//
+//	static StiffnessMatrix Ksab(
+//		ShapeDerivativeMatrix const & dN_by_dx,
+//		Scalar v,
+//		GradientMatrix const & sigma,
+//		Node::Index a,
+//		Node::Index b);
 };
 } // namespace FeltElements
 #endif // FELTELEMENTS_TETRAHEDRON_HPP

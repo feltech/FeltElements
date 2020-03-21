@@ -6,6 +6,7 @@
 
 namespace
 {
+using namespace FeltElements;
 
 template <typename Index>
 auto delta(Index const i, Index const j)
@@ -66,6 +67,34 @@ auto to_matrix(Tensor const & tensor)
 		Eigen::Matrix<double, size<Tensor, 0>, size<Tensor, 1>, Tensor::Layout> const>{
 		tensor.data(), size<Tensor, 0>, size<Tensor, 1>};
 }
+
+const Tetrahedron::ElasticityTensor c_lambda = ([]() {
+  std::size_t constexpr N = 3;
+  Tetrahedron::ElasticityTensor c{};
+  for (std::size_t i = 0; i < N; i++)
+	  for (std::size_t j = 0; j < N; j++)
+		  for (std::size_t k = 0; k < N; k++)
+			  for (std::size_t l = 0; l < N; l++)
+				  c(i, j, k, l) = delta(i, j) * delta(k, l);
+
+  return c;
+}());
+
+const Tetrahedron::ElasticityTensor c_mu = ([]() {
+  std::size_t constexpr N = 3;
+  Tetrahedron::ElasticityTensor c{};
+  for (std::size_t i = 0; i < N; i++)
+	  for (std::size_t j = 0; j < N; j++)
+		  for (std::size_t k = 0; k < N; k++)
+			  for (std::size_t l = 0; l < N; l++)
+				  c(i, j, k, l) = delta(i, k) * delta(j, l) + delta(i, l) * delta(j, k);
+
+  return c;
+}());
+
+template <std::size_t dim>
+const Tetrahedron::MatrixTensor<dim, dim> I = to_tensor(
+	Tetrahedron::Matrix<dim, dim>{Tetrahedron::Matrix<dim, dim>::Identity()});
 }
 
 namespace FeltElements
@@ -77,75 +106,49 @@ Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
 	Tetrahedron::Scalar const lambda_prime = lambda / J;
 	Tetrahedron::Scalar const mu_prime = (mu - lambda * std::log(J));
 
-	std::size_t constexpr N = 3;
-
-	static const ElasticityTensor c_lambda = ([]() {
-	  std::size_t constexpr N = 3;
-	  ElasticityTensor c;
-	  for (std::size_t i = 0; i < N; i++)
-		  for (std::size_t j = 0; j < N; j++)
-			  for (std::size_t k = 0; k < N; k++)
-				  for (std::size_t l = 0; l < N; l++)
-					  c(i, j, k, l) = delta(i, j) * delta(k, l);
-
-	  return c;
-	}());
-
-	static const ElasticityTensor c_mu = ([]() {
-	  ElasticityTensor c;
-	  for (std::size_t i = 0; i < N; i++)
-		  for (std::size_t j = 0; j < N; j++)
-			  for (std::size_t k = 0; k < N; k++)
-				  for (std::size_t l = 0; l < N; l++)
-					  c(i, j, k, l) = delta(i, k) * delta(j, l) + delta(i, l) * delta(j, k);
-
-	  return c;
-	}());
-
 	return lambda_prime * c_lambda + mu_prime * c_mu;
 }
 
-Tetrahedron::StressMatrix Tetrahedron::neo_hookian_stress(
-	Tetrahedron::Scalar const J, Tetrahedron::GradientMatrix const & b,
+Tetrahedron::StressTensor Tetrahedron::sigma(
+	Tetrahedron::Scalar const J, Tetrahedron::GradientTensor const & b,
 	Tetrahedron::Scalar const lambda, Tetrahedron::Scalar const mu)
 {
-	static auto const I = StressMatrix::Identity();
-	return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
+	return (mu / J) * (b - I<3>) + (lambda / J) * log(J) * I<3>;
 }
 
-Tetrahedron::StiffnessMatrix Tetrahedron::Kcab(
-	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
-	Tetrahedron::Scalar const v,
-	Tetrahedron::ElasticityTensor const & c,
-	Tetrahedron::Node::Index const a,
-	Tetrahedron::Node::Index const b)
-{
-	constexpr IndexPairs<1> c_a{{{1, 0}}};
-	constexpr IndexPairs<1> c_b{{{3, 0}}};
-
-	auto const & dNa_by_dx = to_tensor(dN_by_dx.row(a));
-	auto const & dNb_by_dx = to_tensor(dN_by_dx.row(b));
-
-	using Tensor2 = Eigen::TensorFixedSize<Tetrahedron::Scalar, Eigen::Sizes<3, 3>>;
-
-	Tensor2 K = v * c.contract(dNb_by_dx, c_b).contract(dNa_by_dx, c_a);
-
-	return to_matrix(K);
-}
-
-Tetrahedron::StiffnessMatrix Tetrahedron::Ksab(
-	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
-	Tetrahedron::Scalar const v,
-	Tetrahedron::StressMatrix const & sigma,
-	Tetrahedron::Node::Index const a,
-	Tetrahedron::Node::Index const b)
-{
-	auto const I = GradientMatrix::Identity();
-	auto const & dNa_by_dxT = dN_by_dx.row(a);
-	auto const & dNb_by_dx = dN_by_dx.row(b).transpose();
-
-	return v * dNa_by_dxT * sigma * dNb_by_dx * I;
-}
+//Tetrahedron::StiffnessMatrix Tetrahedron::Kcab(
+//	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
+//	Tetrahedron::Scalar const v,
+//	Tetrahedron::ElasticityTensor const & c,
+//	Tetrahedron::Node::Index const a,
+//	Tetrahedron::Node::Index const b)
+//{
+//	constexpr IndexPairs<1> c_a{{{1, 0}}};
+//	constexpr IndexPairs<1> c_b{{{3, 0}}};
+//
+//	auto const & dNa_by_dx = to_tensor(dN_by_dx.row(a));
+//	auto const & dNb_by_dx = to_tensor(dN_by_dx.row(b));
+//
+//	using Tensor2 = Eigen::TensorFixedSize<Tetrahedron::Scalar, Eigen::Sizes<3, 3>>;
+//
+//	Tensor2 K = v * c.contract(dNb_by_dx, c_b).contract(dNa_by_dx, c_a);
+//
+//	return to_matrix(K);
+//}
+//
+//Tetrahedron::StiffnessMatrix Tetrahedron::Ksab(
+//	Tetrahedron::ShapeDerivativeMatrix const & dN_by_dx,
+//	Tetrahedron::Scalar const v,
+//	Tetrahedron::StressTensor const & sigma,
+//	Tetrahedron::Node::Index const a,
+//	Tetrahedron::Node::Index const b)
+//{
+//	auto const I = GradientMatrix::Identity();
+//	auto const & dNa_by_dxT = dN_by_dx.row(a);
+//	auto const & dNb_by_dx = dN_by_dx.row(b).transpose();
+//
+//	return v * dNa_by_dxT * sigma * dNb_by_dx * I;
+//}
 
 
 Tetrahedron::Scalar Tetrahedron::J(Tetrahedron::GradientTensor const & dx_by_dX)
