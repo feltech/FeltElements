@@ -255,6 +255,21 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 		});
 	}
 
+	THEN("derivative of local/shape wrt shape/local coords are inverses")
+	{
+		constexpr Tetrahedron::IndexPairs<1> LN_NL{{{1, 0}}};
+		Tetrahedron::MatrixTensor<3> const identity =
+			Tetrahedron::dL_by_dN.contract(Tetrahedron::dN_by_dL, LN_NL);
+
+		check_equal(identity, "dL_by_dN * dN_by_dL", {
+			// clang-format off
+			{1, 0, 0},
+			{0, 1, 0},
+			{0, 0, 1}
+			// clang-format on
+		});
+	}
+
 	GIVEN("a one-element mesh")
 	{
 		auto mesh = TetGenIO{file_name_one}.to_mesh();
@@ -412,6 +427,20 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 						// clang-format on
 					}
 
+					THEN("derivative is inverse of material wrt local")
+					{
+						constexpr Tetrahedron::IndexPairs<1> XL_LX{{{1, 0}}};
+						Tetrahedron::MatrixTensor<3> const identity =
+							dX_by_dL.contract(dL_by_dX, XL_LX);
+						// clang-format off
+						check_equal(identity, "dX_by_dL * dL_by_dX", {
+							{1, 0, 0},
+							{0, 1, 0},
+							{0, 0, 1}
+						});
+						// clang-format on
+					}
+
 					AND_WHEN("derivative of natural wrt material coords is calculated")
 					{
 						auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
@@ -537,6 +566,36 @@ SCENARIO("Deformation gradient of undeformed element")
 
 SCENARIO("Deformation gradient of deformed element")
 {
+	GIVEN("a one-element mesh")
+	{
+		auto mesh = TetGenIO{file_name_one}.to_mesh();
+		auto const & X = Tetrahedron::X(mesh, 0);
+		auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+
+		WHEN("a node is deformed")
+		{
+			x(0, 0) += 0.5;
+
+			AND_WHEN("derivative of shape function wrt spatial coords is calculated")
+			{
+				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+
+				THEN("derivative is correct")
+				{
+					// clang-format off
+				check_equal(dN_by_dx, "dN_by_dx", {
+					{-2, -2, -2},
+					{2, 1, 1},
+					{0, 1, 0},
+					{0, 0, 1}
+				});
+					// clang-format on
+				}
+			}
+		}
+	}
+
 	GIVEN("first element of two-element mesh")
 	{
 		auto const & io = TetGenIO{file_name_two};
@@ -646,6 +705,24 @@ SCENARIO("Internal nodal force")
 				});
 				// clang-format on
 			}
+
+			AND_WHEN("internal nodal forces are calculated")
+			{
+				auto const v = Tetrahedron::V(x);
+				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+				auto const & T = Tetrahedron::T(v, sigma, dN_by_dx);
+
+				THEN("nodal forces are zero")
+				{
+					// clang-format off
+					check_equal(T, "T", {
+						{0, 0, 0},
+						{0, 0, 0},
+						{0, 0, 0}
+					});
+					// clang-format on
+				}
+			}
 		}
 
 		WHEN("a node is deformed")
@@ -669,6 +746,25 @@ SCENARIO("Internal nodal force")
 						{-1, 0, -1.38629}
 					});
 					// clang-format on
+				}
+
+				AND_WHEN("internal nodal forces are calculated")
+				{
+					auto const v = Tetrahedron::V(x);
+					auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+					auto const & T = Tetrahedron::T(v, sigma, dN_by_dx);
+
+					THEN("nodal forces are correct")
+					{
+						// clang-format off
+						check_equal(T, "T", {
+							{0.647716, 0.397716, 0.397716},
+							{-0.481049, -0.282191, -0.282191},
+							{-0.0833333, -0.115525, 0},
+							{-0.0833333, 0, -0.115525}
+						});
+						// clang-format on
+					}
 				}
 			}
 		}

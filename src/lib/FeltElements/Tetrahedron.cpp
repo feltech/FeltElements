@@ -109,6 +109,14 @@ Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
 	return lambda_prime * c_lambda + mu_prime * c_mu;
 }
 
+Tetrahedron::Node::Forces Tetrahedron::T(
+	Scalar const v, StressTensor const & sigma, ShapeDerivativeTensor const & dN_by_dx)
+{
+	// T^T = v * sigma * dN/dx^T = v * (dN/dx * sigma^T)
+	constexpr IndexPairs<1> sigma_dN{{{1, 1}}};
+	return v * dN_by_dx.contract(sigma, sigma_dN);
+}
+
 Tetrahedron::StressTensor Tetrahedron::sigma(
 	Tetrahedron::Scalar const J, Tetrahedron::GradientTensor const & b,
 	Tetrahedron::Scalar const lambda, Tetrahedron::Scalar const mu)
@@ -199,7 +207,7 @@ Tetrahedron::CartesianDerivativeTensor Tetrahedron::dx_by_dN(
 Tetrahedron::ShapeDerivativeTensor Tetrahedron::dN_by_dX(
 	Tetrahedron::GradientTensor const & dL_by_dX)
 {
-	// dN/dX = dX/dL^(-T) * dN/dL = dN/dL^T * dX/dL^(-1) = dN/dL^T * dL/dX^T
+	// dN/dX^T = dX/dL^(-T) * dN/dL^T => dN/dX = dN/dL * dX/dL^(-1) = dN/dL * dL/dX
 	constexpr IndexPairs<1> dN_dL{{{1, 0}}};
 	return dN_by_dL.contract(dL_by_dX, dN_dL);
 }
@@ -227,8 +235,8 @@ Tetrahedron::ShapeCartesianTransform Tetrahedron::N_to_x(Node::Positions const &
 {
 	using Shuffle = Eigen::array<Eigen::Index, 2>;
 	using Padding = Eigen::array<std::pair<Eigen::Index, Eigen::Index>, 2>;
-	Shuffle transpose{{1, 0}};
-	Padding padding{{{1, 0}, {0, 0}}};
+	constexpr Shuffle transpose{{1, 0}};
+	constexpr Padding padding{{{1, 0}, {0, 0}}};
 	return X.shuffle(transpose).pad(padding, 1.0);
 }
 
@@ -286,6 +294,7 @@ Tetrahedron::Node::Positions Tetrahedron::X(Mesh const & mesh, CellHandle const 
 // clang-format off
 Tetrahedron::IsoCoordDerivativeTensor const Tetrahedron::dL_by_dN = // NOLINT(cert-err58-cpp)
 	to_tensor(IsoCoordDerivativeMatrix{(Eigen::Matrix4d{} <<
+		// (1, L) = A * N
 		1, 1, 1, 1,
 		0, 1, 0, 0,
 		0, 0, 1, 0,

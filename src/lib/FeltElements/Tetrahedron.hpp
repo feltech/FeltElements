@@ -30,6 +30,7 @@ public:
 		using List = std::array<PosMap, 4>;
 		using Index = Eigen::Index;
 		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<4, 3>>;
+		using Forces = Positions;
 		using PosProperty = OpenVolumeMesh::VertexPropertyT<Pos>;
 		using SpatialCoordProp = OpenVolumeMesh::VertexPropertyT<OpenVolumeMesh::Vec3d>;
 	};
@@ -39,7 +40,7 @@ public:
 	using StiffnessMatrix = GradientMatrix;
 	using ShapeDerivativeMatrix = Matrix<4, 3>;
 	using IsoCoordDerivativeMatrix = Matrix<3, 4>;
-	template <Eigen::Index rows = 3, Eigen::Index cols = 3>
+	template <Eigen::Index rows = 3, Eigen::Index cols = rows>
 	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<rows, cols>>;
 	template <Eigen::Index dim = 3>
 	using VectorTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim>>;
@@ -61,6 +62,9 @@ public:
 
 	[[nodiscard]] static ElasticityTensor
 	neo_hookian_elasticity(Scalar J, Scalar lambda, Scalar mu);
+
+	[[nodiscard]] static Node::Forces
+	T(Scalar const v, StressTensor const & sigma, ShapeDerivativeTensor const & dN_by_dx);
 	[[nodiscard]] static StressTensor
 	sigma(Scalar const J, GradientTensor const & b, Scalar const lambda, Scalar const mu);
 
