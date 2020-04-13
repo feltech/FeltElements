@@ -1,14 +1,15 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
-#include <unsupported/Eigen/CXX11/Tensor>
+#include <OpenVolumeMesh/Core/PropertyDefines.hh>
 #include <OpenVolumeMesh/Geometry/VectorT.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
-#include <OpenVolumeMesh/Core/PropertyDefines.hh>
 #include <boost/range/irange.hpp>
+#include <unsupported/Eigen/CXX11/Tensor>
 
 #include <FeltElements/TetGenIO.hpp>
 #include <FeltElements/Tetrahedron.hpp>
 
 #define CATCH_CONFIG_MAIN
+#define CATCH_CONFIG_CONSOLE_WIDTH 200
 #include "common.hpp"
 
 char const * file_name_one = "resources/single/tet.1";
@@ -17,21 +18,18 @@ char const * file_name_two_quadratic = "resources/double/tet.1";
 
 using namespace FeltElements;
 
-
 SCENARIO("Loading a tetrahedralisation")
 {
-//	char cwd[500];
-//	getcwd(cwd, 500);
-//	std::cerr << "Executing tests in " << cwd << std::endl;
+	//	char cwd[500];
+	//	getcwd(cwd, 500);
+	//	std::cerr << "Executing tests in " << cwd << std::endl;
 
-	auto expected_counts = [](const TetGenIO & mesh,
-							  auto num_points,
-							  auto num_simplexes,
-							  auto num_corners) {
-		CHECK(mesh.num_points() == num_points);
-		CHECK(mesh.num_simplexes() == num_simplexes);
-		CHECK(mesh.num_corners() == num_corners);
-	};
+	auto expected_counts =
+		[](const TetGenIO & mesh, auto num_points, auto num_simplexes, auto num_corners) {
+			CHECK(mesh.num_points() == num_points);
+			CHECK(mesh.num_simplexes() == num_simplexes);
+			CHECK(mesh.num_corners() == num_corners);
+		};
 
 	GIVEN("single tetrahedron mesh is loaded")
 	{
@@ -115,7 +113,6 @@ SCENARIO("OpenVolumeMesh construction")
 	}
 } // End SCENARIO("OpenVolumeMesh construction")
 
-
 SCENARIO("Metrics of undeformed mesh")
 {
 	GIVEN("one-element mesh")
@@ -185,7 +182,6 @@ SCENARIO("Metrics of undeformed mesh")
 	}
 }
 
-
 SCENARIO("Metrics of deformed mesh")
 {
 	GIVEN("one-element mesh")
@@ -229,30 +225,35 @@ SCENARIO("Metrics of deformed mesh")
 	}
 }
 
-
 SCENARIO("Coordinate derivatives in undeformed mesh")
 {
 	THEN("derivative of shape wrt local coords is correct")
 	{
-		check_equal(Tetrahedron::dN_by_dL, "dN_by_dL", {
+		check_equal(
+			Tetrahedron::dN_by_dL,
+			"dN_by_dL",
+			{
 				// clang-format off
 				{-1, -1, -1},
 				{1, 0, 0},
 				{0, 1, 0},
 				{0, 0, 1}
 				// clang-format on
-		});
+			});
 	}
 
 	THEN("derivative of local wrt shape coords is correct")
 	{
-		check_equal(Tetrahedron::dL_by_dN, "dL_by_dN", {
+		check_equal(
+			Tetrahedron::dL_by_dN,
+			"dL_by_dN",
+			{
 				// clang-format off
 				{0, 1, 0, 0},
 				{0, 0, 1, 0},
 				{0, 0, 0, 1}
 				// clang-format on
-		});
+			});
 	}
 
 	THEN("derivative of local/shape wrt shape/local coords are inverses")
@@ -261,13 +262,16 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 		Tetrahedron::MatrixTensor<3> const identity =
 			Tetrahedron::dL_by_dN.contract(Tetrahedron::dN_by_dL, LN_NL);
 
-		check_equal(identity, "dL_by_dN * dN_by_dL", {
-			// clang-format off
+		check_equal(
+			identity,
+			"dL_by_dN * dN_by_dL",
+			{
+				// clang-format off
 			{1, 0, 0},
 			{0, 1, 0},
 			{0, 0, 1}
-			// clang-format on
-		});
+				// clang-format on
+			});
 	}
 
 	GIVEN("a one-element mesh")
@@ -514,17 +518,108 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	}
 }
 
+
+SCENARIO("Coordinate derivatives in deformed mesh")
+{
+	GIVEN("a one-element mesh")
+	{
+		auto mesh = TetGenIO{file_name_one}.to_mesh();
+		auto const & X = Tetrahedron::X(mesh, 0);
+		auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+		INFO("Material vertices:")
+		INFO(X)
+
+		WHEN("a node is deformed")
+		{
+			x(0, 0) += 0.5;
+			INFO("Spatial vertices:")
+			INFO(x)
+
+			AND_WHEN("derivative of spatial wrt local coords is calculated")
+			{
+//				{-1, -1, -1},
+//				{1, 0, 0},
+//				{0, 1, 0},
+//				{0, 0, 1}
+				auto const & dx_by_dL = Tetrahedron::dX_by_dL(x);
+
+				THEN("derivative is correct")
+				{
+					// clang-format off
+					check_equal(dx_by_dL, "dx_by_dL", {
+						{0.5, -0.5, -0.5},
+						{0, 1, 0},
+						{0, 0, 1}
+					});
+					// clang-format on
+				}
+
+				AND_WHEN("derivative of local wrt spatial coords is calculated")
+				{
+					auto const & dL_by_dx = Tetrahedron::dL_by_dX(dx_by_dL);
+
+					THEN("derivative is correct")
+					{
+						// clang-format off
+						check_equal(dL_by_dx, "dL_by_dx", {
+							{2, 1, 1},
+							{0, 1, 0},
+							{0, 0, 1}
+						});
+						// clang-format on
+					}
+
+					AND_WHEN("derivative of spatial wrt shape coords is calculated")
+					{
+						auto const & dN_by_dx = Tetrahedron::dN_by_dX(dL_by_dx);
+
+						THEN("derivative is correct")
+						{
+							// clang-format off
+							check_equal(dN_by_dx, "dN_by_dx", {
+								{-2, -2, -2},
+								{2, 1, 1},
+								{0, 1, 0},
+								{0, 0, 1}
+							});
+							// clang-format on
+						}
+					}
+				}
+			}
+
+			AND_WHEN("derivative of shape function wrt spatial coords is calculated")
+			{
+				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+
+				THEN("derivative is correct")
+				{
+					// clang-format off
+					check_equal(dN_by_dx, "dN_by_dx", {
+						{-2, -2, -2},
+						{2, 1, 1},
+						{0, 1, 0},
+						{0, 0, 1}
+					});
+					// clang-format on
+				}
+			}
+		}
+	}
+}
+
+
 SCENARIO("Deformation gradient of undeformed element")
 {
 	GIVEN("first element of two-element mesh")
 	{
 		auto const & io = TetGenIO{file_name_two};
-		auto const & mesh = io.to_mesh();
+		auto mesh = io.to_mesh();
 
 		auto const & X = Tetrahedron::X(mesh, 0);
 
-		std::stringstream ss;
-		INFO("Tetrahedron vertices:")
+		INFO("Material vertices:")
 		INFO(X)
 
 		WHEN("deformation gradient is calculated from natural coordinate derivative")
@@ -561,6 +656,36 @@ SCENARIO("Deformation gradient of undeformed element")
 				// clang-format on
 			}
 		}
+
+		WHEN("element is translated")
+		{
+			auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+
+			x(0, 0) += 0.5;
+			x(1, 0) += 0.5;
+			x(2, 0) += 0.5;
+			x(3, 0) += 0.5;
+
+			INFO("Spatial vertices:")
+			INFO(x)
+
+			AND_WHEN("deformation gradient is calculated")
+			{
+				 auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+				 auto const & dx_by_dX = Tetrahedron::dx_by_dX(x, dN_by_dX);
+
+				 THEN("gradient is identity")
+				 {
+					 // clang-format off
+					 check_equal(dx_by_dX, "dx_by_dX", {
+						 {1, 0, 0},
+						 {0, 1, 0},
+						 {0, 0, 1}
+					 });
+					 // clang-format on
+				 }
+			}
+		 }
 	}
 }
 
@@ -572,10 +697,14 @@ SCENARIO("Deformation gradient of deformed element")
 		auto const & X = Tetrahedron::X(mesh, 0);
 		auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
 		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+		INFO("Material vertices:")
+		INFO(X)
 
 		WHEN("a node is deformed")
 		{
 			x(0, 0) += 0.5;
+			INFO("Spatial vertices:")
+			INFO(x)
 
 			AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 			{
@@ -584,13 +713,54 @@ SCENARIO("Deformation gradient of deformed element")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-				check_equal(dN_by_dx, "dN_by_dx", {
-					{-2, -2, -2},
-					{2, 1, 1},
-					{0, 1, 0},
-					{0, 0, 1}
-				});
+					check_equal(dN_by_dx, "dN_by_dx", {
+						{-2, -2, -2},
+						{2, 1, 1},
+						{0, 1, 0},
+						{0, 0, 1}
+					});
 					// clang-format on
+				}
+			}
+			AND_WHEN("deformation gradient is calculated")
+			{
+				auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
+
+				THEN("deformation gradient is correct")
+				{
+					// clang-format off
+					check_equal(F, "F", {
+						{0.5, -0.5, -0.5},
+						{0, 1, 0},
+						{0, 0, 1}
+					});
+					// clang-format on
+				}
+
+				AND_WHEN("Jacobian of deformation gradient is calculated")
+				{
+					double const J = Tetrahedron::J(F);
+
+					THEN("value is correct")
+					{
+						CHECK(J == 0.5);
+					}
+				}
+
+				AND_WHEN("Left Cauchy-Green / Finger tensor is calculated")
+				{
+					auto const & b = Tetrahedron::b(F);
+
+					THEN("tensor is correct")
+					{
+						// clang-format off
+						check_equal(b, "b", {
+							{0.75, -0.5, -0.5},
+							{-0.5,    1,    0},
+							{-0.5,    0,    1}
+						});
+						// clang-format on
+					}
 				}
 			}
 		}
@@ -605,8 +775,7 @@ SCENARIO("Deformation gradient of deformed element")
 		auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
 		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 
-		std::stringstream ss;
-		INFO("Tetrahedron vertices:")
+		INFO("Material vertices:")
 		INFO(X)
 
 		WHEN("a node is deformed")
@@ -674,8 +843,7 @@ SCENARIO("Deformation gradient of deformed element")
 	}
 }
 
-
-SCENARIO("Internal nodal force")
+SCENARIO("Internal equivalent nodal force")
 {
 	GIVEN("an undeformed one-element mesh")
 	{
@@ -684,8 +852,16 @@ SCENARIO("Internal nodal force")
 		auto const & x_prop = Tetrahedron::x(mesh);
 		auto x = Tetrahedron::x(mesh, 0, x_prop);
 		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
-		Tetrahedron::Scalar const lambda = 1;
-		Tetrahedron::Scalar const mu = 1;
+		//		Tetrahedron::Scalar const lambda = 1;
+		//		Tetrahedron::Scalar const mu = 1;
+		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
+		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
+		double const E = 1;	   // Young's modulus: 0.001 - 0.05
+		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+
+		INFO("Material vertices:")
+		INFO(X)
 
 		WHEN("neo-hookean stress is calculated")
 		{
@@ -706,7 +882,7 @@ SCENARIO("Internal nodal force")
 				// clang-format on
 			}
 
-			AND_WHEN("internal nodal forces are calculated")
+			AND_WHEN("internal equivalent nodal forces are calculated")
 			{
 				auto const v = Tetrahedron::V(x);
 				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
@@ -728,6 +904,8 @@ SCENARIO("Internal nodal force")
 		WHEN("a node is deformed")
 		{
 			x(0, 0) += 0.5;
+			INFO("Spatial vertices:")
+			INFO(x)
 
 			AND_WHEN("neo-hookean stress is calculated")
 			{
@@ -741,14 +919,14 @@ SCENARIO("Internal nodal force")
 				{
 					// clang-format off
 					check_equal(sigma, "sigma", {
-						{-1.88629, -1, -1},
-						{-1, -1.38629, 0},
-						{-1, 0, -1.38629}
-					});
+						{-0.754518, -0.4, -0.4},
+						{-0.4, -0.554518, 0},
+						{-0.4, 0, -0.554518}
+					 });
 					// clang-format on
 				}
 
-				AND_WHEN("internal nodal forces are calculated")
+				AND_WHEN("internal equivalent nodal forces are calculated")
 				{
 					auto const v = Tetrahedron::V(x);
 					auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
@@ -758,10 +936,10 @@ SCENARIO("Internal nodal force")
 					{
 						// clang-format off
 						check_equal(T, "T", {
-							{0.647716, 0.397716, 0.397716},
-							{-0.481049, -0.282191, -0.282191},
-							{-0.0833333, -0.115525, 0},
-							{-0.0833333, 0, -0.115525}
+							{0.259086, 0.159086, 0.159086},
+							{-0.19242, -0.112876, -0.112876},
+							{-0.0333333, -0.0462098, 0},
+							{-0.0333333, 0, -0.0462098}
 						});
 						// clang-format on
 					}
@@ -771,114 +949,328 @@ SCENARIO("Internal nodal force")
 	}
 }
 
+SCENARIO("Neo-hookian tangent stiffness tensor")
+{
+	GIVEN("material properties")
+	{
+		using namespace FeltElements;
 
+		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
+		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
+		double const E = 1;	   // Young's modulus: 0.001 - 0.05
+		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
 
-//SCENARIO("Neo-hookian tangent stiffness matrix")
-//{
-//	GIVEN("material properties")
-//	{
-//		using namespace FeltElements;
-//
-//		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-//		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
-//		double const E = 1;	   // Young's modulus: 0.001 - 0.05
-//		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-//		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
-//
-//		std::stringstream s;
-//		s << "Lambda = " << lambda << "; mu = " << mu;
-//		INFO(s.str());
-//
-//		AND_GIVEN("an undeformed tetrahedron")
-//		{
-//			auto mesh = FeltElements::TetGenIO{file_name_one}.to_mesh();
-//			auto const & X = Tetrahedron::X(mesh, 0);
-//			auto const & x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
-//			auto const v = Tetrahedron::V(x);
-//			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
-//			auto const & dx_by_dN = Tetrahedron::dx_by_dN();
-//			auto const & F = Tetrahedron::dx_by_dX(dx_by_dN, dN_by_dX);
-//			auto const & dN_by_dx = Tetrahedron::dN_by_dx(dN_by_dX, F);
-//			auto const J = Tetrahedron::J(F);
-//			auto const & b = Tetrahedron::b(F);
-//
-//			WHEN("neo-hookian elasticity tensor is calculated")
-//			{
-//				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
-//
-//				THEN("it has expected values")
-//				{
-//					FeltElements::Tetrahedron::ElasticityTensor expected;
-//					expected.setValues({{{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
-//											{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
-//											{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}},
-//										{{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
-//											{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
-//											{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}},
-//										{{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
-//											{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
-//											{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}}});
-//					Eigen::Tensor<bool, 0> comparison = ((c - expected).abs() < 0.00001).all();
-//
-//					INFO("Expected:")
-//					INFO(expected);
-//					INFO("Actual:")
-//					INFO(c);
-//					CHECK(comparison(0));
-//				}
-//
-//				AND_WHEN("constitutive component of tangent matrix is calculated")
-//				{
-//					auto const & Kcab = Tetrahedron::Kcab(dN_by_dx, v, c, 0, 1);
-//
-//					INFO("Kcab:")
-//					INFO(Kcab)
-//
-//					THEN("matrix of values are as expected")
-//					{
-//						Eigen::Matrix3d expected;
-//						expected <<
-//						// clang-format off
-//							-0.0667, -0.0667,    0,
-//							-0.0667, -0.2, -0.0667,
-//							0, -0.0667, -0.0667;
-//						// clang-format on
-//						CHECK(Kcab.isApprox(expected, 0.0005));
-//					}
-//				}
-//
-//			} // End WHEN("neo-hookian elasticity tensor is calculated")
-//
-//			WHEN("neo-hookian Cauchy stress tensor is calculated")
-//			{
-//				Tetrahedron::GradientMatrix const & sigma = Tetrahedron::neo_hookian_stress(
-//					J, b, lambda, mu);
-//
-//				INFO("sigma:")
-//				INFO(sigma)
-//
-//				THEN("Cauchy stress tensor is zero")
-//				{
-//					Eigen::Matrix3d expected;
-//					expected.setZero();
-//					CHECK(sigma == expected);
-//				}
-//
-//				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
-//				{
-//					Tetrahedron::GradientMatrix const & Ksab = Tetrahedron::Ksab(
-//						dN_by_dx, v, sigma, 0, 1);
-//
-//					THEN("stress component is zero")
-//					{
-//						Eigen::Matrix3d expected;
-//						expected.setZero();
-//						CHECK(Ksab == expected);
-//					}
-//				}
-//			}
-//		} // End AND_GIVEN("an undeformed tetrahedron")
-//
+		std::stringstream s;
+		s << "Lambda = " << lambda << "; mu = " << mu;
+		INFO(s.str());
+
+		AND_GIVEN("an undeformed tetrahedron")
+		{
+			auto mesh = FeltElements::TetGenIO{file_name_one}.to_mesh();
+			auto const & X = Tetrahedron::X(mesh, 0);
+			auto const & x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+			auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
+			auto const J = Tetrahedron::J(F);
+			auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+			auto const v = Tetrahedron::V(x);
+
+			INFO("Material vertices:")
+			INFO(X)
+
+			WHEN("neo-hookian elasticity tensor is calculated")
+			{
+				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
+
+				THEN("it has expected values")
+				{
+					// clang-format off
+					check_equal(c, "c",   {
+						{
+							{{1.2, 0, 0}, {0, 0.4, 0}, {0, 0, 0.4}},
+							{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+							{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}}
+						}, {
+							{{0, 0.4, 0}, {0.4, 0, 0}, {0, 0, 0}},
+							{{0.4, 0, 0}, {0, 1.2, 0}, {0, 0, 0.4}},
+							{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}}
+						}, {
+							{{0, 0, 0.4}, {0, 0, 0}, {0.4, 0, 0}},
+							{{0, 0, 0}, {0, 0, 0.4}, {0, 0.4, 0}},
+							{{0.4, 0, 0}, {0, 0.4, 0}, {0, 0, 1.2}}
+						}
+					});
+					// clang-format on
+				}
+				AND_WHEN("constitutive component of tangent tensor is calculated")
+				{
+					auto const & Kc = Tetrahedron::Kc(dN_by_dx, v, c);
+
+					THEN("it has expected values")
+					{
+						// clang-format off
+						check_equal(Kc, "Kc", {
+							{
+								{{0.333333, 0.133333, 0.133333}, {0.133333, 0.333333, 0.133333}, {0.133333, 0.133333, 0.333333}},
+								{{-0.2, -0.0666667, -0.0666667}, {-0.0666667, -0.0666667, 0}, {-0.0666667, 0, -0.0666667}},
+								{{-0.0666667, -0.0666667, 0}, {-0.0666667, -0.2, -0.0666667}, {0, -0.0666667, -0.0666667}},
+								{{-0.0666667, 0, -0.0666667}, {0, -0.0666667, -0.0666667}, {-0.0666667, -0.0666667, -0.2}}
+							}, {
+								{{-0.2, -0.0666667, -0.0666667}, {-0.0666667, -0.0666667, 0}, {-0.0666667, 0, -0.0666667}},
+								{{0.2, 0, 0}, {0, 0.0666667, 0}, {0, 0, 0.0666667}},
+								{{0, 0.0666667, 0}, {0.0666667, 0, 0}, {0, 0, 0}},
+								{{0, 0, 0.0666667}, {0, 0, 0}, {0.0666667, 0, 0}}
+							}, {
+								{{-0.0666667, -0.0666667, 0}, {-0.0666667, -0.2, -0.0666667}, {0, -0.0666667, -0.0666667}},
+								{{0, 0.0666667, 0}, {0.0666667, 0, 0}, {0, 0, 0}},
+								{{0.0666667, 0, 0}, {0, 0.2, 0}, {0, 0, 0.0666667}},
+								{{0, 0, 0}, {0, 0, 0.0666667}, {0, 0.0666667, 0}}
+							}, {
+								{{-0.0666667, 0, -0.0666667}, {0, -0.0666667, -0.0666667}, {-0.0666667, -0.0666667, -0.2}},
+								{{0, 0, 0.0666667}, {0, 0, 0}, {0.0666667, 0, 0}},
+								{{0, 0, 0}, {0, 0, 0.0666667}, {0, 0.0666667, 0}},
+								{{0.0666667, 0, 0}, {0, 0.0666667, 0}, {0, 0, 0.2}}
+							}
+						});
+						// clang-format on
+					}
+				}
+			}
+
+			WHEN("neo-hookian Cauchy stress tensor is calculated")
+			{
+				auto const & b = Tetrahedron::b(F);
+				auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+
+				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
+				{
+					Tetrahedron::StiffnessTensor const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
+
+					THEN("stress component is zero")
+					{
+						Tetrahedron::StiffnessTensor expected;
+						expected.setZero();
+						check_equal(Ks, "Ks", expected, "zero");
+					}
+				}
+			}
+		} // End AND_GIVEN("an undeformed tetrahedron")
+
+		AND_GIVEN("a deformed tetrahedron")
+		{
+			auto mesh = FeltElements::TetGenIO{file_name_one}.to_mesh();
+			auto const & X = Tetrahedron::X(mesh, 0);
+			auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+			x(0, 0) += 0.5;
+			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+			auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
+			auto const J = Tetrahedron::J(F);
+			auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+			auto const v = Tetrahedron::V(x);
+
+			INFO("Material vertices:")
+			INFO(X)
+			INFO("Material volume:")
+			INFO(Tetrahedron::V(X))
+			INFO("Spatial vertices:")
+			INFO(x)
+
+			WHEN("neo-hookian elasticity tensor is calculated")
+			{
+				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
+
+				THEN("it has expected values")
+				{
+					// clang-format off
+					check_equal(c, "c",   {
+						{
+							{{3.50904, 0, 0}, {0, 0.8, 0}, {0, 0, 0.8}},
+							{{0, 1.35452, 0}, {1.35452, 0, 0}, {0, 0, 0}},
+							{{0, 0, 1.35452}, {0, 0, 0}, {1.35452, 0, 0}}
+						}, {
+							{{0, 1.35452, 0}, {1.35452, 0, 0}, {0, 0, 0}},
+							{{0.8, 0, 0}, {0, 3.50904, 0}, {0, 0, 0.8}},
+							{{0, 0, 0}, {0, 0, 1.35452}, {0, 1.35452, 0}}
+						}, {
+							{{0, 0, 1.35452}, {0, 0, 0}, {1.35452, 0, 0}},
+							{{0, 0, 0}, {0, 0, 1.35452}, {0, 1.35452, 0}},
+							{{0.8, 0, 0}, {0, 0.8, 0}, {0, 0, 3.50904}}
+						}
+
+					});
+					// clang-format on
+				}
+				AND_WHEN("constitutive component of tangent tensor is calculated")
+				{
+					auto const & Kc = Tetrahedron::Kc(dN_by_dx, v, c);
+
+					THEN("it has expected values")
+					{
+						// clang-format off
+						check_equal(Kc, "Kc", {
+							{
+								{{2.07269, 0.718173, 0.718173}, {0.718173, 2.07269, 0.718173}, {0.718173, 0.718173, 2.07269}},
+								{{-1.62118, -0.584839, -0.584839}, {-0.49242, -1.2621, -0.359086}, {-0.49242, -0.359086, -1.2621}},
+								{{-0.225753, -0.133333, 0}, {-0.225753, -0.584839, -0.225753}, {0, -0.133333, -0.225753}},
+								{{-0.225753, 0, -0.133333}, {0, -0.225753, -0.133333}, {-0.225753, -0.225753, -0.584839}}
+							}, {
+								{{-1.62118, -0.49242, -0.49242}, {-0.584839, -1.2621, -0.359086}, {-0.584839, -0.359086, -1.2621}},
+								{{1.39543, 0.359086, 0.359086}, {0.359086, 0.856802, 0.179543}, {0.359086, 0.179543, 0.856802}},
+								{{0.112876, 0.133333, 0}, {0.225753, 0.29242, 0.112876}, {0, 0.0666667, 0.112876}},
+								{{0.112876, 0, 0.133333}, {0, 0.112876, 0.0666667}, {0.225753, 0.112876, 0.29242}}
+							}, {
+								{{-0.225753, -0.225753, 0}, {-0.133333, -0.584839, -0.133333}, {0, -0.225753, -0.225753}},
+								{{0.112876, 0.225753, 0}, {0.133333, 0.29242, 0.0666667}, {0, 0.112876, 0.112876}},
+								{{0.112876, 0, 0}, {0, 0.29242, 0}, {0, 0, 0.112876}},
+								{{0, 0, 0}, {0, 0, 0.0666667}, {0, 0.112876, 0}}
+							}, {
+								{{-0.225753, 0, -0.225753}, {0, -0.225753, -0.225753}, {-0.133333, -0.133333, -0.584839}},
+								{{0.112876, 0, 0.225753}, {0, 0.112876, 0.112876}, {0.133333, 0.0666667, 0.29242}},
+								{{0, 0, 0}, {0, 0, 0.112876}, {0, 0.0666667, 0}},
+								{{0.112876, 0, 0}, {0, 0.112876, 0}, {0, 0, 0.29242}}
+							}
+						});
+						// clang-format on
+					}
+				}
+			}
+
+			WHEN("neo-hookian Cauchy stress tensor is calculated")
+			{
+				auto const & b = Tetrahedron::b(F);
+				auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+
+				THEN("stress is correct")
+				{
+					// clang-format off
+					check_equal(sigma, "sigma", {
+						{-0.754518, -0.4, -0.4},
+						{-0.4, -0.554518, 0},
+						{-0.4, 0, -0.554518}
+					});
+					// clang-format on
+				}
+
+				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
+				{
+					Tetrahedron::StiffnessTensor const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
+
+					THEN("stress component is correct")
+					{
+						// clang-format off
+						check_equal(Ks, "Ks", {
+							{
+								{{-1.15452, 0, 0}, {0, -1.15452, 0}, {0, 0, -1.15452}},
+								{{0.836345, 0, 0}, {0, 0.836345, 0}, {0, 0, 0.836345}},
+								{{0.159086, 0, 0}, {0, 0.159086, 0}, {0, 0, 0.159086}},
+								{{0.159086, 0, 0}, {0, 0.159086, 0}, {0, 0, 0.159086}}
+							}, {
+								{{0.836345, 0, 0}, {0, 0.836345, 0}, {0, 0, 0.836345}},
+								{{-0.610592, 0, 0}, {0, -0.610592, 0}, {0, 0, -0.610592}},
+								{{-0.112876, 0, 0}, {0, -0.112876, 0}, {0, 0, -0.112876}},
+								{{-0.112876, 0, 0}, {0, -0.112876, 0}, {0, 0, -0.112876}}
+							}, {
+								{{0.159086, 0, 0}, {0, 0.159086, 0}, {0, 0, 0.159086}},
+								{{-0.112876, 0, 0}, {0, -0.112876, 0}, {0, 0, -0.112876}},
+								{{-0.0462098, 0, 0}, {0, -0.0462098, 0}, {0, 0, -0.0462098}},
+								{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}}
+							}, {
+								{{0.159086, 0, 0}, {0, 0.159086, 0}, {0, 0, 0.159086}},
+								{{-0.112876, 0, 0}, {0, -0.112876, 0}, {0, 0, -0.112876}},
+								{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+								{{-0.0462098, 0, 0}, {0, -0.0462098, 0}, {0, 0, -0.0462098}}
+							}
+						});
+						// clang-format on
+
+					}
+				}
+			}
+
+			WHEN("displacement is solved")
+			{
+				using Displacements = Eigen::Matrix<double, 12, 1>;
+				Displacements u;
+				std::stringstream ss;
+				Tetrahedron::GradientTensor b;
+				Tetrahedron::Scalar v{};
+
+				for (int i = 0; i < 7; i++)
+				{
+					v = Tetrahedron::V(x);
+					auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+					auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+					auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
+					auto const J = Tetrahedron::J(F);
+					auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
+					b = Tetrahedron::b(F);
+					auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+					Tetrahedron::StiffnessTensor const & Kc = Tetrahedron::Kc(dN_by_dx, v, c);
+					Tetrahedron::StiffnessTensor const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
+					Tetrahedron::StiffnessTensor K = Ks + Kc;
+					Tetrahedron::Node::Forces T = Tetrahedron::T(v, sigma, dN_by_dx);
+
+					Eigen::TensorFixedSize<double, Eigen::Sizes<3, 4, 3, 4>> KT =
+						K.shuffle(Eigen::array<Eigen::Index, 4>{2, 0, 3, 1});
+					Eigen::TensorFixedSize<double, Eigen::Sizes<3, 4>> TT =
+						T.shuffle(Eigen::array<Eigen::Index, 2>{1, 0});
+
+					Eigen::Map<Displacements> B{TT.data(), 12, 1};
+					B = -B;
+
+					Eigen::Map<
+						Eigen::Matrix<double, 12, 12, Tetrahedron::StiffnessTensor::Layout>> const
+						A{KT.data(), 12, 12};
+
+					u = A.colPivHouseholderQr().solve(B);
+
+					FeltElements::Tetrahedron::Node::Positions delta =
+						Eigen::TensorMap<Eigen::Tensor<double, 2>>{u.data(), {3, 4}}.shuffle(
+							Eigen::array<Eigen::Index, 2>{1, 0});
+
+					ss << ">>>>>>>>>>>>>>>>>>>>>>> Iteration " << i << "\n\n";
+					ss << "K (tensor)" << "\n";
+					ss << K << "\n";
+					ss << "KT (tensor)" << "\n";
+					ss << KT << "\n";
+					ss << "v" << "\n";
+					ss << v << "\n";
+					ss << "-T" << "\n";;
+					ss << B << "\n";;
+					ss << "K" << "\n";;
+					ss << A << "\n";;
+					ss << "u" << "\n";;
+					ss << u << "\n";;
+					ss << "x" << "\n";;
+					ss << x << "\n";;
+					ss << "delta" << "\n";
+					ss << delta << "\n";
+
+					x += delta;
+				}
+				INFO(ss.str())
+
+				THEN("volume returns and strain is zero")
+				{
+					FeltElements::Tetrahedron::Node::Positions delta =
+						Eigen::TensorMap<Eigen::Tensor<double, 2>>{
+							u.data(), {3, 4}
+						}.shuffle(Eigen::array<Eigen::Index, 2>{1, 0});
+
+					check_equal(b, "b", {
+						{1, 0, 0},
+						{0, 1, 0},
+						{0, 0, 1}
+					});
+
+					CHECK(v == Approx(1.0 / 6));
+				}
+			}
+		} // End AND_GIVEN("an undeformed tetrahedron")
+	}
+}
+
 //		AND_GIVEN("a deformed tetrahedron")
 //		{
 //			auto const mesh = FeltElements::TetGenIO{file_name_one};
@@ -901,7 +1293,7 @@ SCENARIO("Internal nodal force")
 //				THEN("it has expected values")
 //				{
 //					FeltElements::Tetrahedron::ElasticityTensor expected;
-//					expected.setValues({
+//					expected.setValues({?
 //						// clang-format off
 //						{
 //							{{2.15452, 0, 0}, {0, 0.8, 0}, {0, 0, 0.8}},

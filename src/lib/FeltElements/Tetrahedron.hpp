@@ -24,12 +24,14 @@ public:
 
 	struct Node
 	{
+		using Index = Eigen::Index;
+		static constexpr Index count = 4;
+		static constexpr Index dim = 3;
 		using Coord = Scalar;
 		using Pos = Eigen::Vector3d;
 		using PosMap = Eigen::Map<Pos>;
-		using List = std::array<PosMap, 4>;
-		using Index = Eigen::Index;
-		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<4, 3>>;
+		using List = std::array<PosMap, count>;
+		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<count, dim>>;
 		using Forces = Positions;
 		using PosProperty = OpenVolumeMesh::VertexPropertyT<Pos>;
 		using SpatialCoordProp = OpenVolumeMesh::VertexPropertyT<OpenVolumeMesh::Vec3d>;
@@ -37,20 +39,22 @@ public:
 	template <Eigen::Index rows = 3, Eigen::Index cols = rows, int options = 0>
 	using Matrix = Eigen::Matrix<Scalar, rows, cols, options>;
 	using GradientMatrix = Matrix<3, 3>;
-	using StiffnessMatrix = GradientMatrix;
 	using ShapeDerivativeMatrix = Matrix<4, 3>;
 	using IsoCoordDerivativeMatrix = Matrix<3, 4>;
 	template <Eigen::Index rows = 3, Eigen::Index cols = rows>
 	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<rows, cols>>;
 	template <Eigen::Index dim = 3>
 	using VectorTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim>>;
-	using IsoCoordDerivativeTensor = MatrixTensor<3, 4>;
-	using ShapeDerivativeTensor = MatrixTensor<4, 3>;
-	using ElasticityTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<3, 3, 3, 3>>;
+	using IsoCoordDerivativeTensor = MatrixTensor<Node::dim, Node::count>;
+	using ShapeDerivativeTensor = MatrixTensor<Node::count, Node::dim>;
+	using ElasticityTensor =
+		Eigen::TensorFixedSize<Scalar, Eigen::Sizes<Node::dim, Node::dim, Node::dim, Node::dim>>;
 	using ShapeCartesianTransform = MatrixTensor<4, 4>;
-	using CartesianDerivativeTensor = MatrixTensor<3, 4>;
-	using GradientTensor = MatrixTensor<3, 3>;
+	using CartesianDerivativeTensor = MatrixTensor<Node::dim, Node::count>;
+	using GradientTensor = MatrixTensor<Node::dim, Node::dim>;
 	using StressTensor = GradientTensor;
+	using StiffnessTensor = Eigen::TensorFixedSize<
+		Scalar, Eigen::Sizes<Node::count, Node::count, Node::dim, Node::dim>>;
 	using IndexPair = Eigen::IndexPair<Eigen::Index>;
 	template <Eigen::Index num_pairs>
 	using IndexPairs = Eigen::array<IndexPair, num_pairs>;
@@ -58,7 +62,10 @@ public:
 	static IsoCoordDerivativeTensor const dL_by_dN;
 	static ShapeDerivativeTensor const dN_by_dL;
 
-
+	[[nodiscard]] static StiffnessTensor Kc(
+		ShapeDerivativeTensor const & dN_by_dx, Scalar v, ElasticityTensor const & c);
+	[[nodiscard]] static StiffnessTensor Ks(
+		ShapeDerivativeTensor const & dN_by_dx, Scalar v, StressTensor const & s);
 
 	[[nodiscard]] static ElasticityTensor
 	neo_hookian_elasticity(Scalar J, Scalar lambda, Scalar mu);
@@ -75,8 +82,6 @@ public:
 		Node::Positions const & x, ShapeDerivativeTensor const & dN_by_dX);
 	[[nodiscard]] static GradientTensor dx_by_dX(
 		GradientTensor const & dx_by_dL, GradientTensor const & dL_by_dX);
-	[[nodiscard]] static GradientMatrix dx_by_dX(
-		IsoCoordDerivativeMatrix const & dx_by_dN, ShapeDerivativeMatrix const & dN_by_dX);
 	[[nodiscard]] static ShapeDerivativeMatrix dN_by_dx(
 		ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F);
 
