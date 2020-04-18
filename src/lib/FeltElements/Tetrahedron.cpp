@@ -103,24 +103,32 @@ Tetrahedron::StiffnessTensor Tetrahedron::Kc(
 	ShapeDerivativeTensor const & dN_by_dx, Scalar const v, ElasticityTensor const & c)
 {
 	constexpr IndexPairs<1> c_a{{{1, 1}}};
-	constexpr IndexPairs<1> c_b{{{1, 3}}};
-
-	return v * dN_by_dx.contract(dN_by_dx.contract(c, c_b), c_a);
+	constexpr IndexPairs<1> c_b{{{3, 1}}};
+	using Shuffle = Eigen::array<Eigen::Index, 4>;
+	constexpr Shuffle shuffle{1, 0, 2, 3};
+	// Kc = v * dN_a/dx_k * c_ikjl * dN_b/dx_l
+//	return v * dN_by_dx.contract(dN_by_dx.contract(c, c_b), c_a);
+	return v * dN_by_dx.contract(c, c_a).contract(dN_by_dx, c_b).shuffle(shuffle);
 }
 
 Tetrahedron::StiffnessTensor Tetrahedron::Ks(
 	ShapeDerivativeTensor const & dN_by_dx, Scalar const v, StressTensor const & s)
 {
-	constexpr IndexPairs<1> s_a{{{1, 1}}};
+//	constexpr IndexPairs<1> s_a{{{0, 1}}};
+//	constexpr IndexPairs<1> s_b{{{0, 1}}};
+	constexpr IndexPairs<1> s_a{{{1, 0}}};
 	constexpr IndexPairs<1> s_b{{{1, 1}}};
 	constexpr IndexPairs<0> s_I{};
-
-	return v * dN_by_dx.contract(
-		dN_by_dx.contract(s.contract(I<>, s_I), s_b), s_a);
+	using Shuffle = Eigen::array<Eigen::Index, 4>;
+	constexpr Shuffle shuffle{2, 0, 3, 1};
+	// Ks = v * dN_a/dx_k * sigma_kl * dN_b/dx_l * delta_ij
+//	return v * dN_by_dx.contract(
+//		dN_by_dx.contract(s.contract(I<>, s_I), s_b), s_a);
+//	return v * s.contract(I<>, s_I).contract(dN_by_dx, s_a).contract(dN_by_dx, s_b).shuffle(shuffle);
+	return v * dN_by_dx.contract(s, s_a).contract(dN_by_dx, s_b).contract(I<>, s_I).shuffle(shuffle);
 }
 
-Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
-	Tetrahedron::Scalar const J, Tetrahedron::Scalar const lambda, Tetrahedron::Scalar const mu)
+Tetrahedron::ElasticityTensor Tetrahedron::c(Scalar J, Scalar lambda, Scalar mu)
 {
 	Tetrahedron::Scalar const lambda_prime = lambda / J;
 	Tetrahedron::Scalar const mu_prime = (mu - lambda * std::log(J)) / J;
@@ -131,9 +139,9 @@ Tetrahedron::ElasticityTensor Tetrahedron::neo_hookian_elasticity(
 Tetrahedron::Node::Forces Tetrahedron::T(
 	Scalar const v, StressTensor const & sigma, ShapeDerivativeTensor const & dN_by_dx)
 {
-	// T^T = v * sigma * dN/dx^T = v * (dN/dx * sigma^T)
+	// T = v * sigma * dN/dx^T
 	constexpr IndexPairs<1> sigma_dN{{{1, 1}}};
-	return v * dN_by_dx.contract(sigma, sigma_dN);
+	return v * sigma.contract(dN_by_dx, sigma_dN);
 }
 
 Tetrahedron::StressTensor Tetrahedron::sigma(
@@ -267,28 +275,35 @@ Tetrahedron::Node::SpatialCoordProp Tetrahedron::x(Mesh & mesh)
 }
 
 Tetrahedron::Node::Positions Tetrahedron::x(
-	Mesh const & mesh, CellHandle const & cellh, Node::SpatialCoordProp const & x_prop)
+	Mesh const & mesh, Node::Vtxhs const & vtxhs, Node::SpatialCoordProp const & x_prop)
 {
 	Node::Positions p;
 	std::size_t node_idx = 0;
-	for (OpenVolumeMesh::CellVertexIter iter = mesh.cv_iter(cellh); iter.valid(); iter++)
+	for (Node::Vtxh const & vtxh : vtxhs)
 	{
-		OpenVolumeMesh::Vec3d const & vtx = x_prop[*iter];
+		OpenVolumeMesh::Vec3d const & vtx = x_prop[vtxh];
 		p.chip(node_idx++, 0) = to_tensor(vtx);
 	}
 	return p;
 }
 
-Tetrahedron::Node::Positions Tetrahedron::X(Mesh const & mesh, CellHandle const & cellh)
+Tetrahedron::Node::Positions Tetrahedron::X(Mesh const & mesh, Node::Vtxhs const & vtxhs)
 {
 	Node::Positions p;
 	std::size_t node_idx = 0;
-	for (OpenVolumeMesh::CellVertexIter iter = mesh.cv_iter(cellh); iter.valid(); iter++)
+	for (Node::Vtxh const & vtxh : vtxhs)
 	{
-		OpenVolumeMesh::Vec3d const & vtx = mesh.vertex(*iter);
+		OpenVolumeMesh::Vec3d const & vtx = mesh.vertex(vtxh);
 		p.chip(node_idx++, 0) = to_tensor(vtx);
 	}
 	return p;
+}
+
+Tetrahedron::Node::Vtxhs Tetrahedron::vtxhs(
+	OpenVolumeMesh::GeometricTetrahedralMeshV3d const & mesh,
+	OpenVolumeMesh::CellHandle const & cellh)
+{
+	return mesh.get_cell_vertices(cellh);
 }
 
 // clang-format off

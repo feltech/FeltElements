@@ -2,7 +2,13 @@
 
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <range/v3/view/transform.hpp>
+#include <range/v3/action/transform.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/to_container.hpp>
 #include <boost/algorithm/string/join.hpp>
+
+#include <FeltElements/TetGenIO.hpp>
+#include <FeltElements/Tetrahedron.hpp>
 
 namespace Eigen
 {
@@ -59,6 +65,10 @@ auto const to_string = [](auto const f) {
 	std::stringstream ss;
 	ss << f;
 	return ss.str();
+};
+
+auto const to_int = [](auto const f) {
+	return int{f};
 };
 
 template <class Tensor, Eigen::Index N>
@@ -120,6 +130,14 @@ ostream_if<Tensor, 2> operator<< (std::ostream& os, Tensor const& value)
 	return os;
 }
 
+std::ostream& operator<< (std::ostream& os, std::vector<OpenVolumeMesh::VertexHandle> const& vtxhs)
+{
+	using ranges::views::transform;
+	using boost::algorithm::join;
+	os << join(vtxhs | transform(to_int) | transform(to_string), ", ") << "\n";
+	return os;
+}
+
 #include <catch2/catch.hpp>  // Must come after `operator<<` definitions.
 
 template <class Tensor>
@@ -142,4 +160,16 @@ void check_equal(
 	INFO(desc_expected)
 	INFO(expected)
 	CHECK(equal(in, expected));
+}
+
+auto load_tet(char const * const file_name)
+{
+	using namespace FeltElements;
+	auto const & io = TetGenIO{file_name};
+	auto mesh = io.to_mesh();
+	auto const & vtxhs = Tetrahedron::vtxhs(mesh, 0);
+	auto const & X = Tetrahedron::X(mesh, vtxhs);
+	auto x = Tetrahedron::x(mesh, vtxhs, Tetrahedron::x(mesh));
+
+	return std::tuple(X, x);
 }

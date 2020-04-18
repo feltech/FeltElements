@@ -24,23 +24,28 @@ TetGenIO::~TetGenIO() = default;
 
 OpenVolumeMesh::GeometricTetrahedralMeshV3d TetGenIO::to_mesh() const
 {
-	OpenVolumeMesh::GeometricTetrahedralMeshV3d ovm;
-	std::vector<OpenVolumeMesh::VertexHandle> hvtxs{static_cast<int>(num_points())};
-	std::vector<OpenVolumeMesh::VertexHandle> tet_hvtxs(static_cast<int>(num_corners()));
+	using VtxhList = std::vector<OpenVolumeMesh::VertexHandle>;
+
+	VtxhList hvtxs(num_points());
+	VtxhList tet_hvtxs(num_corners());
+	OpenVolumeMesh::GeometricTetrahedralMeshV3d mesh;
 
 	for (std::size_t vtx_idx : boost::irange(num_points()))
 	{
 		auto const [x, y, z] = vertex(vtx_idx);
-		hvtxs[vtx_idx] = ovm.add_vertex(OpenVolumeMesh::Vec3d{x, y, z});
+		hvtxs[vtx_idx] = mesh.add_vertex(OpenVolumeMesh::Vec3d{x, y, z});
 	}
 
 	for (std::size_t tet_idx : boost::irange(num_simplexes()))
 	{
 		for (std::size_t corner_idx : boost::irange(num_corners()))
-			tet_hvtxs[corner_idx] = hvtxs[tet_vertex_idx(tet_idx, corner_idx)];
-		ovm.add_cell(tet_hvtxs);
+		{
+			std::size_t const vtx_idx = tet_vertex_idx(tet_idx, corner_idx);
+			tet_hvtxs[corner_idx] = hvtxs[vtx_idx];
+		}
+		mesh.add_cell(tet_hvtxs);
 	}
-	return ovm;
+	return mesh;
 }
 
 std::size_t TetGenIO::num_points() const

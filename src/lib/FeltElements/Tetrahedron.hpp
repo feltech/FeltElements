@@ -30,9 +30,11 @@ public:
 		using Coord = Scalar;
 		using Pos = Eigen::Vector3d;
 		using PosMap = Eigen::Map<Pos>;
-		using List = std::array<PosMap, count>;
+		using Vtxh = OpenVolumeMesh::VertexHandle;
+		using Vtxhs = std::vector<Vtxh>;
 		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<count, dim>>;
-		using Forces = Positions;
+		// Note: col-major map to matrix for solver requires unintuitive layout.
+		using Forces = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim, count>>;
 		using PosProperty = OpenVolumeMesh::VertexPropertyT<Pos>;
 		using SpatialCoordProp = OpenVolumeMesh::VertexPropertyT<OpenVolumeMesh::Vec3d>;
 	};
@@ -53,8 +55,9 @@ public:
 	using CartesianDerivativeTensor = MatrixTensor<Node::dim, Node::count>;
 	using GradientTensor = MatrixTensor<Node::dim, Node::dim>;
 	using StressTensor = GradientTensor;
+	// Note: col-major map to matrix for solver requires unintuitive layout.
 	using StiffnessTensor = Eigen::TensorFixedSize<
-		Scalar, Eigen::Sizes<Node::count, Node::count, Node::dim, Node::dim>>;
+		Scalar, Eigen::Sizes<Node::dim, Node::count, Node::dim, Node::count>>;
 	using IndexPair = Eigen::IndexPair<Eigen::Index>;
 	template <Eigen::Index num_pairs>
 	using IndexPairs = Eigen::array<IndexPair, num_pairs>;
@@ -67,8 +70,7 @@ public:
 	[[nodiscard]] static StiffnessTensor Ks(
 		ShapeDerivativeTensor const & dN_by_dx, Scalar v, StressTensor const & s);
 
-	[[nodiscard]] static ElasticityTensor
-	neo_hookian_elasticity(Scalar J, Scalar lambda, Scalar mu);
+	[[nodiscard]] static ElasticityTensor c(Scalar J, Scalar lambda, Scalar mu);
 
 	[[nodiscard]] static Node::Forces
 	T(Scalar const v, StressTensor const & sigma, ShapeDerivativeTensor const & dN_by_dx);
@@ -98,25 +100,15 @@ public:
 
 	[[nodiscard]] static ShapeCartesianTransform N_to_x(Node::Positions const & X);
 
-	[[nodiscard]] static Node::Positions X(Mesh const & mesh, CellHandle const & cellh);
+	[[nodiscard]] static Node::Positions X(Mesh const & mesh, Node::Vtxhs const & vtxhs);
 	[[nodiscard]] static Node::SpatialCoordProp x(Mesh & mesh);
 	[[nodiscard]] static Node::Positions x(
-		Mesh const & mesh, CellHandle const & cellh, Node::SpatialCoordProp const & x_prop);
+		Mesh const & mesh, Node::Vtxhs const & vtxhs, Node::SpatialCoordProp const & x_prop);
+	[[nodiscard]] static Node::Vtxhs vtxhs(
+		OpenVolumeMesh::GeometricTetrahedralMeshV3d const & mesh,
+		OpenVolumeMesh::CellHandle const & cellh);
 
 
-//	static StiffnessMatrix Kcab(
-//		ShapeDerivativeMatrix const & dN_by_dx,
-//		Scalar v,
-//		ElasticityTensor const & c,
-//		Node::Index a,
-//		Node::Index b);
-//
-//	static StiffnessMatrix Ksab(
-//		ShapeDerivativeMatrix const & dN_by_dx,
-//		Scalar v,
-//		GradientMatrix const & sigma,
-//		Node::Index a,
-//		Node::Index b);
 };
 } // namespace FeltElements
 #endif // FELTELEMENTS_TETRAHEDRON_HPP

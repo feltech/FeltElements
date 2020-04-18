@@ -5,16 +5,15 @@
 #include <boost/range/irange.hpp>
 #include <unsupported/Eigen/CXX11/Tensor>
 
-#include <FeltElements/TetGenIO.hpp>
-#include <FeltElements/Tetrahedron.hpp>
+
 
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_CONSOLE_WIDTH 200
 #include "common.hpp"
 
-char const * file_name_one = "resources/single/tet.1";
-char const * file_name_two = "resources/two/tet.1";
-char const * file_name_two_quadratic = "resources/double/tet.1";
+char const * const file_name_one = "resources/single/tet.1";
+char const * const file_name_two = "resources/two/tet.1";
+char const * const file_name_two_quadratic = "resources/double/tet.1";
 
 using namespace FeltElements;
 
@@ -120,61 +119,73 @@ SCENARIO("Metrics of undeformed mesh")
 		auto const & io = TetGenIO{file_name_one};
 		auto mesh = io.to_mesh();
 
-		WHEN("material node position tensor is constructed")
+
+		WHEN("vertex index mapping is fetched")
 		{
-			Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, 0);
+			auto const & vtxhs = Tetrahedron::vtxhs(mesh, 0);
 
-			THEN("expected positions are reported")
+			THEN("mapping is expected")
 			{
-				// clang-format off
-				check_equal(X, "X", {
-					{0, 0, 0},
-					{1, 0, 0},
-					{0, 1, 0},
-					{0, 0, 1}
-				});
-				// clang-format on
+				CHECK(vtxhs == Tetrahedron::Node::Vtxhs{0, 2, 3, 1});
 			}
 
-			AND_WHEN("material volume is calculated")
+			AND_WHEN("material node position tensor is constructed")
 			{
-				Tetrahedron::Scalar V = Tetrahedron::V(X);
+				Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, vtxhs);
 
-				THEN("volume is correct")
+				THEN("expected positions are reported")
 				{
-					CHECK(V == 1.0 / 6.0);
+					// clang-format off
+					check_equal(X, "X", {
+						{0, 0, 0},
+						{0, 1, 0},
+						{0, 0, 1},
+						{1, 0, 0}
+					});
+					// clang-format on
 				}
-			}
 
-			AND_WHEN("spatial coordinate property is created")
-			{
-				using namespace OpenVolumeMesh;
-				VertexPropertyT<Vec3d> const & x_prop = Tetrahedron::x(mesh);
-
-				THEN("spatial coordinates equal material coordinates")
+				AND_WHEN("material volume is calculated")
 				{
-					std::vector<Vec3d> all_X{};
-					std::vector<Vec3d> all_x{};
+					Tetrahedron::Scalar V = Tetrahedron::V(X);
 
-					for (VertexIter it_vtx = mesh.vertices_begin(); it_vtx != mesh.vertices_end();
-						 it_vtx++)
+					THEN("volume is correct")
 					{
-						all_X.push_back(mesh.vertex(*it_vtx));
-						all_x.push_back(x_prop[*it_vtx]);
+						CHECK(V == 1.0 / 6.0);
+					}
+				}
+
+				AND_WHEN("spatial coordinate property is created")
+				{
+					using namespace OpenVolumeMesh;
+					VertexPropertyT<Vec3d> const & x_prop = Tetrahedron::x(mesh);
+
+					THEN("spatial coordinates equal material coordinates")
+					{
+						std::vector<Vec3d> all_X{};
+						std::vector<Vec3d> all_x{};
+
+						for (VertexIter it_vtx = mesh.vertices_begin();
+							 it_vtx != mesh.vertices_end();
+							 it_vtx++)
+						{
+							all_X.push_back(mesh.vertex(*it_vtx));
+							all_x.push_back(x_prop[*it_vtx]);
+						}
+
+						CHECK(all_X == all_x);
 					}
 
-					CHECK(all_X == all_x);
-				}
-
-				AND_WHEN("spatial node position tensor is constructed")
-				{
-					Tetrahedron::Node::Positions x = Tetrahedron::x(mesh, 0, x_prop);
-
-					THEN("spatial node positions equal material positions")
+					AND_WHEN("spatial node position tensor is constructed")
 					{
-						// clang-format off
-						check_equal(x, "x", X, "X");
-						// clang-format on
+						Tetrahedron::Node::Positions x = Tetrahedron::x(mesh, vtxhs, x_prop);
+
+						THEN("spatial node positions equal material positions")
+						{
+							// clang-format off
+							check_equal(x, "x", X, "X");
+							// clang-format on
+						}
 					}
 				}
 			}
@@ -186,13 +197,8 @@ SCENARIO("Metrics of deformed mesh")
 {
 	GIVEN("one-element mesh")
 	{
-		auto const & io = TetGenIO{file_name_one};
-		auto mesh = io.to_mesh();
+		auto [X, x] = load_tet(file_name_one);
 
-		auto const & X = Tetrahedron::X(mesh, 0);
-		auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
-
-		std::stringstream ss;
 		INFO("Tetrahedron vertices:")
 		INFO(X)
 
@@ -205,9 +211,9 @@ SCENARIO("Metrics of deformed mesh")
 				// clang-format off
 				check_equal(x, "x", {
 					{0.5, 0, 0},
-					{1, 0, 0},
 					{0, 1, 0},
-					{0, 0, 1}
+					{0, 0, 1},
+					{1, 0, 0}
 				});
 				// clang-format on
 			}
@@ -276,108 +282,104 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	GIVEN("a one-element mesh")
 	{
-		auto mesh = TetGenIO{file_name_one}.to_mesh();
+		auto [X, x] = load_tet(file_name_one);
 
-		WHEN("material node position tensor is constructed")
+		AND_WHEN("derivative of material wrt local coords is calculated")
 		{
-			Tetrahedron::Node::Positions const & X = Tetrahedron::X(mesh, 0);
+			auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
 
-			AND_WHEN("derivative of material wrt local coords is calculated")
+			THEN("derivative is correct")
 			{
-				auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+				// clang-format off
+				check_equal(dX_by_dL, "dX_by_dL", {
+					{0, 0, 1},
+					{1, 0, 0},
+					{0, 1, 0}
+				});
+				// clang-format on
+			}
+
+			AND_WHEN("derivative of local wrt material coords is calculated")
+			{
+				auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
 
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dX_by_dL, "dX_by_dL", {
-						{1, 0, 0},
+					check_equal(dL_by_dX, "dL_by_dX", {
 						{0, 1, 0},
-						{0, 0, 1}
+						{0, 0, 1},
+						{1, 0, 0}
 					});
 					// clang-format on
 				}
 
-				AND_WHEN("derivative of local wrt material coords is calculated")
+				AND_WHEN("derivative of material wrt shape coords is calculated")
 				{
-					auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
-
-					THEN("derivative is correct")
-					{
-						// clang-format off
-						check_equal(dL_by_dX, "dL_by_dX", {
-							{1, 0, 0},
-							{0, 1, 0},
-							{0, 0, 1}
-						});
-						// clang-format on
-					}
-
-					AND_WHEN("derivative of material wrt shape coords is calculated")
-					{
-						auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
-
-						THEN("derivative is correct")
-						{
-							// clang-format off
-							check_equal(dN_by_dX, "dN_by_dX", {
-								{-1, -1, -1},
-								{1, 0, 0},
-								{0, 1, 0},
-								{0, 0, 1}
-							});
-							// clang-format on
-						}
-					}
-				}
-			}
-
-			AND_WHEN("transformation from natural to cartesian coordinates is calculated")
-			{
-				auto const & N_to_x = Tetrahedron::N_to_x(X);
-
-				THEN("matrix is correct")
-				{
-					// clang-format off
-					check_equal(N_to_x, "N_to_x", {
-						{1, 1, 1, 1},
-						{0, 1, 0, 0},
-						{0, 0, 1, 0},
-						{0, 0, 0, 1}
-					});
-					// clang-format on
-				}
-
-				AND_WHEN("derivative of natural wrt cartesian coords is calculated")
-				{
-					auto const & dN_by_dX = Tetrahedron::dN_by_dX(N_to_x);
+					auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
 
 					THEN("derivative is correct")
 					{
 						// clang-format off
 						check_equal(dN_by_dX, "dN_by_dX", {
-							 {-1, -1, -1},
-							 {1, 0, 0},
-							 {0, 1, 0},
-							 {0, 0, 1}
-						 });
-						// clang-format on
-					}
-				}
-
-				AND_WHEN("derivative of cartesian wrt natural coords is calculated")
-				{
-					auto const & dx_by_dN = Tetrahedron::dx_by_dN(N_to_x);
-
-					THEN("derivative is correct")
-					{
-						// clang-format off
-						check_equal(dx_by_dN, "dx_by_dN", {
-							{0, 1, 0, 0},
-							{0, 0, 1, 0},
-							{0, 0, 0, 1}
+							{-1, -1, -1},
+							{0, 1, 0},
+							{0, 0, 1},
+							{1, 0, 0}
 						});
 						// clang-format on
 					}
+				}
+			}
+		}
+
+		AND_WHEN("transformation from natural to cartesian coordinates is calculated")
+		{
+			auto const & N_to_x = Tetrahedron::N_to_x(X);
+
+			THEN("matrix is correct")
+			{
+				// clang-format off
+				check_equal(N_to_x, "N_to_x", {
+					{1, 1, 1, 1},
+					{0, 0, 0, 1},
+					{0, 1, 0, 0},
+					{0, 0, 1, 0}
+				});
+				// clang-format on
+			}
+
+			AND_WHEN("derivative of natural wrt cartesian coords is calculated")
+			{
+				auto const & dN_by_dX = Tetrahedron::dN_by_dX(N_to_x);
+
+				THEN("derivative is correct")
+				{
+					// clang-format off
+					check_equal(dN_by_dX, "dN_by_dX", {
+						{-1, -1, -1},
+						{0, 1, 0},
+						{-0, 0, 1},
+						{1, -0, 0}
+					 });
+					// clang-format on
+				}
+			}
+
+			AND_WHEN("derivative of cartesian wrt natural coords is calculated")
+			{
+				auto const & dx_by_dN = Tetrahedron::dx_by_dN(N_to_x);
+
+				THEN("derivative is correct")
+				{
+					// clang-format off
+					check_equal(dx_by_dN, "dx_by_dN", {
+						{0, 0, 0, 1},
+						{0, 1, 0, 0},
+						{0, 0, 1, 0}
+
+					});
+					// clang-format on
 				}
 			}
 		}
@@ -385,133 +387,137 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	GIVEN("First element of a two-element mesh")
 	{
-		auto mesh = TetGenIO{file_name_two}.to_mesh();
+		auto [X, x] = load_tet(file_name_two);
 
-		WHEN("material node position tensor is constructed")
+		THEN("expected positions are reported")
 		{
-			Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, 0);
+			Tetrahedron::Node::Positions expected;
+			// clang-format off
+			expected.setValues({
+			   {0, 0, 0},
+			   {0, 0, 1},
+			   {1, 0, 0},
+			   {0, 0.5, 0.5}
+			});
+			// clang-format on
 
-			THEN("expected positions are reported")
+			INFO("X:")
+			INFO(X)
+			CHECK(equal(X, expected));
+		}
+
+		WHEN("derivative of material wrt local coords is calculated")
+		{
+			auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+
+			THEN("derivative is correct")
 			{
-				Tetrahedron::Node::Positions expected;
-				expected.setValues({{0, 0, 0}, {1, 0, 0}, {0, 0, 1}, {0, 0.5, 0.5}});
-
-				INFO("X:")
-				INFO(X)
-				CHECK(equal(X, expected));
+				// clang-format off
+				check_equal(dX_by_dL, "dX_by_dL", {
+					{0, 1, 0},
+					{0, 0, 0.5},
+					{1, 0, 0.5}
+				});
+				// clang-format on
 			}
 
-			WHEN("derivative of material wrt local coords is calculated")
+			AND_WHEN("derivative of local wrt material coords is calculated")
 			{
-				auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+				auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
 
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dX_by_dL, "dX_by_dL", {
-							{1, 0, 0},
-							{0, 0, 0.5},
-							{0, 1, 0.5}
+					check_equal(dL_by_dX, "dL_by_dX", {
+						{0, -1, 1},
+						{1, 0, 0},
+						{0, 2, 0}
 					});
 					// clang-format on
 				}
 
-				AND_WHEN("derivative of local wrt material coords is calculated")
+				THEN("derivative is inverse of material wrt local")
 				{
-					auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
-
-					THEN("derivative is correct")
-					{
-						// clang-format off
-						check_equal(dL_by_dX, "dL_by_dX", {
-								{1, 0, 0},
-								{0, -1, 1},
-								{0, 2, 0}
-						});
-						// clang-format on
-					}
-
-					THEN("derivative is inverse of material wrt local")
-					{
-						constexpr Tetrahedron::IndexPairs<1> XL_LX{{{1, 0}}};
-						Tetrahedron::MatrixTensor<3> const identity =
-							dX_by_dL.contract(dL_by_dX, XL_LX);
-						// clang-format off
-						check_equal(identity, "dX_by_dL * dL_by_dX", {
-							{1, 0, 0},
-							{0, 1, 0},
-							{0, 0, 1}
-						});
-						// clang-format on
-					}
-
-					AND_WHEN("derivative of natural wrt material coords is calculated")
-					{
-						auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
-
-						THEN("derivative is correct")
-						{
-							// clang-format off
-							check_equal(dN_by_dX, "dN_by_dX", {
-									{-1, -1, -1},
-									{1, 0, 0},
-									{0, -1, 1},
-									{0, 2, 0}
-							});
-							// clang-format on
-						}
-					}
-				}
-			}
-
-			AND_WHEN("derivative of natural wrt material coords is calculated")
-			{
-				auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
-
-				THEN("derivative is correct")
-				{
+					constexpr Tetrahedron::IndexPairs<1> XL_LX{{{1, 0}}};
+					Tetrahedron::MatrixTensor<3> const identity =
+						dX_by_dL.contract(dL_by_dX, XL_LX);
 					// clang-format off
-					check_equal(dN_by_dX, "dN_by_dX", {
-							{-1, -1, -1},
-							{1, 0, 0},
-							{0, -1, 1},
-							{0, 2, 0}
-					});
-					// clang-format on
-				}
-			}
-
-			AND_WHEN("transformation from natural to cartesian coordinates is calculated")
-			{
-				auto const & N_to_x = Tetrahedron::N_to_x(X);
-
-				THEN("matrix is correct")
-				{
-					// clang-format off
-					check_equal(N_to_x, "N_to_x", {
-							{1, 1, 1, 1},
-							{0, 1, 0, 0},
-							{0, 0, 0, 0.5},
-							{0, 0, 1, 0.5}
+					check_equal(identity, "dX_by_dL * dL_by_dX", {
+						{1, 0, 0},
+						{0, 1, 0},
+						{0, 0, 1}
 					});
 					// clang-format on
 				}
 
 				AND_WHEN("derivative of natural wrt material coords is calculated")
 				{
-					auto const & dN_by_dX = Tetrahedron::dN_by_dX(N_to_x);
+					auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
 
 					THEN("derivative is correct")
 					{
 						// clang-format off
 						check_equal(dN_by_dX, "dN_by_dX", {
-								{-1, -1, -1},
-								{1, 0, 0},
-								{0, -1, 1},
-								{0, 2, 0}
+							{-1, -1, -1},
+							{0, -1, 1},
+							{1, 0, 0},
+							{0, 2, 0}
+
 						});
 						// clang-format on
 					}
+				}
+			}
+		}
+
+		AND_WHEN("derivative of natural wrt material coords is calculated")
+		{
+			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+
+			THEN("derivative is correct")
+			{
+				// clang-format off
+				check_equal(dN_by_dX, "dN_by_dX", {
+					{-1, -1, -1},
+					{0, -1, 1},
+					{1, 0, 0},
+					{0, 2, 0}
+				});
+				// clang-format on
+			}
+		}
+
+		AND_WHEN("transformation from natural to cartesian coordinates is calculated")
+		{
+			auto const & N_to_x = Tetrahedron::N_to_x(X);
+
+			THEN("matrix is correct")
+			{
+				// clang-format off
+				check_equal(N_to_x, "N_to_x", {
+					{1, 1, 1, 1},
+					{0, 0, 1, 0},
+					{0, 0, 0, 0.5},
+					{0, 1, 0, 0.5}
+
+				});
+				// clang-format on
+			}
+
+			AND_WHEN("derivative of natural wrt material coords is calculated")
+			{
+				auto const & dN_by_dX = Tetrahedron::dN_by_dX(N_to_x);
+
+				THEN("derivative is correct")
+				{
+					// clang-format off
+					check_equal(dN_by_dX, "dN_by_dX", {
+						{-1, -1, -1},
+						{0, -1, 1},
+						{1, 0, -0},
+						{0, 2, 0}
+					});
+					// clang-format on
 				}
 			}
 		}
@@ -523,9 +529,8 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 {
 	GIVEN("a one-element mesh")
 	{
-		auto mesh = TetGenIO{file_name_one}.to_mesh();
-		auto const & X = Tetrahedron::X(mesh, 0);
-		auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+		auto [X, x] = load_tet(file_name_one);
+
 		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 		INFO("Material vertices:")
 		INFO(X)
@@ -538,19 +543,15 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 
 			AND_WHEN("derivative of spatial wrt local coords is calculated")
 			{
-//				{-1, -1, -1},
-//				{1, 0, 0},
-//				{0, 1, 0},
-//				{0, 0, 1}
 				auto const & dx_by_dL = Tetrahedron::dX_by_dL(x);
 
 				THEN("derivative is correct")
 				{
 					// clang-format off
 					check_equal(dx_by_dL, "dx_by_dL", {
-						{0.5, -0.5, -0.5},
-						{0, 1, 0},
-						{0, 0, 1}
+						{-0.5, -0.5, 0.5},
+						{1, 0, 0},
+						{0, 1, 0}
 					});
 					// clang-format on
 				}
@@ -563,9 +564,9 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 					{
 						// clang-format off
 						check_equal(dL_by_dx, "dL_by_dx", {
-							{2, 1, 1},
-							{0, 1, 0},
-							{0, 0, 1}
+							{0, 1, -0},
+							{0, -0, 1},
+							{2, 1, 1}
 						});
 						// clang-format on
 					}
@@ -579,9 +580,9 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 							// clang-format off
 							check_equal(dN_by_dx, "dN_by_dx", {
 								{-2, -2, -2},
-								{2, 1, 1},
 								{0, 1, 0},
-								{0, 0, 1}
+								{0, 0, 1},
+								{2, 1, 1}
 							});
 							// clang-format on
 						}
@@ -598,9 +599,9 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 					// clang-format off
 					check_equal(dN_by_dx, "dN_by_dx", {
 						{-2, -2, -2},
-						{2, 1, 1},
 						{0, 1, 0},
-						{0, 0, 1}
+						{0, 0, 1},
+						{2, 1, 1}
 					});
 					// clang-format on
 				}
@@ -614,10 +615,7 @@ SCENARIO("Deformation gradient of undeformed element")
 {
 	GIVEN("first element of two-element mesh")
 	{
-		auto const & io = TetGenIO{file_name_two};
-		auto mesh = io.to_mesh();
-
-		auto const & X = Tetrahedron::X(mesh, 0);
+		auto [X, x] = load_tet(file_name_two);
 
 		INFO("Material vertices:")
 		INFO(X)
@@ -659,8 +657,6 @@ SCENARIO("Deformation gradient of undeformed element")
 
 		WHEN("element is translated")
 		{
-			auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
-
 			x(0, 0) += 0.5;
 			x(1, 0) += 0.5;
 			x(2, 0) += 0.5;
@@ -693,9 +689,8 @@ SCENARIO("Deformation gradient of deformed element")
 {
 	GIVEN("a one-element mesh")
 	{
-		auto mesh = TetGenIO{file_name_one}.to_mesh();
-		auto const & X = Tetrahedron::X(mesh, 0);
-		auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+		auto [X, x] = load_tet(file_name_one);
+
 		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 		INFO("Material vertices:")
 		INFO(X)
@@ -715,9 +710,9 @@ SCENARIO("Deformation gradient of deformed element")
 					// clang-format off
 					check_equal(dN_by_dx, "dN_by_dx", {
 						{-2, -2, -2},
-						{2, 1, 1},
 						{0, 1, 0},
-						{0, 0, 1}
+						{0, 0, 1},
+						{2, 1, 1}
 					});
 					// clang-format on
 				}
@@ -768,11 +763,8 @@ SCENARIO("Deformation gradient of deformed element")
 
 	GIVEN("first element of two-element mesh")
 	{
-		auto const & io = TetGenIO{file_name_two};
-		auto mesh = io.to_mesh();
+		auto [X, x] = load_tet(file_name_two);
 
-		auto const & X = Tetrahedron::X(mesh, 0);
-		auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
 		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 
 		INFO("Material vertices:")
@@ -791,9 +783,10 @@ SCENARIO("Deformation gradient of deformed element")
 					// clang-format off
 					check_equal(dN_by_dx, "dN_by_dx", {
 						{-2, -2, -2},
-						{2, 1, 1},
 						{0, -1, 1},
+						{2, 1, 1},
 						{0, 2, 0}
+
 					});
 					// clang-format on
 				}
@@ -847,10 +840,8 @@ SCENARIO("Internal equivalent nodal force")
 {
 	GIVEN("an undeformed one-element mesh")
 	{
-		auto mesh = TetGenIO{file_name_one}.to_mesh();
-		auto const & X = Tetrahedron::X(mesh, 0);
-		auto const & x_prop = Tetrahedron::x(mesh);
-		auto x = Tetrahedron::x(mesh, 0, x_prop);
+		auto [X, x] = load_tet(file_name_one);
+
 		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 		//		Tetrahedron::Scalar const lambda = 1;
 		//		Tetrahedron::Scalar const mu = 1;
@@ -936,10 +927,9 @@ SCENARIO("Internal equivalent nodal force")
 					{
 						// clang-format off
 						check_equal(T, "T", {
-							{0.259086, 0.159086, 0.159086},
-							{-0.19242, -0.112876, -0.112876},
-							{-0.0333333, -0.0462098, 0},
-							{-0.0333333, 0, -0.0462098}
+							{0.259086, -0.0333333, -0.0333333, -0.19242},
+							{0.159086, -0.0462098, 0, -0.112876},
+							{0.159086, 0, -0.0462098, -0.112876}
 						});
 						// clang-format on
 					}
@@ -967,9 +957,8 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 		AND_GIVEN("an undeformed tetrahedron")
 		{
-			auto mesh = FeltElements::TetGenIO{file_name_one}.to_mesh();
-			auto const & X = Tetrahedron::X(mesh, 0);
-			auto const & x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+			auto [X, x] = load_tet(file_name_one);
+
 			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 			auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
 			auto const J = Tetrahedron::J(F);
@@ -981,7 +970,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 			WHEN("neo-hookian elasticity tensor is calculated")
 			{
-				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
+				auto const & c = Tetrahedron::c(J, lambda, mu);
 
 				THEN("it has expected values")
 				{
@@ -1012,26 +1001,22 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 						// clang-format off
 						check_equal(Kc, "Kc", {
 							{
-								{{0.333333, 0.133333, 0.133333}, {0.133333, 0.333333, 0.133333}, {0.133333, 0.133333, 0.333333}},
-								{{-0.2, -0.0666667, -0.0666667}, {-0.0666667, -0.0666667, 0}, {-0.0666667, 0, -0.0666667}},
-								{{-0.0666667, -0.0666667, 0}, {-0.0666667, -0.2, -0.0666667}, {0, -0.0666667, -0.0666667}},
-								{{-0.0666667, 0, -0.0666667}, {0, -0.0666667, -0.0666667}, {-0.0666667, -0.0666667, -0.2}}
+								{{0.333333, -0.0666667, -0.0666667, -0.2}, {0.133333, -0.0666667, 0, -0.0666667}, {0.133333, 0, -0.0666667, -0.0666667}},
+								{{-0.0666667, 0.0666667, 0, 0}, {-0.0666667, 0, 0, 0.0666667}, {0, 0, 0, 0}},
+								{{-0.0666667, 0, 0.0666667, 0}, {0, 0, 0, 0}, {-0.0666667, 0, 0, 0.0666667}},
+								{{-0.2, 0, 0, 0.2}, {-0.0666667, 0.0666667, 0, 0}, {-0.0666667, 0, 0.0666667, 0}}
 							}, {
-								{{-0.2, -0.0666667, -0.0666667}, {-0.0666667, -0.0666667, 0}, {-0.0666667, 0, -0.0666667}},
-								{{0.2, 0, 0}, {0, 0.0666667, 0}, {0, 0, 0.0666667}},
-								{{0, 0.0666667, 0}, {0.0666667, 0, 0}, {0, 0, 0}},
-								{{0, 0, 0.0666667}, {0, 0, 0}, {0.0666667, 0, 0}}
+								{{0.133333, -0.0666667, 0, -0.0666667}, {0.333333, -0.2, -0.0666667, -0.0666667}, {0.133333, -0.0666667, -0.0666667, 0}},
+								{{-0.0666667, 0, 0, 0.0666667}, {-0.2, 0.2, 0, 0}, {-0.0666667, 0, 0.0666667, 0}},
+								{{0, 0, 0, 0}, {-0.0666667, 0, 0.0666667, 0}, {-0.0666667, 0.0666667, 0, 0}},
+								{{-0.0666667, 0.0666667, 0, 0}, {-0.0666667, 0, 0, 0.0666667}, {0, 0, 0, 0}}
 							}, {
-								{{-0.0666667, -0.0666667, 0}, {-0.0666667, -0.2, -0.0666667}, {0, -0.0666667, -0.0666667}},
-								{{0, 0.0666667, 0}, {0.0666667, 0, 0}, {0, 0, 0}},
-								{{0.0666667, 0, 0}, {0, 0.2, 0}, {0, 0, 0.0666667}},
-								{{0, 0, 0}, {0, 0, 0.0666667}, {0, 0.0666667, 0}}
-							}, {
-								{{-0.0666667, 0, -0.0666667}, {0, -0.0666667, -0.0666667}, {-0.0666667, -0.0666667, -0.2}},
-								{{0, 0, 0.0666667}, {0, 0, 0}, {0.0666667, 0, 0}},
-								{{0, 0, 0}, {0, 0, 0.0666667}, {0, 0.0666667, 0}},
-								{{0.0666667, 0, 0}, {0, 0.0666667, 0}, {0, 0, 0.2}}
+								{{0.133333, 0, -0.0666667, -0.0666667}, {0.133333, -0.0666667, -0.0666667, 0}, {0.333333, -0.0666667, -0.2, -0.0666667}},
+								{{0, 0, 0, 0}, {-0.0666667, 0, 0.0666667, 0}, {-0.0666667, 0.0666667, 0, 0}},
+								{{-0.0666667, 0, 0, 0.0666667}, {-0.0666667, 0.0666667, 0, 0}, {-0.2, 0, 0.2, 0}},
+								{{-0.0666667, 0, 0.0666667, 0}, {0, 0, 0, 0}, {-0.0666667, 0, 0, 0.0666667}}
 							}
+
 						});
 						// clang-format on
 					}
@@ -1059,10 +1044,9 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 		AND_GIVEN("a deformed tetrahedron")
 		{
-			auto mesh = FeltElements::TetGenIO{file_name_one}.to_mesh();
-			auto const & X = Tetrahedron::X(mesh, 0);
-			auto x = Tetrahedron::x(mesh, 0, Tetrahedron::x(mesh));
+			auto [X, x] = load_tet(file_name_one);
 			x(0, 0) += 0.5;
+
 			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 			auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
 			auto const J = Tetrahedron::J(F);
@@ -1078,7 +1062,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 			WHEN("neo-hookian elasticity tensor is calculated")
 			{
-				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
+				auto const & c = Tetrahedron::c(J, lambda, mu);
 
 				THEN("it has expected values")
 				{
@@ -1110,26 +1094,22 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 						// clang-format off
 						check_equal(Kc, "Kc", {
 							{
-								{{2.07269, 0.718173, 0.718173}, {0.718173, 2.07269, 0.718173}, {0.718173, 0.718173, 2.07269}},
-								{{-1.62118, -0.584839, -0.584839}, {-0.49242, -1.2621, -0.359086}, {-0.49242, -0.359086, -1.2621}},
-								{{-0.225753, -0.133333, 0}, {-0.225753, -0.584839, -0.225753}, {0, -0.133333, -0.225753}},
-								{{-0.225753, 0, -0.133333}, {0, -0.225753, -0.133333}, {-0.225753, -0.225753, -0.584839}}
+								{{2.07269, -0.225753, -0.225753, -1.62118}, {0.718173, -0.133333, 0, -0.584839}, {0.718173, 0, -0.133333, -0.584839}},
+								{{-0.225753, 0.112876, 0, 0.112876}, {-0.225753, 0, 0, 0.225753}, {0, 0, 0, 0}},
+								{{-0.225753, 0, 0.112876, 0.112876}, {0, 0, 0, 0}, {-0.225753, 0, 0, 0.225753}},
+								{{-1.62118, 0.112876, 0.112876, 1.39543}, {-0.49242, 0.133333, 0, 0.359086}, {-0.49242, 0, 0.133333, 0.359086}}
 							}, {
-								{{-1.62118, -0.49242, -0.49242}, {-0.584839, -1.2621, -0.359086}, {-0.584839, -0.359086, -1.2621}},
-								{{1.39543, 0.359086, 0.359086}, {0.359086, 0.856802, 0.179543}, {0.359086, 0.179543, 0.856802}},
-								{{0.112876, 0.133333, 0}, {0.225753, 0.29242, 0.112876}, {0, 0.0666667, 0.112876}},
-								{{0.112876, 0, 0.133333}, {0, 0.112876, 0.0666667}, {0.225753, 0.112876, 0.29242}}
+								{{0.718173, -0.225753, 0, -0.49242}, {2.07269, -0.584839, -0.225753, -1.2621}, {0.718173, -0.225753, -0.133333, -0.359086}},
+								{{-0.133333, 0, 0, 0.133333}, {-0.584839, 0.29242, 0, 0.29242}, {-0.133333, 0, 0.0666667, 0.0666667}},
+								{{0, 0, 0, 0}, {-0.225753, 0, 0.112876, 0.112876}, {-0.225753, 0.112876, 0, 0.112876}},
+								{{-0.584839, 0.225753, 0, 0.359086}, {-1.2621, 0.29242, 0.112876, 0.856802}, {-0.359086, 0.112876, 0.0666667, 0.179543}}
 							}, {
-								{{-0.225753, -0.225753, 0}, {-0.133333, -0.584839, -0.133333}, {0, -0.225753, -0.225753}},
-								{{0.112876, 0.225753, 0}, {0.133333, 0.29242, 0.0666667}, {0, 0.112876, 0.112876}},
-								{{0.112876, 0, 0}, {0, 0.29242, 0}, {0, 0, 0.112876}},
-								{{0, 0, 0}, {0, 0, 0.0666667}, {0, 0.112876, 0}}
-							}, {
-								{{-0.225753, 0, -0.225753}, {0, -0.225753, -0.225753}, {-0.133333, -0.133333, -0.584839}},
-								{{0.112876, 0, 0.225753}, {0, 0.112876, 0.112876}, {0.133333, 0.0666667, 0.29242}},
-								{{0, 0, 0}, {0, 0, 0.112876}, {0, 0.0666667, 0}},
-								{{0.112876, 0, 0}, {0, 0.112876, 0}, {0, 0, 0.29242}}
+								{{0.718173, 0, -0.225753, -0.49242}, {0.718173, -0.133333, -0.225753, -0.359086}, {2.07269, -0.225753, -0.584839, -1.2621}},
+								{{0, 0, 0, 0}, {-0.225753, 0, 0.112876, 0.112876}, {-0.225753, 0.112876, 0, 0.112876}},
+								{{-0.133333, 0, 0, 0.133333}, {-0.133333, 0.0666667, 0, 0.0666667}, {-0.584839, 0, 0.29242, 0.29242}},
+								{{-0.584839, 0, 0.225753, 0.359086}, {-0.359086, 0.0666667, 0.112876, 0.179543}, {-1.2621, 0.112876, 0.29242, 0.856802}}
 							}
+
 						});
 						// clang-format on
 					}
@@ -1161,25 +1141,20 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 						// clang-format off
 						check_equal(Ks, "Ks", {
 							{
-								{{-1.15452, 0, 0}, {0, -1.15452, 0}, {0, 0, -1.15452}},
-								{{0.836345, 0, 0}, {0, 0.836345, 0}, {0, 0, 0.836345}},
-								{{0.159086, 0, 0}, {0, 0.159086, 0}, {0, 0, 0.159086}},
-								{{0.159086, 0, 0}, {0, 0.159086, 0}, {0, 0, 0.159086}}
+								{{-1.15452, 0.159086, 0.159086, 0.836345}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+								{{0.159086, -0.0462098, 0, -0.112876}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+								{{0.159086, 0, -0.0462098, -0.112876}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+								{{0.836345, -0.112876, -0.112876, -0.610592}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 							}, {
-								{{0.836345, 0, 0}, {0, 0.836345, 0}, {0, 0, 0.836345}},
-								{{-0.610592, 0, 0}, {0, -0.610592, 0}, {0, 0, -0.610592}},
-								{{-0.112876, 0, 0}, {0, -0.112876, 0}, {0, 0, -0.112876}},
-								{{-0.112876, 0, 0}, {0, -0.112876, 0}, {0, 0, -0.112876}}
+								{{0, 0, 0, 0}, {-1.15452, 0.159086, 0.159086, 0.836345}, {0, 0, 0, 0}},
+								{{0, 0, 0, 0}, {0.159086, -0.0462098, 0, -0.112876}, {0, 0, 0, 0}},
+								{{0, 0, 0, 0}, {0.159086, 0, -0.0462098, -0.112876}, {0, 0, 0, 0}},
+								{{0, 0, 0, 0}, {0.836345, -0.112876, -0.112876, -0.610592}, {0, 0, 0, 0}}
 							}, {
-								{{0.159086, 0, 0}, {0, 0.159086, 0}, {0, 0, 0.159086}},
-								{{-0.112876, 0, 0}, {0, -0.112876, 0}, {0, 0, -0.112876}},
-								{{-0.0462098, 0, 0}, {0, -0.0462098, 0}, {0, 0, -0.0462098}},
-								{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}}
-							}, {
-								{{0.159086, 0, 0}, {0, 0.159086, 0}, {0, 0, 0.159086}},
-								{{-0.112876, 0, 0}, {0, -0.112876, 0}, {0, 0, -0.112876}},
-								{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
-								{{-0.0462098, 0, 0}, {0, -0.0462098, 0}, {0, 0, -0.0462098}}
+								{{0, 0, 0, 0}, {0, 0, 0, 0}, {-1.15452, 0.159086, 0.159086, 0.836345}},
+								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.159086, -0.0462098, 0, -0.112876}},
+								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.159086, 0, -0.0462098, -0.112876}},
+								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.836345, -0.112876, -0.112876, -0.610592}}
 							}
 						});
 						// clang-format on
@@ -1203,7 +1178,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
 					auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
 					auto const J = Tetrahedron::J(F);
-					auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
+					auto const & c = Tetrahedron::c(J, lambda, mu);
 					b = Tetrahedron::b(F);
 					auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
 					Tetrahedron::StiffnessTensor const & Kc = Tetrahedron::Kc(dN_by_dx, v, c);
@@ -1211,17 +1186,17 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					Tetrahedron::StiffnessTensor K = Ks + Kc;
 					Tetrahedron::Node::Forces T = Tetrahedron::T(v, sigma, dN_by_dx);
 
-					Eigen::TensorFixedSize<double, Eigen::Sizes<3, 4, 3, 4>> KT =
-						K.shuffle(Eigen::array<Eigen::Index, 4>{2, 0, 3, 1});
-					Eigen::TensorFixedSize<double, Eigen::Sizes<3, 4>> TT =
-						T.shuffle(Eigen::array<Eigen::Index, 2>{1, 0});
+//					Eigen::TensorFixedSize<double, Eigen::Sizes<3, 4, 3, 4>> KT =
+//						K.shuffle(Eigen::array<Eigen::Index, 4>{2, 0, 3, 1});
+//					Eigen::TensorFixedSize<double, Eigen::Sizes<3, 4>> TT =
+//						T.shuffle(Eigen::array<Eigen::Index, 2>{1, 0});
 
-					Eigen::Map<Displacements> B{TT.data(), 12, 1};
+					Eigen::Map<Displacements> B{T.data(), 12, 1};
 					B = -B;
 
 					Eigen::Map<
 						Eigen::Matrix<double, 12, 12, Tetrahedron::StiffnessTensor::Layout>> const
-						A{KT.data(), 12, 12};
+						A{K.data(), 12, 12};
 
 					u = A.colPivHouseholderQr().solve(B);
 
@@ -1232,8 +1207,8 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					ss << ">>>>>>>>>>>>>>>>>>>>>>> Iteration " << i << "\n\n";
 					ss << "K (tensor)" << "\n";
 					ss << K << "\n";
-					ss << "KT (tensor)" << "\n";
-					ss << KT << "\n";
+//					ss << "KT (tensor)" << "\n";
+//					ss << KT << "\n";
 					ss << "v" << "\n";
 					ss << v << "\n";
 					ss << "-T" << "\n";;
@@ -1253,18 +1228,20 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 				THEN("volume returns and strain is zero")
 				{
-					FeltElements::Tetrahedron::Node::Positions delta =
-						Eigen::TensorMap<Eigen::Tensor<double, 2>>{
-							u.data(), {3, 4}
-						}.shuffle(Eigen::array<Eigen::Index, 2>{1, 0});
-
+					CHECK(v == Approx(1.0 / 6));
+					// clang-format off
 					check_equal(b, "b", {
 						{1, 0, 0},
 						{0, 1, 0},
 						{0, 0, 1}
 					});
-
-					CHECK(v == Approx(1.0 / 6));
+					check_equal(x, "x", {
+						{0.287126, 0.0989334, 0.0478705},
+						{-0.0143856, 1.0512, 0.000137554},
+						{-0.0143856, 0.0512004, 1.00014},
+						{1.19166, 0.400445, 0.349382}
+					});
+					// clang-format on
 				}
 			}
 		} // End AND_GIVEN("an undeformed tetrahedron")
@@ -1288,7 +1265,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 //
 //			WHEN("neo-hookian elasticity tensor is calculated")
 //			{
-//				auto const & c = Tetrahedron::neo_hookian_elasticity(J, lambda, mu);
+//				auto const & c = Tetrahedron::c(J, lambda, mu);
 //
 //				THEN("it has expected values")
 //				{
