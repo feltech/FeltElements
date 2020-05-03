@@ -61,9 +61,13 @@ public:
 	using IndexPair = Eigen::IndexPair<Eigen::Index>;
 	template <Eigen::Index num_pairs>
 	using IndexPairs = Eigen::array<IndexPair, num_pairs>;
+	using StiffnessAndForces = std::tuple<StiffnessTensor, Node::Forces>;
 
 	static IsoCoordDerivativeTensor const dL_by_dN;
 	static ShapeDerivativeTensor const dN_by_dL;
+
+	[[nodiscard]] static StiffnessAndForces KT(
+		Node::Positions const & x, ShapeDerivativeTensor const & dN_by_dX, Scalar lambda, Scalar mu);
 
 	[[nodiscard]] static StiffnessTensor Kc(
 		ShapeDerivativeTensor const & dN_by_dx, Scalar v, ElasticityTensor const & c);
@@ -73,7 +77,7 @@ public:
 	[[nodiscard]] static ElasticityTensor c(Scalar J, Scalar lambda, Scalar mu);
 
 	[[nodiscard]] static Node::Forces
-	T(Scalar const v, StressTensor const & sigma, ShapeDerivativeTensor const & dN_by_dx);
+	T(ShapeDerivativeTensor const & dN_by_dx, Scalar const v, StressTensor const & sigma);
 	[[nodiscard]] static StressTensor
 	sigma(Scalar const J, GradientTensor const & b, Scalar const lambda, Scalar const mu);
 
@@ -84,16 +88,12 @@ public:
 		Node::Positions const & x, ShapeDerivativeTensor const & dN_by_dX);
 	[[nodiscard]] static GradientTensor dx_by_dX(
 		GradientTensor const & dx_by_dL, GradientTensor const & dL_by_dX);
-	[[nodiscard]] static ShapeDerivativeMatrix dN_by_dx(
-		ShapeDerivativeMatrix const & dN_by_dX, GradientMatrix const & F);
 
 	[[nodiscard]] static Scalar V(Node::Positions const & x);
 
 	[[nodiscard]] static GradientTensor dX_by_dL(Node::Positions const & X);
 	[[nodiscard]] static GradientTensor dL_by_dX(GradientTensor const & dX_by_dL);
 	[[nodiscard]] static CartesianDerivativeTensor dx_by_dN(ShapeCartesianTransform const & N_to_x);
-	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(
-		Tetrahedron::GradientTensor const & dL_by_dX);
 
 	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(ShapeCartesianTransform const & N_to_x);
 	[[nodiscard]] static ShapeDerivativeTensor dN_by_dX(Node::Positions const & X);

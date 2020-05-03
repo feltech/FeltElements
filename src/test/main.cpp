@@ -316,7 +316,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 				AND_WHEN("derivative of material wrt shape coords is calculated")
 				{
-					auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
+					auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 
 					THEN("derivative is correct")
 					{
@@ -449,24 +449,6 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					});
 					// clang-format on
 				}
-
-				AND_WHEN("derivative of natural wrt material coords is calculated")
-				{
-					auto const & dN_by_dX = Tetrahedron::dN_by_dX(dL_by_dX);
-
-					THEN("derivative is correct")
-					{
-						// clang-format off
-						check_equal(dN_by_dX, "dN_by_dX", {
-							{-1, -1, -1},
-							{0, -1, 1},
-							{1, 0, 0},
-							{0, 2, 0}
-
-						});
-						// clang-format on
-					}
-				}
 			}
 		}
 
@@ -569,23 +551,6 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 							{2, 1, 1}
 						});
 						// clang-format on
-					}
-
-					AND_WHEN("derivative of spatial wrt shape coords is calculated")
-					{
-						auto const & dN_by_dx = Tetrahedron::dN_by_dX(dL_by_dx);
-
-						THEN("derivative is correct")
-						{
-							// clang-format off
-							check_equal(dN_by_dx, "dN_by_dx", {
-								{-2, -2, -2},
-								{0, 1, 0},
-								{0, 0, 1},
-								{2, 1, 1}
-							});
-							// clang-format on
-						}
 					}
 				}
 			}
@@ -877,7 +842,7 @@ SCENARIO("Internal equivalent nodal force")
 			{
 				auto const v = Tetrahedron::V(x);
 				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
-				auto const & T = Tetrahedron::T(v, sigma, dN_by_dx);
+				auto const & T = Tetrahedron::T(dN_by_dx, v, sigma);
 
 				THEN("nodal forces are zero")
 				{
@@ -921,7 +886,7 @@ SCENARIO("Internal equivalent nodal force")
 				{
 					auto const v = Tetrahedron::V(x);
 					auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
-					auto const & T = Tetrahedron::T(v, sigma, dN_by_dx);
+					auto const & T = Tetrahedron::T(dN_by_dx, v, sigma);
 
 					THEN("nodal forces are correct")
 					{
@@ -1163,87 +1128,106 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 				}
 			}
 
-			WHEN("displacement is solved")
-			{
-				using Displacements = Eigen::Matrix<double, 12, 1>;
-				Displacements u;
-				std::stringstream ss;
-				Tetrahedron::GradientTensor b;
-				Tetrahedron::Scalar v{};
-
-				for (int i = 0; i < 7; i++)
-				{
-					v = Tetrahedron::V(x);
-					auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
-					auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
-					auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
-					auto const J = Tetrahedron::J(F);
-					auto const & c = Tetrahedron::c(J, lambda, mu);
-					b = Tetrahedron::b(F);
-					auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
-					Tetrahedron::StiffnessTensor const & Kc = Tetrahedron::Kc(dN_by_dx, v, c);
-					Tetrahedron::StiffnessTensor const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
-					Tetrahedron::StiffnessTensor K = Ks + Kc;
-					Tetrahedron::Node::Forces T = Tetrahedron::T(v, sigma, dN_by_dx);
-
-//					Eigen::TensorFixedSize<double, Eigen::Sizes<3, 4, 3, 4>> KT =
-//						K.shuffle(Eigen::array<Eigen::Index, 4>{2, 0, 3, 1});
-//					Eigen::TensorFixedSize<double, Eigen::Sizes<3, 4>> TT =
-//						T.shuffle(Eigen::array<Eigen::Index, 2>{1, 0});
-
-					Eigen::Map<Displacements> B{T.data(), 12, 1};
-					B = -B;
-
-					Eigen::Map<
-						Eigen::Matrix<double, 12, 12, Tetrahedron::StiffnessTensor::Layout>> const
-						A{K.data(), 12, 12};
-
-					u = A.colPivHouseholderQr().solve(B);
-
-					FeltElements::Tetrahedron::Node::Positions delta =
-						Eigen::TensorMap<Eigen::Tensor<double, 2>>{u.data(), {3, 4}}.shuffle(
-							Eigen::array<Eigen::Index, 2>{1, 0});
-
-					ss << ">>>>>>>>>>>>>>>>>>>>>>> Iteration " << i << "\n\n";
-					ss << "K (tensor)" << "\n";
-					ss << K << "\n";
-//					ss << "KT (tensor)" << "\n";
-//					ss << KT << "\n";
-					ss << "v" << "\n";
-					ss << v << "\n";
-					ss << "-T" << "\n";;
-					ss << B << "\n";;
-					ss << "K" << "\n";;
-					ss << A << "\n";;
-					ss << "u" << "\n";;
-					ss << u << "\n";;
-					ss << "x" << "\n";;
-					ss << x << "\n";;
-					ss << "delta" << "\n";
-					ss << delta << "\n";
-
-					x += delta;
-				}
-				INFO(ss.str())
-
-				THEN("volume returns and strain is zero")
-				{
-					CHECK(v == Approx(1.0 / 6));
-					// clang-format off
-					check_equal(b, "b", {
-						{1, 0, 0},
-						{0, 1, 0},
-						{0, 0, 1}
-					});
-					check_equal(x, "x", {
-						{0.287126, 0.0989334, 0.0478705},
-						{-0.0143856, 1.0512, 0.000137554},
-						{-0.0143856, 0.0512004, 1.00014},
-						{1.19166, 0.400445, 0.349382}
-					});
-					// clang-format on
-				}
-			}
 		} // End AND_GIVEN("an undeformed tetrahedron")
+	}
+}
+
+SCENARIO("Solution of a single element")
+{
+	GIVEN("tangent stiffness and equivalent node force tensors")
+	{
+		using namespace FeltElements;
+		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
+		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
+		double const E = 1;	   // Young's modulus: 0.001 - 0.05
+		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+
+		auto [X, x] = load_tet(file_name_one);
+		x(0, 0) += 0.5;
+		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+
+		std::stringstream s;
+		s << "Lambda = " << lambda << "; mu = " << mu;
+		INFO(s.str());
+		INFO("Material vertices:")
+		INFO(X)
+
+		WHEN("displacement is solved")
+		{
+			std::stringstream ss;
+
+			for (int i = 0; i < 7; i++)
+			{
+				auto [K, T] = Tetrahedron::KT(x, dN_by_dX, lambda, mu);
+
+				using Displacements = Eigen::Matrix<double, 12, 1>;
+				Eigen::Map<Displacements> B{T.data(), 12, 1};
+				B = -B;
+
+				Eigen::Map<
+					Eigen::Matrix<double, 12, 12, Tetrahedron::StiffnessTensor::Layout>> const
+					A{K.data(), 12, 12};
+
+				Displacements u = A.colPivHouseholderQr().solve(B);
+
+				FeltElements::Tetrahedron::Node::Positions delta =
+					Eigen::TensorMap<Eigen::Tensor<double, 2>>{u.data(), {3, 4}}.shuffle(
+						Eigen::array<Eigen::Index, 2>{1, 0});
+
+				ss << ">>>>>>>>>>>>>>>>>>>>>>> Iteration " << i << "\n\n";
+				ss << "K (tensor)" << "\n";
+				ss << K << "\n";
+				ss << "v" << "\n";
+				ss << v << "\n";
+				ss << "-T" << "\n";;
+				ss << B << "\n";;
+				ss << "K" << "\n";;
+				ss << A << "\n";;
+				ss << "u" << "\n";;
+				ss << u << "\n";;
+				ss << "x" << "\n";;
+				ss << x << "\n";;
+				ss << "delta" << "\n";
+				ss << delta << "\n";
+
+				x += delta;
+			}
+			INFO(ss.str())
+
+			THEN("volume returns and strain is zero")
+			{
+				CHECK(v == Approx(1.0 / 6));
+				// clang-format off
+				check_equal(b, "b", {
+					{1, 0, 0},
+					{0, 1, 0},
+					{0, 0, 1}
+				});
+				check_equal(x, "x", {
+					{0.287126, 0.0989334, 0.0478705},
+					{-0.0143856, 1.0512, 0.000137554},
+					{-0.0143856, 0.0512004, 1.00014},
+					{1.19166, 0.400445, 0.349382}
+				});
+				// clang-format on
+			}
+		}
+	}
+}
+
+
+SCENARIO("Two elements")
+{
+	GIVEN("a deformed two-element mesh")
+	{
+		auto [X, x] = load_tet(file_name_two);
+
+		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+
+		INFO("Material vertices:")
+		INFO(X)
+
+		x(0, 0) += 0.5;
 	}
 }
