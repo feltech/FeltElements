@@ -22,6 +22,11 @@ public:
 	using Mesh = OpenVolumeMesh::GeometricTetrahedralMeshV3d;
 	using CellHandle = OpenVolumeMesh::CellHandle;
 
+	template <Eigen::Index rows = 3, Eigen::Index cols = rows>
+	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<rows, cols>>;
+	template <Eigen::Index dim = 3>
+	using VectorTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim>>;
+
 	struct Node
 	{
 		using Index = Eigen::Index;
@@ -33,6 +38,7 @@ public:
 		using Vtxh = OpenVolumeMesh::VertexHandle;
 		using Vtxhs = std::vector<Vtxh>;
 		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<count, dim>>;
+		using Force = VectorTensor<dim>;
 		// Note: col-major map to matrix for solver requires unintuitive layout.
 		using Forces = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim, count>>;
 		using PosProperty = OpenVolumeMesh::VertexPropertyT<Pos>;
@@ -43,10 +49,6 @@ public:
 	using GradientMatrix = Matrix<3, 3>;
 	using ShapeDerivativeMatrix = Matrix<4, 3>;
 	using IsoCoordDerivativeMatrix = Matrix<3, 4>;
-	template <Eigen::Index rows = 3, Eigen::Index cols = rows>
-	using MatrixTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<rows, cols>>;
-	template <Eigen::Index dim = 3>
-	using VectorTensor = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<dim>>;
 	using IsoCoordDerivativeTensor = MatrixTensor<Node::dim, Node::count>;
 	using ShapeDerivativeTensor = MatrixTensor<Node::count, Node::dim>;
 	using ElasticityTensor =

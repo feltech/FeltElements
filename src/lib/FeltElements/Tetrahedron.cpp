@@ -131,7 +131,7 @@ auto const dL_by_dX = [](Tetrahedron::GradientTensor const & dX_by_dL)
 	-> Tetrahedron::GradientTensor {
 	// Note:
 	// * Can't accept an expression because may not have `Dimensions` for `to_matrix()` to use.
-	// * Can't return expression because mapping a temporary.
+	// * Can't return expression because `TensorMap`ing a temporary.
 	return to_tensor(Tetrahedron::GradientMatrix{to_matrix(dX_by_dL).inverse()});
 };
 

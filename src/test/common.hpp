@@ -9,6 +9,7 @@
 
 #include <FeltElements/TetGenIO.hpp>
 #include <FeltElements/Tetrahedron.hpp>
+#include <FeltElements/Attributes.hpp>
 
 namespace Eigen
 {

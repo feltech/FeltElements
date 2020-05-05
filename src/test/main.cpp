@@ -5,8 +5,6 @@
 #include <boost/range/irange.hpp>
 #include <unsupported/Eigen/CXX11/Tensor>
 
-
-
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_CONSOLE_WIDTH 200
 #include "common.hpp"
@@ -1179,7 +1177,7 @@ SCENARIO("Solution of a single element")
 				ss << "K (tensor)" << "\n";
 				ss << K << "\n";
 				ss << "v" << "\n";
-				ss << v << "\n";
+				ss << Tetrahedron::V(x) << "\n";
 				ss << "-T" << "\n";;
 				ss << B << "\n";;
 				ss << "K" << "\n";;
@@ -1197,9 +1195,9 @@ SCENARIO("Solution of a single element")
 
 			THEN("volume returns and strain is zero")
 			{
-				CHECK(v == Approx(1.0 / 6));
+				CHECK(Tetrahedron::V(x) == Approx(1.0 / 6));
 				// clang-format off
-				check_equal(b, "b", {
+				check_equal(Tetrahedron::b(Tetrahedron::dx_by_dX(x, dN_by_dX)), "b", {
 					{1, 0, 0},
 					{0, 1, 0},
 					{0, 0, 1}
@@ -1217,17 +1215,37 @@ SCENARIO("Solution of a single element")
 }
 
 
-SCENARIO("Two elements")
+SCENARIO("Mesh attributes")
 {
-	GIVEN("a deformed two-element mesh")
+	GIVEN("a two-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_two);
+		auto const & io = TetGenIO{file_name_two};
+		auto mesh = io.to_mesh();
 
-		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+		WHEN("nodal force attributes are constructed")
+		{
+			FeltElements::Attribute::Node::Force const attribs{mesh};
 
-		INFO("Material vertices:")
-		INFO(X)
+			THEN("properties are default initialised")
+			{
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+					check_equal(
+						attribs[*itvtxh], "force",
+						Eigen::TensorFixedSize<double, Eigen::Sizes<3>>{}.setZero(), "zero");
+			}
+		}
 
-		x(0, 0) += 0.5;
+		WHEN("element vertex mapping attributes are constructed")
+		{
+			FeltElements::Attribute::Element::Vertices const attribs{mesh};
+
+			THEN("properties are default initialised")
+			{
+				auto itvtxh = mesh.cells_begin();
+				CHECK(attribs[*itvtxh] == std::vector<OpenVolumeMesh::VertexHandle>{0, 3, 1, 4});
+				itvtxh++;
+				CHECK(attribs[*itvtxh] == std::vector<OpenVolumeMesh::VertexHandle>{2, 0, 1, 4});
+			}
+		}
 	}
 }
