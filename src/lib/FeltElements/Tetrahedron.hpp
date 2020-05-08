@@ -33,10 +33,10 @@ public:
 		static constexpr Index count = 4;
 		static constexpr Index dim = 3;
 		using Coord = Scalar;
-		using Pos = Eigen::Vector3d;
-		using PosMap = Eigen::Map<Pos>;
+		using Pos = VectorTensor<dim>;
+		using PosMap = Eigen::TensorMap<Pos>;
 		using Vtxh = OpenVolumeMesh::VertexHandle;
-		using Vtxhs = std::vector<Vtxh>;
+		using Vtxhs = std::array<Vtxh, count>;
 		using Positions = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<count, dim>>;
 		using Force = VectorTensor<dim>;
 		// Note: col-major map to matrix for solver requires unintuitive layout.
@@ -105,7 +105,7 @@ public:
 	[[nodiscard]] static Node::Positions X(Mesh const & mesh, Node::Vtxhs const & vtxhs);
 	[[nodiscard]] static Node::SpatialCoordProp x(Mesh & mesh);
 	[[nodiscard]] static Node::Positions x(
-		Mesh const & mesh, Node::Vtxhs const & vtxhs, Node::SpatialCoordProp const & x_prop);
+		Node::Vtxhs const & vtxhs, Node::SpatialCoordProp const & x_prop);
 	[[nodiscard]] static Node::Vtxhs vtxhs(
 		OpenVolumeMesh::GeometricTetrahedralMeshV3d const & mesh,
 		OpenVolumeMesh::CellHandle const & cellh);

@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+# Add extra warnings.
+add_compile_options(-Wall -Wextra -Wpedantic)
 ###################################
 # Create application targets.
 file(GLOB_RECURSE _src_lib src/lib/*.cpp)
@@ -108,6 +110,10 @@ enable_testing()
 include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 conan_target_link_libraries(tests)
 catch_discover_tests(tests)
+target_compile_options(
+	tests PRIVATE -fsanitize=thread -fsanitize-address-use-after-scope)
+target_link_options(
+	tests PRIVATE -fsanitize=thread -fsanitize-address-use-after-scope)
 set(_resources_dir ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 file(

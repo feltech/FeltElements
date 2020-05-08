@@ -8,8 +8,7 @@ namespace
 {
 using namespace FeltElements;
 
-template <typename Index>
-auto delta(Index const i, Index const j)
+auto const delta = [](auto const i, auto const j)
 {
 	return i == j;
 };
@@ -342,7 +341,7 @@ Tetrahedron::Node::SpatialCoordProp Tetrahedron::x(Mesh & mesh)
 }
 
 Tetrahedron::Node::Positions Tetrahedron::x(
-	Mesh const & mesh, Node::Vtxhs const & vtxhs, Node::SpatialCoordProp const & x_prop)
+	Node::Vtxhs const & vtxhs, Node::SpatialCoordProp const & x_prop)
 {
 	Node::Positions p;
 	std::size_t node_idx = 0;
@@ -370,6 +369,9 @@ Tetrahedron::Node::Vtxhs Tetrahedron::vtxhs(
 	OpenVolumeMesh::GeometricTetrahedralMeshV3d const & mesh,
 	OpenVolumeMesh::CellHandle const & cellh)
 {
-	return mesh.get_cell_vertices(cellh);
+	Node::Vtxhs avtxhs;
+	auto const vvtxhs = mesh.get_cell_vertices(cellh);
+	std::copy_n(vvtxhs.begin(), avtxhs.size(), avtxhs.begin());
+	return avtxhs;
 }
 } // namespace FeltElements

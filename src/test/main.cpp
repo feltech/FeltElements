@@ -22,7 +22,8 @@ SCENARIO("Loading a tetrahedralisation")
 	//	std::cerr << "Executing tests in " << cwd << std::endl;
 
 	auto expected_counts =
-		[](const TetGenIO & mesh, auto num_points, auto num_simplexes, auto num_corners) {
+		[](const TetGenIO & mesh, std::size_t num_points, std::size_t num_simplexes,
+				std::size_t num_corners) {
 			CHECK(mesh.num_points() == num_points);
 			CHECK(mesh.num_simplexes() == num_simplexes);
 			CHECK(mesh.num_corners() == num_corners);
@@ -176,7 +177,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 					AND_WHEN("spatial node position tensor is constructed")
 					{
-						Tetrahedron::Node::Positions x = Tetrahedron::x(mesh, vtxhs, x_prop);
+						Tetrahedron::Node::Positions x = Tetrahedron::x(vtxhs, x_prop);
 
 						THEN("spatial node positions equal material positions")
 						{
@@ -281,6 +282,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	GIVEN("a one-element mesh")
 	{
 		auto [X, x] = load_tet(file_name_one);
+		(void)x;
 
 		AND_WHEN("derivative of material wrt local coords is calculated")
 		{
@@ -386,6 +388,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	GIVEN("First element of a two-element mesh")
 	{
 		auto [X, x] = load_tet(file_name_two);
+		(void)x;
 
 		THEN("expected positions are reported")
 		{
@@ -511,7 +514,6 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 	{
 		auto [X, x] = load_tet(file_name_one);
 
-		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
 		INFO("Material vertices:")
 		INFO(X)
 
@@ -1235,16 +1237,61 @@ SCENARIO("Mesh attributes")
 			}
 		}
 
+		WHEN("spatial position attributes are constructed")
+		{
+			FeltElements::Attribute::Node::SpatialPosition const attribs{mesh};
+
+			THEN("attributes are initialised to material position")
+			{
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					check_equal(
+						attribs[*itvtxh],
+						"x",
+						reinterpret_cast<Tetrahedron::Node::Pos const &>(mesh.vertex(*itvtxh)),
+						"X");
+				}
+			}
+		}
+
 		WHEN("element vertex mapping attributes are constructed")
 		{
-			FeltElements::Attribute::Element::Vertices const attribs{mesh};
+			FeltElements::Attribute::Element::VertexHandles const vtxh_attribs{mesh};
 
-			THEN("properties are default initialised")
+			THEN("properties are populated")
 			{
 				auto itvtxh = mesh.cells_begin();
-				CHECK(attribs[*itvtxh] == std::vector<OpenVolumeMesh::VertexHandle>{0, 3, 1, 4});
+				CHECK(
+					vtxh_attribs[*itvtxh] ==
+					std::array<OpenVolumeMesh::VertexHandle, 4>{0, 3, 1, 4});
 				itvtxh++;
-				CHECK(attribs[*itvtxh] == std::vector<OpenVolumeMesh::VertexHandle>{2, 0, 1, 4});
+				CHECK(
+					vtxh_attribs[*itvtxh] ==
+					std::array<OpenVolumeMesh::VertexHandle, 4>{2, 0, 1, 4});
+			}
+
+			AND_WHEN("element natural wrt material coords attributes are constructed")
+			{
+				FeltElements::Attribute::Element::MaterialShapeDerivative const dn_by_dX_attribs{
+					mesh, vtxh_attribs};
+
+				THEN("properties are populated")
+				{
+					auto itvtxh = mesh.cells_begin();
+					check_equal(
+						dn_by_dX_attribs[*itvtxh],
+						std::string{"dN_by_dX "} + std::to_string(itvtxh),
+						Tetrahedron::dN_by_dX(
+							  Tetrahedron::X(mesh, Tetrahedron::vtxhs(mesh, *itvtxh))),
+						"dN_by_dX");
+					itvtxh++;
+					check_equal(
+						dn_by_dX_attribs[*itvtxh],
+						std::string{"dN_by_dX "} + std::to_string(itvtxh),
+						Tetrahedron::dN_by_dX(
+							Tetrahedron::X(mesh, Tetrahedron::vtxhs(mesh, *itvtxh))),
+						"dN_by_dX");
+				}
 			}
 		}
 	}

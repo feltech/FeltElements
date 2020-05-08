@@ -47,13 +47,13 @@ template <class Tensor, std::size_t idx>
 constexpr auto dimension()
 {
 	return Eigen::internal::get<idx, typename Tensor::Dimensions::Base>::value;
-};
+}
 
 template <class Tensor, std::size_t... dim>
 constexpr auto dimensions(std::index_sequence<dim...>)
 {
 	return std::array<Eigen::Index, Tensor::NumIndices>{size<Tensor, dim>...};
-};
+}
 
 template <class Tensor>
 constexpr auto dimensions()
@@ -142,7 +142,7 @@ std::ostream& operator<< (std::ostream& os, std::vector<OpenVolumeMesh::VertexHa
 #include <catch2/catch.hpp>  // Must come after `operator<<` definitions.
 
 template <class Tensor>
-void check_equal( Tensor const & in, char const* desc, InitList<Tensor> const values)
+void check_equal( Tensor const & in, std::string_view const desc, InitList<Tensor> const values)
 {
 	Tensor expected{};
 	expected.setValues(values);
@@ -153,7 +153,8 @@ void check_equal( Tensor const & in, char const* desc, InitList<Tensor> const va
 
 template <class Tensor>
 void check_equal(
-	Tensor const & in, char const * desc_in, Tensor const & expected, char const * desc_expected)
+	Tensor const & in, std::string_view const desc_in,
+	Tensor const & expected, std::string_view const desc_expected)
 {
 	INFO(desc_in)
 	INFO(in)
@@ -170,7 +171,7 @@ auto load_tet(char const * const file_name)
 	auto mesh = io.to_mesh();
 	auto const & vtxhs = Tetrahedron::vtxhs(mesh, 0);
 	auto const & X = Tetrahedron::X(mesh, vtxhs);
-	auto x = Tetrahedron::x(mesh, vtxhs, Tetrahedron::x(mesh));
+	auto x = Tetrahedron::x(vtxhs, Tetrahedron::x(mesh));
 
 	return std::tuple(X, x);
 }
