@@ -6,10 +6,6 @@
 namespace FeltElements::Attribute::internal
 {
 
-using Scalar = double;
-template <Eigen::Index dim = 3, typename data = Scalar>
-using VectorTensor = Eigen::TensorFixedSize<data, Eigen::Sizes<dim>>;
-
 template <class Derived>
 struct Traits{};
 

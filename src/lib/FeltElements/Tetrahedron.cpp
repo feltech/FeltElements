@@ -116,10 +116,8 @@ Tetrahedron::ShapeDerivativeTensor const Tetrahedron::dN_by_dL = // NOLINT(cert-
 // clang-format on
 }
 
-namespace ex
+namespace FeltElements::ex
 {
-using namespace FeltElements;
-
 
 auto const dX_by_dL = [](auto const & X) {
 	constexpr Tetrahedron::IndexPairs<1> X_L{{{0, 0}}};

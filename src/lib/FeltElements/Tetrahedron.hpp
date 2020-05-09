@@ -1,9 +1,4 @@
-//
-// Created by dave on 07/11/2019.
-//
-
-#ifndef FELTELEMENTS_TETRAHEDRON_HPP
-#define FELTELEMENTS_TETRAHEDRON_HPP
+#pragma once
 
 #include <cstddef>
 
@@ -113,4 +108,3 @@ public:
 
 };
 } // namespace FeltElements
-#endif // FELTELEMENTS_TETRAHEDRON_HPP
