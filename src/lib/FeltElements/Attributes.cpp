@@ -1,5 +1,7 @@
 #include "Attributes.hpp"
 
+#include "internal/Conversions.hpp"
+
 namespace FeltElements::Attribute
 {
 
@@ -35,4 +37,23 @@ Element::MaterialShapeDerivative::MaterialShapeDerivative(Mesh & mesh, VertexHan
 	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
 		(*this)[*itcellh] = Tetrahedron::dN_by_dX(Tetrahedron::X(mesh, vtxhs[*itcellh]));
 }
+// clang-format off
+Tetrahedron::IsoCoordDerivativeTensor const
+Element::MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
+	internal::to_tensor(Tetrahedron::IsoCoordDerivativeMatrix{(Eigen::Matrix4d{} <<
+		// (1, L) = A * N
+		1, 1, 1, 1,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1).finished().block<3, 4>(1, 0)});
+
+Tetrahedron::ShapeDerivativeTensor const
+Element::MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
+	internal::to_tensor(Tetrahedron::ShapeDerivativeMatrix{(Eigen::Matrix4d{} <<
+		1, 1, 1, 1,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1).finished().inverse().block<4, 3>(0, 1)});
+// clang-format on
+
 } // namespace FeltElements::Attribute

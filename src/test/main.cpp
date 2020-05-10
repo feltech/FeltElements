@@ -1,9 +1,5 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
-#include <OpenVolumeMesh/Core/PropertyDefines.hh>
-#include <OpenVolumeMesh/Geometry/VectorT.hh>
-#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <boost/range/irange.hpp>
-#include <unsupported/Eigen/CXX11/Tensor>
 
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_CONSOLE_WIDTH 200
@@ -17,9 +13,9 @@ using namespace FeltElements;
 
 SCENARIO("Loading a tetrahedralisation")
 {
-	//	char cwd[500];
-	//	getcwd(cwd, 500);
-	//	std::cerr << "Executing tests in " << cwd << std::endl;
+	char cwd[500];
+	getcwd(cwd, 500);
+	std::cerr << "Executing tests in " << cwd << std::endl;
 
 	auto expected_counts =
 		[](const TetGenIO & mesh, std::size_t num_points, std::size_t num_simplexes,
@@ -235,7 +231,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	THEN("derivative of shape wrt local coords is correct")
 	{
 		check_equal(
-			Tetrahedron::dN_by_dL,
+			Attribute::Element::MaterialShapeDerivative::dN_by_dL,
 			"dN_by_dL",
 			{
 				// clang-format off
@@ -250,7 +246,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	THEN("derivative of local wrt shape coords is correct")
 	{
 		check_equal(
-			Tetrahedron::dL_by_dN,
+			Attribute::Element::MaterialShapeDerivative::dL_by_dN,
 			"dL_by_dN",
 			{
 				// clang-format off
@@ -265,7 +261,8 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	{
 		constexpr Tetrahedron::IndexPairs<1> LN_NL{{{1, 0}}};
 		Tetrahedron::MatrixTensor<3> const identity =
-			Tetrahedron::dL_by_dN.contract(Tetrahedron::dN_by_dL, LN_NL);
+			Attribute::Element::MaterialShapeDerivative::dL_by_dN.contract(
+				Attribute::Element::MaterialShapeDerivative::dN_by_dL, LN_NL);
 
 		check_equal(
 			identity,
@@ -918,7 +915,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
-		INFO(s.str());
+		INFO(s.str())
 
 		AND_GIVEN("an undeformed tetrahedron")
 		{
@@ -1149,7 +1146,7 @@ SCENARIO("Solution of a single element")
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
-		INFO(s.str());
+		INFO(s.str())
 		INFO("Material vertices:")
 		INFO(X)
 
@@ -1180,14 +1177,14 @@ SCENARIO("Solution of a single element")
 				ss << K << "\n";
 				ss << "v" << "\n";
 				ss << Tetrahedron::V(x) << "\n";
-				ss << "-T" << "\n";;
-				ss << B << "\n";;
-				ss << "K" << "\n";;
-				ss << A << "\n";;
-				ss << "u" << "\n";;
-				ss << u << "\n";;
-				ss << "x" << "\n";;
-				ss << x << "\n";;
+				ss << "-T" << "\n";
+				ss << B << "\n";
+				ss << "K" << "\n";
+				ss << A << "\n";
+				ss << "u" << "\n";
+				ss << u << "\n";
+				ss << "x" << "\n";
+				ss << x << "\n";
 				ss << "delta" << "\n";
 				ss << delta << "\n";
 

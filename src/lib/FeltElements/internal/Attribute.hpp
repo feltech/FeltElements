@@ -1,13 +1,18 @@
 #pragma once
 #include <string_view>
 
+#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include <OpenVolumeMesh/Core/PropertyDefines.hh>
 #include <unsupported/Eigen/CXX11/Tensor>
 
-namespace FeltElements::Attribute::internal
+namespace FeltElements::internal::Attribute
 {
 
 template <class Derived>
-struct Traits{};
+struct Traits
+{
+	static_assert(sizeof(Derived) != sizeof(Derived), "Traits are required");
+};
 
 template <class TData>
 struct BaseTraits

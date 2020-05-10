@@ -2,6 +2,9 @@
 
 #include <cstddef>
 
+#include <OpenVolumeMesh/Core/PropertyDefines.hh>
+#include <OpenVolumeMesh/Geometry/VectorT.hh>
+#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <Eigen/Dense>
 #include <unsupported/Eigen/CXX11/Tensor>
 
@@ -59,9 +62,6 @@ public:
 	template <Eigen::Index num_pairs>
 	using IndexPairs = Eigen::array<IndexPair, num_pairs>;
 	using StiffnessAndForces = std::tuple<StiffnessTensor, Node::Forces>;
-
-	static IsoCoordDerivativeTensor const dL_by_dN;
-	static ShapeDerivativeTensor const dN_by_dL;
 
 	[[nodiscard]] static StiffnessAndForces KT(
 		Node::Positions const & x, ShapeDerivativeTensor const & dN_by_dX, Scalar lambda, Scalar mu);

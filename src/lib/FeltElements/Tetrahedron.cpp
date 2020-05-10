@@ -1,8 +1,7 @@
-//
-// Created by dave on 07/11/2019.
-//
 #include "TetGenIO.hpp"
 #include "Tetrahedron.hpp"
+#include "internal/Conversions.hpp"
+#include "Attributes.hpp"
 
 namespace
 {
@@ -14,39 +13,9 @@ auto const delta = [](auto const i, auto const j)
 };
 
 template <typename Matrix>
-using is_matrix = typename std::enable_if<
-    (Matrix::RowsAtCompileTime > 1 && Matrix::ColsAtCompileTime > 1), void*>::type;
-
-template <typename Matrix>
-using is_vector = typename std::enable_if<
-	(Matrix::RowsAtCompileTime == 1 || Matrix::ColsAtCompileTime == 1), void*>::type;
-
-template <typename Matrix>
 using is_ovm_vector = typename std::enable_if<
 	(std::is_same<Matrix, typename Matrix::vector_type>::value), void*>::type;
 
-template <typename Matrix, is_matrix<Matrix> = nullptr>
-auto to_tensor(Matrix const & matrix)
-{
-	static_assert(
-		!(Matrix::Options & Eigen::RowMajor),
-		"Cannot map a row-major matrix to a tensor since row-major tensors are not yet"
-  		" supported by Eigen");
-
-	return Eigen::TensorMap<
-	    Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 2,
-	    Matrix::Options & Eigen::RowMajor ? Eigen::RowMajor : Eigen::ColMajor>>{
-		matrix.data(), {Matrix::RowsAtCompileTime, Matrix::ColsAtCompileTime}
-	};
-}
-
-template <typename Matrix, is_vector<Matrix> = nullptr >
-auto to_tensor(Matrix const & matrix)
-{
-	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 1>>{
-		matrix.data(), {std::max(Matrix::RowsAtCompileTime, Matrix::ColsAtCompileTime)}
-	};
-}
 
 template <typename Matrix, is_ovm_vector<Matrix> = nullptr >
 auto to_tensor(Matrix const & matrix)
@@ -67,7 +36,7 @@ auto to_matrix(Tensor const & tensor)
 		tensor.data(), size<Tensor, 0>, size<Tensor, 1>};
 }
 
-const Tetrahedron::ElasticityTensor c_lambda = ([]() {
+Tetrahedron::ElasticityTensor const c_lambda = ([]() { // NOLINT(cert-err58-cpp)
   std::size_t constexpr N = 3;
   Tetrahedron::ElasticityTensor c{};
   for (std::size_t i = 0; i < N; i++)
@@ -79,7 +48,7 @@ const Tetrahedron::ElasticityTensor c_lambda = ([]() {
   return c;
 }());
 
-const Tetrahedron::ElasticityTensor c_mu = ([]() {
+Tetrahedron::ElasticityTensor const c_mu = ([]() { // NOLINT(cert-err58-cpp)
   std::size_t constexpr N = 3;
   Tetrahedron::ElasticityTensor c{};
   for (std::size_t i = 0; i < N; i++)
@@ -92,28 +61,12 @@ const Tetrahedron::ElasticityTensor c_mu = ([]() {
 }());
 
 template <std::size_t dim = Tetrahedron::Node::dim>
-const Tetrahedron::MatrixTensor<dim, dim> I = to_tensor(
+const Tetrahedron::MatrixTensor<dim, dim> I = internal::to_tensor(
 	Tetrahedron::Matrix<dim, dim>{Tetrahedron::Matrix<dim, dim>::Identity()});
 } // End anon namespace
 
 namespace FeltElements
 {
-// clang-format off
-Tetrahedron::IsoCoordDerivativeTensor const Tetrahedron::dL_by_dN = // NOLINT(cert-err58-cpp)
-	to_tensor(IsoCoordDerivativeMatrix{(Eigen::Matrix4d{} <<
-		// (1, L) = A * N
-		1, 1, 1, 1,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1).finished().block<3, 4>(1, 0)});
-
-Tetrahedron::ShapeDerivativeTensor const Tetrahedron::dN_by_dL = // NOLINT(cert-err58-cpp)
-	to_tensor(ShapeDerivativeMatrix{(Eigen::Matrix4d{} <<
-		1, 1, 1, 1,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1).finished().inverse().block<4, 3>(0, 1)});
-// clang-format on
 }
 
 namespace FeltElements::ex
@@ -121,7 +74,7 @@ namespace FeltElements::ex
 
 auto const dX_by_dL = [](auto const & X) {
 	constexpr Tetrahedron::IndexPairs<1> X_L{{{0, 0}}};
-	return X.contract(Tetrahedron::dN_by_dL, X_L);
+	return X.contract(Attribute::Element::MaterialShapeDerivative::dN_by_dL, X_L);
 };
 
 auto const dL_by_dX = [](Tetrahedron::GradientTensor const & dX_by_dL)
@@ -129,13 +82,13 @@ auto const dL_by_dX = [](Tetrahedron::GradientTensor const & dX_by_dL)
 	// Note:
 	// * Can't accept an expression because may not have `Dimensions` for `to_matrix()` to use.
 	// * Can't return expression because `TensorMap`ing a temporary.
-	return to_tensor(Tetrahedron::GradientMatrix{to_matrix(dX_by_dL).inverse()});
+	return internal::to_tensor(Tetrahedron::GradientMatrix{to_matrix(dX_by_dL).inverse()});
 };
 
 auto const dN_by_dX = [](auto const & dL_by_dX) {
   // dN/dX^T = dX/dL^(-T) * dN/dL^T => dN/dX = dN/dL * dX/dL^(-1) = dN/dL * dL/dX
   constexpr Tetrahedron::IndexPairs<1> dN_dL{{{1, 0}}};
-  return Tetrahedron::dN_by_dL.contract(dL_by_dX, dN_dL);
+  return Attribute::Element::MaterialShapeDerivative::dN_by_dL.contract(dL_by_dX, dN_dL);
 };
 
 auto const dx_by_dX = [](auto const & x, auto const & dN_by_dX) {
@@ -282,7 +235,7 @@ Tetrahedron::CartesianDerivativeTensor Tetrahedron::dx_by_dN(
 	ShapeCartesianTransform const & N_to_x)
 {
 	Matrix<3, 4> dx_by_dN = to_matrix(N_to_x).block<3, 4>(1, 0);
-	return to_tensor(dx_by_dN);
+	return internal::to_tensor(dx_by_dN);
 }
 
 Tetrahedron::GradientTensor Tetrahedron::dL_by_dX(GradientTensor const & dX_by_dL)
@@ -300,7 +253,7 @@ Tetrahedron::ShapeDerivativeTensor Tetrahedron::dN_by_dX(ShapeCartesianTransform
 	// Interpolation: (1, x, y, z)^T = N_to_x * N, where N is 4x natural coordinates (corners).
 	// Invert then strip constant terms, leaving just coefficients, i.e. the derivative.
 	Matrix<4, 3> dN_by_dX = to_matrix(N_to_x).inverse().block<4, 3>(0, 1);
-	return to_tensor(dN_by_dX);
+	return internal::to_tensor(dN_by_dX);
 }
 
 Tetrahedron::ShapeCartesianTransform Tetrahedron::N_to_x(Node::Positions const & X)
