@@ -43,12 +43,6 @@ namespace
 template <class Tensor, std::size_t idx>
 const Eigen::Index size = Eigen::internal::get<idx, typename Tensor::Dimensions::Base>::value;
 
-template <class Tensor, std::size_t idx>
-constexpr auto dimension()
-{
-	return Eigen::internal::get<idx, typename Tensor::Dimensions::Base>::value;
-}
-
 template <class Tensor, std::size_t... dim>
 constexpr auto dimensions(std::index_sequence<dim...>)
 {

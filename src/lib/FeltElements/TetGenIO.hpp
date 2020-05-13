@@ -26,12 +26,9 @@ class TetGenIO
 	[[nodiscard]] double * displacements() const;
 	[[nodiscard]] int * corners() const;
 
-	[[nodiscard]] double * tet_corner_point(std::size_t tet_idx, std::size_t corner_idx) const;
-	[[nodiscard]] double *
-	tet_corner_displacement(std::size_t tet_idx, std::size_t corner_idx) const;
 	[[nodiscard]] std::size_t tet_vertex_idx(std::size_t tet_idx, std::size_t corner_idx) const;
 	[[nodiscard]] std::array<double, 3> vertex(std::size_t vertex_idx) const;
-	[[nodiscard]] std::size_t point_idx(std::size_t vertex_idx) const;
+	[[nodiscard]] static std::size_t point_idx(std::size_t vertex_idx) ;
 
   private:
 	std::string m_file_name;
