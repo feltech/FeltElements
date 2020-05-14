@@ -1,5 +1,4 @@
 #include "Attributes.hpp"
-
 #include "internal/Conversions.hpp"
 
 namespace FeltElements::Attribute

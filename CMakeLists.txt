@@ -52,7 +52,7 @@ include_directories(src/lib ${CONAN_INCLUDE_DIRS})
 
 include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 # Put tests executable under a "test" directory, rather than "bin".
-set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test)
+set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
 # Add source files to tests target.
 target_sources(tests PRIVATE src/test/main.cpp ${_src_lib})
 # Add libraries to link.
@@ -62,9 +62,11 @@ target_compile_options(
 	tests PRIVATE -fsanitize=thread -fsanitize-address-use-after-scope --coverage)
 target_link_options(
 	tests PRIVATE -fsanitize=thread -fsanitize-address-use-after-scope --coverage)
+get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
+# Add CTest tests
+catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")
 # Copy test resources
 set(_resources_dir ${CMAKE_CURRENT_SOURCE_DIR}/src/test/resources)
-get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 file(
 	GLOB_RECURSE _resources LIST_DIRECTORIES false RELATIVE ${_resources_dir}
 	CONFIGURE_DEPENDS ${_resources_dir}/*
@@ -75,6 +77,4 @@ foreach (_resource ${_resources})
 	configure_file(
 		${_resources_dir}/${_resource} ${_test_runtime_dir}/resources/${_resource} COPYONLY)
 endforeach()
-# Add CTest tests
-catch_discover_tests(tests)
 
