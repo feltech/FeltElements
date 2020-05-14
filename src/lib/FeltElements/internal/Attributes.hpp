@@ -8,26 +8,17 @@
 
 namespace FeltElements
 {
-namespace Attribute
-{
-namespace Node
-{
-class SpatialPosition;
-class Force;
-}
-namespace Element
-{
-class VertexHandles;
-class MaterialShapeDerivative;
-}
-} // namespace Attribute
-
 namespace internal::Attribute
 {
 
+/*
+ * Base traits
+ */
+
+template <typename T> struct always_false : std::false_type {};
 template <class Derived> struct Traits
 {
-	static_assert(sizeof(Derived) != sizeof(Derived), "Traits are required");
+	static_assert(always_false<Derived>::value, "Traits are required");
 };
 
 template <class TData> struct BaseTraits
@@ -96,7 +87,30 @@ protected:
 	{
 	}
 };
+} // namespace FeltElements::internal::Attribute
 
+/*
+ * Forward declarations
+ */
+namespace Attribute
+{
+namespace Node
+{
+class SpatialPosition;
+class Force;
+}
+namespace Element
+{
+class VertexHandles;
+class MaterialShapeDerivative;
+}
+} // namespace Attribute
+
+/*
+ * Specific traits.
+ */
+namespace internal::Attribute
+{
 using namespace FeltElements::Attribute;
 
 template <> struct Traits<Node::SpatialPosition> : public VertexTraits<Tetrahedron::Node::Pos>

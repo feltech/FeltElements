@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FeltElements/internal/Attribute.hpp"
+#include "FeltElements/internal/Attributes.hpp"
 
 namespace FeltElements::Attribute
 {
