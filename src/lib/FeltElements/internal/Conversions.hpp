@@ -21,7 +21,7 @@ auto to_tensor(Matrix const & matrix)
 		" supported by Eigen");
 
 	return Eigen::TensorMap<
-		   Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 2,
+		   Eigen::Tensor<FeltElements::Scalar const, 2,
 		Matrix::Options & Eigen::RowMajor ? Eigen::RowMajor : Eigen::ColMajor>>{
 			matrix.data(), {Matrix::RowsAtCompileTime, Matrix::ColsAtCompileTime}
 		};
@@ -30,7 +30,7 @@ auto to_tensor(Matrix const & matrix)
 template <typename Matrix, is_vector<Matrix> = nullptr>
 auto to_tensor(Matrix const & matrix)
 {
-	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Tetrahedron::Scalar const, 1>>{
+	return Eigen::TensorMap<Eigen::Tensor<FeltElements::Scalar const, 1>>{
 		matrix.data(), {std::max(Matrix::RowsAtCompileTime, Matrix::ColsAtCompileTime)}
 	};
 }

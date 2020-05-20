@@ -7,7 +7,6 @@
 
 char const * const file_name_one = "resources/single/tet.1";
 char const * const file_name_two = "resources/two/tet.1";
-char const * const file_name_two_quadratic = "resources/double/tet.1";
 
 using namespace FeltElements;
 
@@ -121,12 +120,12 @@ SCENARIO("Metrics of undeformed mesh")
 
 			THEN("mapping is expected")
 			{
-				CHECK(vtxhs == Tetrahedron::Node::Vtxhs{0, 2, 3, 1});
+				CHECK(vtxhs == Tetrahedron::Vtxhs{0, 2, 3, 1});
 			}
 
 			AND_WHEN("material node position tensor is constructed")
 			{
-				Tetrahedron::Node::Positions X = Tetrahedron::X(mesh, vtxhs);
+				Node::Positions X = Tetrahedron::X(mesh, vtxhs);
 
 				THEN("expected positions are reported")
 				{
@@ -142,7 +141,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 				AND_WHEN("material volume is calculated")
 				{
-					Tetrahedron::Scalar V = Tetrahedron::V(X);
+					Scalar V = Tetrahedron::V(X);
 
 					THEN("volume is correct")
 					{
@@ -173,7 +172,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 					AND_WHEN("spatial node position tensor is constructed")
 					{
-						Tetrahedron::Node::Positions x = Tetrahedron::x(vtxhs, x_prop);
+						Node::Positions x = Tetrahedron::x(vtxhs, x_prop);
 
 						THEN("spatial node positions equal material positions")
 						{
@@ -215,7 +214,7 @@ SCENARIO("Metrics of deformed mesh")
 
 			AND_WHEN("spatial volume is calculated")
 			{
-				Tetrahedron::Scalar v = Tetrahedron::V(x);
+				Scalar v = Tetrahedron::V(x);
 
 				THEN("volume is correct")
 				{
@@ -231,7 +230,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	THEN("derivative of shape wrt local coords is correct")
 	{
 		check_equal(
-			Attribute::Element::MaterialShapeDerivative::dN_by_dL,
+			Element::Attribute::MaterialShapeDerivative::dN_by_dL,
 			"dN_by_dL",
 			{
 				// clang-format off
@@ -246,7 +245,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	THEN("derivative of local wrt shape coords is correct")
 	{
 		check_equal(
-			Attribute::Element::MaterialShapeDerivative::dL_by_dN,
+			Element::Attribute::MaterialShapeDerivative::dL_by_dN,
 			"dL_by_dN",
 			{
 				// clang-format off
@@ -259,10 +258,10 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	THEN("derivative of local/shape wrt shape/local coords are inverses")
 	{
-		constexpr Tetrahedron::IndexPairs<1> LN_NL{{{1, 0}}};
-		Tetrahedron::MatrixTensor<3> const identity =
-			Attribute::Element::MaterialShapeDerivative::dL_by_dN.contract(
-				Attribute::Element::MaterialShapeDerivative::dN_by_dL, LN_NL);
+		constexpr Tensor::IndexPairs<1> LN_NL{{{1, 0}}};
+		Tensor::Matrix<3> const identity =
+			Element::Attribute::MaterialShapeDerivative::dL_by_dN.contract(
+				Element::Attribute::MaterialShapeDerivative::dN_by_dL, LN_NL);
 
 		check_equal(
 			identity,
@@ -389,7 +388,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 		THEN("expected positions are reported")
 		{
-			Tetrahedron::Node::Positions expected;
+			Node::Positions expected;
 			// clang-format off
 			expected.setValues({
 			   {0, 0, 0},
@@ -436,8 +435,8 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 				THEN("derivative is inverse of material wrt local")
 				{
-					constexpr Tetrahedron::IndexPairs<1> XL_LX{{{1, 0}}};
-					Tetrahedron::MatrixTensor<3> const identity =
+					constexpr Tensor::IndexPairs<1> XL_LX{{{1, 0}}};
+					Tensor::Matrix<3> const identity =
 						dX_by_dL.contract(dL_by_dX, XL_LX);
 					// clang-format off
 					check_equal(identity, "dX_by_dL * dL_by_dX", {
@@ -992,11 +991,11 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
 				{
-					Tetrahedron::StiffnessTensor const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
+					Element::Stiffness const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
 
 					THEN("stress component is zero")
 					{
-						Tetrahedron::StiffnessTensor expected;
+						Element::Stiffness expected;
 						expected.setZero();
 						check_equal(Ks, "Ks", expected, "zero");
 					}
@@ -1096,7 +1095,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
 				{
-					Tetrahedron::StiffnessTensor const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
+					Element::Stiffness const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
 
 					THEN("stress component is correct")
 					{
@@ -1163,12 +1162,12 @@ SCENARIO("Solution of a single element")
 				B = -B;
 
 				Eigen::Map<
-					Eigen::Matrix<double, 12, 12, Tetrahedron::StiffnessTensor::Layout>> const
+					Eigen::Matrix<double, 12, 12, Element::Stiffness::Layout>> const
 					A{K.data(), 12, 12};
 
 				Displacements u = A.colPivHouseholderQr().solve(B);
 
-				FeltElements::Tetrahedron::Node::Positions delta =
+				FeltElements::Node::Positions delta =
 					Eigen::TensorMap<Eigen::Tensor<double, 2>>{u.data(), {3, 4}}.shuffle(
 						Eigen::array<Eigen::Index, 2>{1, 0});
 
@@ -1223,7 +1222,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("nodal force attributes are constructed")
 		{
-			FeltElements::Attribute::Node::Force const attribs{mesh};
+			Node::Attribute::Force const attribs{mesh};
 
 			THEN("properties are default initialised")
 			{
@@ -1236,7 +1235,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("spatial position attributes are constructed")
 		{
-			FeltElements::Attribute::Node::SpatialPosition const attribs{mesh};
+			Node::Attribute::SpatialPosition const attribs{mesh};
 
 			THEN("attributes are initialised to material position")
 			{
@@ -1245,7 +1244,7 @@ SCENARIO("Mesh attributes")
 					check_equal(
 						attribs[*itvtxh],
 						"x",
-						reinterpret_cast<Tetrahedron::Node::Pos const &>(mesh.vertex(*itvtxh)),
+						reinterpret_cast<Node::Pos const &>(mesh.vertex(*itvtxh)),
 						"X");
 				}
 			}
@@ -1253,7 +1252,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("element vertex mapping attributes are constructed")
 		{
-			FeltElements::Attribute::Element::VertexHandles const vtxh_attribs{mesh};
+			FeltElements::Element::Attribute::VertexHandles const vtxh_attribs{mesh};
 
 			THEN("properties are populated")
 			{
@@ -1269,7 +1268,7 @@ SCENARIO("Mesh attributes")
 
 			AND_WHEN("element natural wrt material coords attributes are constructed")
 			{
-				FeltElements::Attribute::Element::MaterialShapeDerivative const dn_by_dX_attribs{
+				FeltElements::Element::Attribute::MaterialShapeDerivative const dn_by_dX_attribs{
 					mesh, vtxh_attribs};
 
 				THEN("properties are populated")
@@ -1290,6 +1289,8 @@ SCENARIO("Mesh attributes")
 						"dN_by_dX");
 				}
 			}
+			int * i = new int;
+
 		}
 	}
 }

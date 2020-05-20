@@ -1,50 +1,53 @@
-#include <string_view>
-
-#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <OpenVolumeMesh/Core/PropertyDefines.hh>
+#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include <string_view>
 #include <unsupported/Eigen/CXX11/Tensor>
 
 #include "FeltElements/Tetrahedron.hpp"
+#include "FeltElements/Typedefs.hpp"
 
 namespace FeltElements
 {
 namespace internal::Attribute
 {
-
 /*
  * Base traits
  */
 
-template <typename T> struct always_false : std::false_type {};
-template <class Derived> struct Traits
+template <typename T>
+struct always_false : std::false_type
+{
+};
+template <class Derived>
+struct Traits
 {
 	static_assert(always_false<Derived>::value, "Traits are required");
 };
 
-template <class TData> struct BaseTraits
+template <class TData>
+struct BaseTraits
 {
-	using Mesh = OpenVolumeMesh::GeometricTetrahedralMeshV3d;
 	using Data = TData;
 };
 
-template <class Derived> class Base
+template <class Derived>
+class Base
 {
 protected:
 	using ThisTraits = Traits<Derived>;
-	using Mesh = typename ThisTraits::Mesh;
 	using Data = typename ThisTraits::Data;
 	using Prop = typename ThisTraits::Prop;
 	using Handle = typename ThisTraits::Handle;
 	static constexpr std::string_view prop_name = ThisTraits::prop_name;
 
-	explicit Base(Prop && prop) : m_prop{prop} {}
+	explicit Base(Prop&& prop) : m_prop{prop} {}
 
-	Data const & operator[](Handle const & handle) const
+	Data const& operator[](Handle const& handle) const
 	{
 		return m_prop[handle];
 	}
 
-	Data & operator[](Handle const & handle)
+	Data& operator[](Handle const& handle)
 	{
 		return m_prop[handle];
 	}
@@ -52,89 +55,92 @@ protected:
 	Prop m_prop;
 };
 
-template <typename TData> struct VertexTraits : public BaseTraits<TData>
+template <typename TData>
+struct VertexTraits : public BaseTraits<TData>
 {
 	using Handle = OpenVolumeMesh::VertexHandle;
 	using Prop = OpenVolumeMesh::VertexPropertyT<TData>;
 };
 
-template <class Derived> class Vertex : protected Base<Derived>
+template <class Derived>
+class Vertex : protected Base<Derived>
 {
 	using ThisBase = Base<Derived>;
 
 protected:
 	using Data = typename ThisBase::Data;
-	explicit Vertex(typename ThisBase::Mesh & mesh)
-		: ThisBase{mesh.template request_vertex_property<Data>(ThisBase::prop_name.data())}
+	explicit Vertex(Mesh& mesh)
+		: ThisBase{mesh.request_vertex_property<Data>(ThisBase::prop_name.data())}
 	{
 	}
 };
 
-template <typename TData> struct CellTraits : public BaseTraits<TData>
+template <typename TData>
+struct CellTraits : public BaseTraits<TData>
 {
 	using Handle = OpenVolumeMesh::CellHandle;
 	using Prop = OpenVolumeMesh::CellPropertyT<TData>;
 };
 
-template <class Derived> class Cell : protected Base<Derived>
+template <class Derived>
+class Cell : protected Base<Derived>
 {
 	using ThisBase = Base<Derived>;
 	using Data = typename ThisBase::Data;
 
 protected:
-	explicit Cell(typename ThisBase::Mesh & mesh)
-		: ThisBase{mesh.template request_cell_property<Data>(ThisBase::prop_name.data())}
+	explicit Cell(Mesh& mesh)
+		: ThisBase{mesh.request_cell_property<Data>(ThisBase::prop_name.data())}
 	{
 	}
 };
-} // namespace FeltElements::internal::Attribute
+}  // namespace internal::Attribute
 
 /*
  * Forward declarations
  */
-namespace Attribute
-{
-namespace Node
+namespace Node::Attribute
 {
 class SpatialPosition;
 class Force;
-}
-namespace Element
+}  // namespace Node::Attribute
+namespace Element::Attribute
 {
 class VertexHandles;
 class MaterialShapeDerivative;
-}
-} // namespace Attribute
+}  // namespace Element::Attribute
 
 /*
  * Specific traits.
  */
 namespace internal::Attribute
 {
-using namespace FeltElements::Attribute;
+using namespace Node::Attribute;
 
-template <> struct Traits<Node::SpatialPosition> : public VertexTraits<Tetrahedron::Node::Pos>
+template <>
+struct Traits<SpatialPosition> : public VertexTraits<Node::Pos>
 {
 	static constexpr std::string_view prop_name = "spatial_position";
 };
 
-template <> struct Traits<Node::Force> : public VertexTraits<Tetrahedron::Node::Force>
+template <>
+struct Traits<Force> : public VertexTraits<Node::Force>
 {
 	static constexpr std::string_view prop_name = "force";
 };
 
+using namespace Element::Attribute;
 template <>
-struct Traits<Element::VertexHandles>
-	: public CellTraits<std::array<OpenVolumeMesh::VertexHandle, Tetrahedron::Node::count>>
+struct Traits<VertexHandles>
+	: public CellTraits<std::array<OpenVolumeMesh::VertexHandle, Node::count>>
 {
 	static constexpr std::string_view prop_name = "vertices";
 };
 
 template <>
-struct Traits<Element::MaterialShapeDerivative>
-	: public CellTraits<Tetrahedron::ShapeDerivativeTensor>
+struct Traits<MaterialShapeDerivative> : public CellTraits<Element::ShapeDerivative>
 {
 	static constexpr std::string_view prop_name = "material_shape_derivative";
 };
-} // namespace internal::Attribute
-} // namespace FeltElements
+}  // namespace internal::Attribute
+}  // namespace FeltElements
