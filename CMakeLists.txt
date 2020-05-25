@@ -44,7 +44,7 @@ conan_cmake_run(
 )
 conan_load_buildinfo()
 # Library include directories
-include_directories(src/lib ${CONAN_INCLUDE_DIRS})
+include_directories(src/lib vendor ${CONAN_INCLUDE_DIRS})
 
 ###################################
 # Configure tests

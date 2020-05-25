@@ -5,88 +5,31 @@
 #define CATCH_CONFIG_CONSOLE_WIDTH 200
 #include "common.hpp"
 
-char const * const file_name_one = "resources/single/tet.1";
-char const * const file_name_two = "resources/two/tet.1";
+char const * const file_name_one = "resources/one.ovm";
+char const * const file_name_two = "resources/two.ovm";
 
 using namespace FeltElements;
 
-SCENARIO("Loading a tetrahedralisation")
-{
-	char cwd[500];
-	getcwd(cwd, 500);
-	std::cerr << "Executing tests in " << cwd << std::endl;
-
-	auto expected_counts =
-		[](const TetGenIO & mesh, std::size_t num_points, std::size_t num_simplexes,
-				std::size_t num_corners) {
-			CHECK(mesh.num_points() == num_points);
-			CHECK(mesh.num_simplexes() == num_simplexes);
-			CHECK(mesh.num_corners() == num_corners);
-		};
-
-	GIVEN("single tetrahedron mesh is loaded")
-	{
-		auto const & mesh = TetGenIO{file_name_one};
-		THEN("expected counts are reported")
-		{
-			expected_counts(mesh, 4, 1, 4);
-		}
-
-		THEN("expected node positions are reported")
-		{
-			CHECK(mesh.points()[3 * mesh.corners()[0]] == 0);
-			CHECK(mesh.points()[3 * mesh.corners()[0] + 1] == 0);
-			CHECK(mesh.points()[3 * mesh.corners()[0] + 2] == 0);
-
-			CHECK(mesh.points()[3 * mesh.corners()[1]] == 0);
-			CHECK(mesh.points()[3 * mesh.corners()[1] + 1] == 1);
-			CHECK(mesh.points()[3 * mesh.corners()[1] + 2] == 0);
-
-			CHECK(mesh.points()[3 * mesh.corners()[2]] == 0);
-			CHECK(mesh.points()[3 * mesh.corners()[2] + 1] == 0);
-			CHECK(mesh.points()[3 * mesh.corners()[2] + 2] == 1);
-
-			CHECK(mesh.points()[3 * mesh.corners()[3]] == 1);
-			CHECK(mesh.points()[3 * mesh.corners()[3] + 1] == 0);
-			CHECK(mesh.points()[3 * mesh.corners()[3] + 2] == 0);
-		}
-
-		THEN("displacements are initially zero")
-		{
-			CHECK(mesh.displacements()[3 * mesh.corners()[0]] == 0);
-			CHECK(mesh.displacements()[3 * mesh.corners()[0] + 1] == 0);
-			CHECK(mesh.displacements()[3 * mesh.corners()[0] + 2] == 0);
-
-			CHECK(mesh.displacements()[3 * mesh.corners()[1]] == 0);
-			CHECK(mesh.displacements()[3 * mesh.corners()[1] + 1] == 0);
-			CHECK(mesh.displacements()[3 * mesh.corners()[1] + 2] == 0);
-
-			CHECK(mesh.displacements()[3 * mesh.corners()[2]] == 0);
-			CHECK(mesh.displacements()[3 * mesh.corners()[2] + 1] == 0);
-			CHECK(mesh.displacements()[3 * mesh.corners()[2] + 2] == 0);
-
-			CHECK(mesh.displacements()[3 * mesh.corners()[3]] == 0);
-			CHECK(mesh.displacements()[3 * mesh.corners()[3] + 1] == 0);
-			CHECK(mesh.displacements()[3 * mesh.corners()[3] + 2] == 0);
-		}
-	}
-}
-
 SCENARIO("OpenVolumeMesh construction")
 {
+//	GIVEN("converting from tetgen")
+//	{
+//		OpenVolumeMesh::IO::FileManager{}.writeFile(
+//			fmt::format("{}.ovm", file_name_one), TetGenIO{file_name_one}.to_mesh());
+//		OpenVolumeMesh::IO::FileManager{}.writeFile(
+//			fmt::format("{}.ovm", file_name_two), TetGenIO{file_name_two}.to_mesh());
+//	}
 	GIVEN("two-element mesh is loaded")
 	{
-		auto const & io = TetGenIO{file_name_two};
+		FeltElements::Mesh ovm;
+		OpenVolumeMesh::IO::FileManager{}.readFile("resources/two.ovm", ovm);
 
 		WHEN("an OpenVolumeMesh is constructed")
 		{
-			auto ovm = io.to_mesh();
-
 			THEN("mesh has correct number of elements")
 			{
 				CHECK(ovm.n_cells() == 2);
-				CHECK(ovm.n_faces() == 7);
-				CHECK(ovm.n_vertices() == 5);
+				CHECK(ovm.n_faces() == 7); CHECK(ovm.n_vertices() == 5);
 			}
 			THEN("expected node positions are reported")
 			{
@@ -106,13 +49,13 @@ SCENARIO("OpenVolumeMesh construction")
 	}
 } // End SCENARIO("OpenVolumeMesh construction")
 
+
 SCENARIO("Metrics of undeformed mesh")
 {
 	GIVEN("one-element mesh")
 	{
-		auto const & io = TetGenIO{file_name_one};
-		auto mesh = io.to_mesh();
-
+		FeltElements::Mesh mesh;
+		OpenVolumeMesh::IO::FileManager{}.readFile(file_name_one, mesh);
 
 		WHEN("vertex index mapping is fetched")
 		{
@@ -120,7 +63,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 			THEN("mapping is expected")
 			{
-				CHECK(vtxhs == Tetrahedron::Vtxhs{0, 2, 3, 1});
+				CHECK(vtxhs == Tetrahedron::Vtxhs{ 0, 1, 2, 3 });
 			}
 
 			AND_WHEN("material node position tensor is constructed")
@@ -132,9 +75,9 @@ SCENARIO("Metrics of undeformed mesh")
 					// clang-format off
 					check_equal(X, "X", {
 						{0, 0, 0},
-						{0, 1, 0},
 						{0, 0, 1},
-						{1, 0, 0}
+						{1, 0, 0},
+						{0, 1, 0}
 					});
 					// clang-format on
 				}
@@ -205,9 +148,9 @@ SCENARIO("Metrics of deformed mesh")
 				// clang-format off
 				check_equal(x, "x", {
 					{0.5, 0, 0},
-					{0, 1, 0},
 					{0, 0, 1},
-					{1, 0, 0}
+					{1, 0, 0},
+					{0, 1, 0}
 				});
 				// clang-format on
 			}
@@ -288,9 +231,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			{
 				// clang-format off
 				check_equal(dX_by_dL, "dX_by_dL", {
+					{0, 1, 0},
 					{0, 0, 1},
-					{1, 0, 0},
-					{0, 1, 0}
+					{1, 0, 0}
 				});
 				// clang-format on
 			}
@@ -303,9 +246,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				{
 					// clang-format off
 					check_equal(dL_by_dX, "dL_by_dX", {
-						{0, 1, 0},
 						{0, 0, 1},
-						{1, 0, 0}
+						{1, 0, 0},
+						{0, 1, 0}
 					});
 					// clang-format on
 				}
@@ -319,9 +262,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 						// clang-format off
 						check_equal(dN_by_dX, "dN_by_dX", {
 							{-1, -1, -1},
-							{0, 1, 0},
 							{0, 0, 1},
-							{1, 0, 0}
+							{1, 0, 0},
+							{0, 1, 0}
 						});
 						// clang-format on
 					}
@@ -338,9 +281,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				// clang-format off
 				check_equal(N_to_x, "N_to_x", {
 					{1, 1, 1, 1},
+					{0, 0, 1, 0},
 					{0, 0, 0, 1},
-					{0, 1, 0, 0},
-					{0, 0, 1, 0}
+					{0, 1, 0, 0}
 				});
 				// clang-format on
 			}
@@ -354,9 +297,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					// clang-format off
 					check_equal(dN_by_dX, "dN_by_dX", {
 						{-1, -1, -1},
-						{0, 1, 0},
-						{-0, 0, 1},
-						{1, -0, 0}
+						{0, 0, 1},
+						{1, 0, 0},
+						{0, 1, 0}
 					 });
 					// clang-format on
 				}
@@ -370,10 +313,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				{
 					// clang-format off
 					check_equal(dx_by_dN, "dx_by_dN", {
+						{0, 0, 1, 0},
 						{0, 0, 0, 1},
-						{0, 1, 0, 0},
-						{0, 0, 1, 0}
-
+						{0, 1, 0, 0}
 					});
 					// clang-format on
 				}
@@ -527,9 +469,9 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 				{
 					// clang-format off
 					check_equal(dx_by_dL, "dx_by_dL", {
-						{-0.5, -0.5, 0.5},
-						{1, 0, 0},
-						{0, 1, 0}
+						{-0.5, 0.5, -0.5},
+						{0, 0, 1},
+						{1, 0, 0}
 					});
 					// clang-format on
 				}
@@ -542,9 +484,9 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 					{
 						// clang-format off
 						check_equal(dL_by_dx, "dL_by_dx", {
-							{0, 1, -0},
-							{0, -0, 1},
-							{2, 1, 1}
+							{0, 0, 1},
+							{2, 1, 1},
+							{0, 1, 0}
 						});
 						// clang-format on
 					}
@@ -560,9 +502,9 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 					// clang-format off
 					check_equal(dN_by_dx, "dN_by_dx", {
 						{-2, -2, -2},
-						{0, 1, 0},
 						{0, 0, 1},
-						{2, 1, 1}
+						{2, 1, 1},
+						{0, 1, 0}
 					});
 					// clang-format on
 				}
@@ -671,9 +613,9 @@ SCENARIO("Deformation gradient of deformed element")
 					// clang-format off
 					check_equal(dN_by_dx, "dN_by_dx", {
 						{-2, -2, -2},
-						{0, 1, 0},
 						{0, 0, 1},
-						{2, 1, 1}
+						{2, 1, 1},
+						{0, 1, 0}
 					});
 					// clang-format on
 				}
@@ -888,9 +830,9 @@ SCENARIO("Internal equivalent nodal force")
 					{
 						// clang-format off
 						check_equal(T, "T", {
-							{0.259086, -0.0333333, -0.0333333, -0.19242},
-							{0.159086, -0.0462098, 0, -0.112876},
-							{0.159086, 0, -0.0462098, -0.112876}
+							{0.259086, -0.0333333, -0.19242, -0.0333333},
+							{0.159086, 0, -0.112876, -0.0462098},
+							{0.159086, -0.0462098, -0.112876, 0}
 						});
 						// clang-format on
 					}
@@ -962,22 +904,21 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 						// clang-format off
 						check_equal(Kc, "Kc", {
 							{
-								{{0.333333, -0.0666667, -0.0666667, -0.2}, {0.133333, -0.0666667, 0, -0.0666667}, {0.133333, 0, -0.0666667, -0.0666667}},
-								{{-0.0666667, 0.0666667, 0, 0}, {-0.0666667, 0, 0, 0.0666667}, {0, 0, 0, 0}},
-								{{-0.0666667, 0, 0.0666667, 0}, {0, 0, 0, 0}, {-0.0666667, 0, 0, 0.0666667}},
-								{{-0.2, 0, 0, 0.2}, {-0.0666667, 0.0666667, 0, 0}, {-0.0666667, 0, 0.0666667, 0}}
+								{{0.333333, -0.0666667, -0.2, -0.0666667}, {0.133333, 0, -0.0666667, -0.0666667}, {0.133333, -0.0666667, -0.0666667, 0}},
+								{{-0.0666667, 0.0666667, 0, 0}, {0, 0, 0, 0}, {-0.0666667, 0, 0.0666667, 0}},
+								{{-0.2, 0, 0.2, 0}, {-0.0666667, 0, 0, 0.0666667}, {-0.0666667, 0.0666667, 0, 0}},
+								{{-0.0666667, 0, 0, 0.0666667}, {-0.0666667, 0, 0.0666667, 0}, {0, 0, 0, 0}}
 							}, {
-								{{0.133333, -0.0666667, 0, -0.0666667}, {0.333333, -0.2, -0.0666667, -0.0666667}, {0.133333, -0.0666667, -0.0666667, 0}},
-								{{-0.0666667, 0, 0, 0.0666667}, {-0.2, 0.2, 0, 0}, {-0.0666667, 0, 0.0666667, 0}},
-								{{0, 0, 0, 0}, {-0.0666667, 0, 0.0666667, 0}, {-0.0666667, 0.0666667, 0, 0}},
-								{{-0.0666667, 0.0666667, 0, 0}, {-0.0666667, 0, 0, 0.0666667}, {0, 0, 0, 0}}
+								{{0.133333, 0, -0.0666667, -0.0666667}, {0.333333, -0.0666667, -0.0666667, -0.2}, {0.133333, -0.0666667, 0, -0.0666667}},
+								{{0, 0, 0, 0}, {-0.0666667, 0.0666667, 0, 0}, {-0.0666667, 0, 0, 0.0666667}},
+								{{-0.0666667, 0, 0, 0.0666667}, {-0.0666667, 0, 0.0666667, 0}, {0, 0, 0, 0}},
+								{{-0.0666667, 0, 0.0666667, 0}, {-0.2, 0, 0, 0.2}, {-0.0666667, 0.0666667, 0, 0}}
 							}, {
-								{{0.133333, 0, -0.0666667, -0.0666667}, {0.133333, -0.0666667, -0.0666667, 0}, {0.333333, -0.0666667, -0.2, -0.0666667}},
-								{{0, 0, 0, 0}, {-0.0666667, 0, 0.0666667, 0}, {-0.0666667, 0.0666667, 0, 0}},
-								{{-0.0666667, 0, 0, 0.0666667}, {-0.0666667, 0.0666667, 0, 0}, {-0.2, 0, 0.2, 0}},
-								{{-0.0666667, 0, 0.0666667, 0}, {0, 0, 0, 0}, {-0.0666667, 0, 0, 0.0666667}}
+								{{0.133333, -0.0666667, -0.0666667, 0}, {0.133333, -0.0666667, 0, -0.0666667}, {0.333333, -0.2, -0.0666667, -0.0666667}},
+								{{-0.0666667, 0, 0.0666667, 0}, {-0.0666667, 0, 0, 0.0666667}, {-0.2, 0.2, 0, 0}},
+								{{-0.0666667, 0.0666667, 0, 0}, {0, 0, 0, 0}, {-0.0666667, 0, 0.0666667, 0}},
+								{{0, 0, 0, 0}, {-0.0666667, 0.0666667, 0, 0}, {-0.0666667, 0, 0, 0.0666667}}
 							}
-
 						});
 						// clang-format on
 					}
@@ -1055,20 +996,20 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 						// clang-format off
 						check_equal(Kc, "Kc", {
 							{
-								{{2.07269, -0.225753, -0.225753, -1.62118}, {0.718173, -0.133333, 0, -0.584839}, {0.718173, 0, -0.133333, -0.584839}},
-								{{-0.225753, 0.112876, 0, 0.112876}, {-0.225753, 0, 0, 0.225753}, {0, 0, 0, 0}},
-								{{-0.225753, 0, 0.112876, 0.112876}, {0, 0, 0, 0}, {-0.225753, 0, 0, 0.225753}},
-								{{-1.62118, 0.112876, 0.112876, 1.39543}, {-0.49242, 0.133333, 0, 0.359086}, {-0.49242, 0, 0.133333, 0.359086}}
+								{{2.07269, -0.225753, -1.62118, -0.225753}, {0.718173, 0, -0.584839, -0.133333}, {0.718173, -0.133333, -0.584839, 0}},
+								{{-0.225753, 0.112876, 0.112876, 0}, {0, 0, 0, 0}, {-0.225753, 0, 0.225753, 0}},
+								{{-1.62118, 0.112876, 1.39543, 0.112876}, {-0.49242, 0, 0.359086, 0.133333}, {-0.49242, 0.133333, 0.359086, 0}},
+								{{-0.225753, 0, 0.112876, 0.112876}, {-0.225753, 0, 0.225753, 0}, {0, 0, 0, 0}}
 							}, {
-								{{0.718173, -0.225753, 0, -0.49242}, {2.07269, -0.584839, -0.225753, -1.2621}, {0.718173, -0.225753, -0.133333, -0.359086}},
-								{{-0.133333, 0, 0, 0.133333}, {-0.584839, 0.29242, 0, 0.29242}, {-0.133333, 0, 0.0666667, 0.0666667}},
-								{{0, 0, 0, 0}, {-0.225753, 0, 0.112876, 0.112876}, {-0.225753, 0.112876, 0, 0.112876}},
-								{{-0.584839, 0.225753, 0, 0.359086}, {-1.2621, 0.29242, 0.112876, 0.856802}, {-0.359086, 0.112876, 0.0666667, 0.179543}}
+								{{0.718173, 0, -0.49242, -0.225753}, {2.07269, -0.225753, -1.2621, -0.584839}, {0.718173, -0.133333, -0.359086, -0.225753}},
+								{{0, 0, 0, 0}, {-0.225753, 0.112876, 0.112876, 0}, {-0.225753, 0, 0.112876, 0.112876}},
+								{{-0.584839, 0, 0.359086, 0.225753}, {-1.2621, 0.112876, 0.856802, 0.29242}, {-0.359086, 0.0666667, 0.179543, 0.112876}},
+								{{-0.133333, 0, 0.133333, 0}, {-0.584839, 0, 0.29242, 0.29242}, {-0.133333, 0.0666667, 0.0666667, 0}}
 							}, {
-								{{0.718173, 0, -0.225753, -0.49242}, {0.718173, -0.133333, -0.225753, -0.359086}, {2.07269, -0.225753, -0.584839, -1.2621}},
-								{{0, 0, 0, 0}, {-0.225753, 0, 0.112876, 0.112876}, {-0.225753, 0.112876, 0, 0.112876}},
-								{{-0.133333, 0, 0, 0.133333}, {-0.133333, 0.0666667, 0, 0.0666667}, {-0.584839, 0, 0.29242, 0.29242}},
-								{{-0.584839, 0, 0.225753, 0.359086}, {-0.359086, 0.0666667, 0.112876, 0.179543}, {-1.2621, 0.112876, 0.29242, 0.856802}}
+								{{0.718173, -0.225753, -0.49242, 0}, {0.718173, -0.225753, -0.359086, -0.133333}, {2.07269, -0.584839, -1.2621, -0.225753}},
+								{{-0.133333, 0, 0.133333, 0}, {-0.133333, 0, 0.0666667, 0.0666667}, {-0.584839, 0.29242, 0.29242, 0}},
+								{{-0.584839, 0.225753, 0.359086, 0}, {-0.359086, 0.112876, 0.179543, 0.0666667}, {-1.2621, 0.29242, 0.856802, 0.112876}},
+								{{0, 0, 0, 0}, {-0.225753, 0.112876, 0.112876, 0}, {-0.225753, 0, 0.112876, 0.112876}}
 							}
 
 						});
@@ -1102,20 +1043,20 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 						// clang-format off
 						check_equal(Ks, "Ks", {
 							{
-								{{-1.15452, 0.159086, 0.159086, 0.836345}, {0, 0, 0, 0}, {0, 0, 0, 0}},
-								{{0.159086, -0.0462098, 0, -0.112876}, {0, 0, 0, 0}, {0, 0, 0, 0}},
-								{{0.159086, 0, -0.0462098, -0.112876}, {0, 0, 0, 0}, {0, 0, 0, 0}},
-								{{0.836345, -0.112876, -0.112876, -0.610592}, {0, 0, 0, 0}, {0, 0, 0, 0}}
+								{{-1.15452, 0.159086, 0.836345, 0.159086}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+								{{0.159086, -0.0462098, -0.112876, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+								{{0.836345, -0.112876, -0.610592, -0.112876}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+								{{0.159086, 0, -0.112876, -0.0462098}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 							}, {
-								{{0, 0, 0, 0}, {-1.15452, 0.159086, 0.159086, 0.836345}, {0, 0, 0, 0}},
-								{{0, 0, 0, 0}, {0.159086, -0.0462098, 0, -0.112876}, {0, 0, 0, 0}},
-								{{0, 0, 0, 0}, {0.159086, 0, -0.0462098, -0.112876}, {0, 0, 0, 0}},
-								{{0, 0, 0, 0}, {0.836345, -0.112876, -0.112876, -0.610592}, {0, 0, 0, 0}}
+								{{0, 0, 0, 0}, {-1.15452, 0.159086, 0.836345, 0.159086}, {0, 0, 0, 0}},
+								{{0, 0, 0, 0}, {0.159086, -0.0462098, -0.112876, 0}, {0, 0, 0, 0}},
+								{{0, 0, 0, 0}, {0.836345, -0.112876, -0.610592, -0.112876}, {0, 0, 0, 0}},
+								{{0, 0, 0, 0}, {0.159086, 0, -0.112876, -0.0462098}, {0, 0, 0, 0}}
 							}, {
-								{{0, 0, 0, 0}, {0, 0, 0, 0}, {-1.15452, 0.159086, 0.159086, 0.836345}},
-								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.159086, -0.0462098, 0, -0.112876}},
-								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.159086, 0, -0.0462098, -0.112876}},
-								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.836345, -0.112876, -0.112876, -0.610592}}
+								{{0, 0, 0, 0}, {0, 0, 0, 0}, {-1.15452, 0.159086, 0.836345, 0.159086}},
+								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.159086, -0.0462098, -0.112876, 0}},
+								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.836345, -0.112876, -0.610592, -0.112876}},
+								{{0, 0, 0, 0}, {0, 0, 0, 0}, {0.159086, 0, -0.112876, -0.0462098}}
 							}
 						});
 						// clang-format on
@@ -1201,10 +1142,10 @@ SCENARIO("Solution of a single element")
 					{0, 0, 1}
 				});
 				check_equal(x, "x", {
-					{0.287126, 0.0989334, 0.0478705},
-					{-0.0143856, 1.0512, 0.000137554},
-					{-0.0143856, 0.0512004, 1.00014},
-					{1.19166, 0.400445, 0.349382}
+					{0.100138, 0.0494372, -0.0993858},
+					{-0.201374, 0.00170419, 0.852881},
+					{1.00467, 0.350949, 0.202126},
+					{-0.201374, 1.0017, -0.147119}
 				});
 				// clang-format on
 			}
@@ -1217,8 +1158,7 @@ SCENARIO("Mesh attributes")
 {
 	GIVEN("a two-element mesh")
 	{
-		auto const & io = TetGenIO{file_name_two};
-		auto mesh = io.to_mesh();
+		auto mesh = load_ovm_mesh(file_name_two);
 
 		WHEN("nodal force attributes are constructed")
 		{
@@ -1289,8 +1229,6 @@ SCENARIO("Mesh attributes")
 						"dN_by_dX");
 				}
 			}
-			int * i = new int;
-
 		}
 	}
 }

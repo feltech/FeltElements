@@ -133,7 +133,8 @@ std::ostream& operator<< (std::ostream& os, std::vector<OpenVolumeMesh::VertexHa
 	return os;
 }
 
-#include <catch2/catch.hpp>  // Must come after `operator<<` definitions.
+#include <OpenVolumeMesh/FileManager/FileManager.hh>
+#include <catch2/catch.hpp>	 // Must come after `operator<<` definitions.
 
 template <class Tensor>
 void check_equal( Tensor const & in, std::string_view const desc, InitList<Tensor> const values)
@@ -161,11 +162,20 @@ void check_equal(
 auto load_tet(char const * const file_name)
 {
 	using namespace FeltElements;
-	auto const & io = TetGenIO{file_name};
-	auto mesh = io.to_mesh();
+	FeltElements::Mesh mesh;
+	OpenVolumeMesh::IO::FileManager{}.readFile(file_name, mesh);
 	auto const & vtxhs = Tetrahedron::vtxhs(mesh, 0);
 	auto const & X = Tetrahedron::X(mesh, vtxhs);
 	auto x = Tetrahedron::x(vtxhs, Tetrahedron::x(mesh));
 
 	return std::tuple(X, x);
+}
+
+auto load_ovm_mesh(char const * const file_name)
+{
+	using namespace FeltElements;
+	FeltElements::Mesh mesh;
+	OpenVolumeMesh::IO::FileManager file_manager{};
+	file_manager.readFile(file_name, mesh);
+	return mesh;
 }
