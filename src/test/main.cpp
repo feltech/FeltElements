@@ -10,45 +10,9 @@ char const * const file_name_two = "resources/two.ovm";
 
 using namespace FeltElements;
 
-SCENARIO("OpenVolumeMesh construction")
-{
-//	GIVEN("converting from tetgen")
-//	{
-//		OpenVolumeMesh::IO::FileManager{}.writeFile(
-//			fmt::format("{}.ovm", file_name_one), TetGenIO{file_name_one}.to_mesh());
-//		OpenVolumeMesh::IO::FileManager{}.writeFile(
-//			fmt::format("{}.ovm", file_name_two), TetGenIO{file_name_two}.to_mesh());
-//	}
-	GIVEN("two-element mesh is loaded")
-	{
-		FeltElements::Mesh ovm;
-		OpenVolumeMesh::IO::FileManager{}.readFile("resources/two.ovm", ovm);
-
-		WHEN("an OpenVolumeMesh is constructed")
-		{
-			THEN("mesh has correct number of elements")
-			{
-				CHECK(ovm.n_cells() == 2);
-				CHECK(ovm.n_faces() == 7); CHECK(ovm.n_vertices() == 5);
-			}
-			THEN("expected node positions are reported")
-			{
-				auto const & vtxs1 = ovm.get_cell_vertices(OpenVolumeMesh::CellHandle{0});
-				CHECK(ovm.vertex(vtxs1[0]) == OpenVolumeMesh::Vec3d{0, 0, 0});
-				CHECK(ovm.vertex(vtxs1[1]) == OpenVolumeMesh::Vec3d{0, 0, 1});
-				CHECK(ovm.vertex(vtxs1[2]) == OpenVolumeMesh::Vec3d{1, 0, 0});
-				CHECK(ovm.vertex(vtxs1[3]) == OpenVolumeMesh::Vec3d{0, 0.5, 0.5});
-
-				auto const & vtxs2 = ovm.get_cell_vertices(OpenVolumeMesh::CellHandle{1});
-				CHECK(ovm.vertex(vtxs2[0]) == OpenVolumeMesh::Vec3d{0, 1, 0});
-				CHECK(ovm.vertex(vtxs2[1]) == OpenVolumeMesh::Vec3d{0, 0, 0});
-				CHECK(ovm.vertex(vtxs2[2]) == OpenVolumeMesh::Vec3d{1, 0, 0});
-				CHECK(ovm.vertex(vtxs2[3]) == OpenVolumeMesh::Vec3d{0, 0.5, 0.5});
-			}
-		}
-	}
-} // End SCENARIO("OpenVolumeMesh construction")
-
+//	char cwd[500];
+//	getcwd(cwd, 500);
+//	std::cerr << "Executing tests in " << cwd << std::endl;
 
 SCENARIO("Metrics of undeformed mesh")
 {

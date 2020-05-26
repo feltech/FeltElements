@@ -1,0 +1,3 @@
+[submodule "vendor/Fastor"]
+	path = vendor/Fastor
+	url = https://github.com/romeric/Fastor.git

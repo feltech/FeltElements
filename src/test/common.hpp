@@ -11,33 +11,6 @@
 #include <FeltElements/Tetrahedron.hpp>
 #include <FeltElements/Attributes.hpp>
 
-namespace Eigen
-{
-
-using Tensor1d = Tensor<double, 1>;
-
-auto begin(Tensor1d & m)
-{
-	return m.data();
-}
-
-auto end(Tensor1d & m)
-{
-	return m.data() + m.size();
-}
-
-auto begin(Tensor1d const & m)
-{
-	return m.data();
-}
-
-auto end(Tensor1d const & m)
-{
-	return m.data() + m.size();
-}
-
-} // namespace Eigen
-
 namespace
 {
 template <class Tensor, std::size_t idx>
@@ -96,8 +69,11 @@ ostream_if<Tensor, 4> operator<< (std::ostream& os, Tensor const& value)
 		{
 			for (Index k = 0; k < dims[2]; k++)
 			{
-				Eigen::Tensor1d const & vec = value.chip(i, 0).chip(j, 0).chip(k, 0);
-				ks[k] = join(vec | ranges::views::transform(to_string), ", ");
+				Eigen::Tensor<FeltElements::Scalar, 1> const & vec =
+					value.chip(i, 0).chip(j, 0).chip(k, 0);
+				ks[k] = join(
+					ranges::subrange{vec.data(), vec.data() + vec.size()} |
+						ranges::views::transform(to_string), ", ");
 			}
 			js[j] = join(ks, "}, {");
 		}
@@ -118,14 +94,17 @@ ostream_if<Tensor, 2> operator<< (std::ostream& os, Tensor const& value)
 	std::array<std::string, dims[0]> is{};
 	for (Index i = 0; i < dims[0]; i++)
 	{
-		Eigen::Tensor1d const & vec = value.chip(i, 0);
-		is[i] = join(vec | ranges::views::transform(to_string), ", ");
+		Eigen::Tensor<FeltElements::Scalar, 1> const & vec = value.chip(i, 0);
+		is[i] = join(
+			ranges::subrange{vec.data(), vec.data() + vec.size()} |
+				ranges::views::transform(to_string), ", ");
 	}
 	os << "{\n\t{" << join(is, "},\n\t{") << "}\n}";
 	return os;
 }
 
-std::ostream& operator<< (std::ostream& os, std::vector<OpenVolumeMesh::VertexHandle> const& vtxhs)
+inline std::ostream& operator<< (
+	std::ostream& os, std::vector<OpenVolumeMesh::VertexHandle> const& vtxhs)
 {
 	using ranges::views::transform;
 	using boost::algorithm::join;
@@ -159,7 +138,7 @@ void check_equal(
 	CHECK(equal(in, expected));
 }
 
-auto load_tet(char const * const file_name)
+inline auto load_tet(char const * const file_name)
 {
 	using namespace FeltElements;
 	FeltElements::Mesh mesh;
@@ -171,7 +150,7 @@ auto load_tet(char const * const file_name)
 	return std::tuple(X, x);
 }
 
-auto load_ovm_mesh(char const * const file_name)
+inline auto load_ovm_mesh(char const * const file_name)
 {
 	using namespace FeltElements;
 	FeltElements::Mesh mesh;

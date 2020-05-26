@@ -53,7 +53,8 @@ include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 # Put tests executable under a "test" directory, rather than "bin".
 set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
 # Add source files to tests target.
-target_sources(tests PRIVATE src/test/main.cpp ${_src_lib})
+file(GLOB _src_test LIST_DIRECTORIES false src/test/*.cpp)
+target_sources(tests PRIVATE ${_src_test} ${_src_lib})
 # Add libraries to link.
 conan_target_link_libraries(tests)
 # Add sanitizer and coverage build options.

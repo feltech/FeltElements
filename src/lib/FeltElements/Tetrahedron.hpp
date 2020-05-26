@@ -8,8 +8,6 @@
 
 namespace FeltElements
 {
-class TetGenIO;
-
 class Tetrahedron
 {
 public:
@@ -78,7 +76,7 @@ public:
 	[[nodiscard]] static Node::Positions x(
 		Vtxhs const& vtxhs, SpatialCoordProp const& x_prop);
 	[[nodiscard]] static Vtxhs vtxhs(
-		OpenVolumeMesh::GeometricTetrahedralMeshV3d const& mesh,
+		Mesh const& mesh,
 		OpenVolumeMesh::CellHandle const& cellh);
 };
 }  // namespace FeltElements
