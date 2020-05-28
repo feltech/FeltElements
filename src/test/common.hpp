@@ -1,15 +1,13 @@
-#include <ostream>
-
-#include <unsupported/Eigen/CXX11/Tensor>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/action/transform.hpp>
-#include <range/v3/view/join.hpp>
-#include <range/v3/to_container.hpp>
-#include <boost/algorithm/string/join.hpp>
-
-#include <FeltElements/TetGenIO.hpp>
-#include <FeltElements/Tetrahedron.hpp>
 #include <FeltElements/Attributes.hpp>
+#include <FeltElements/Derivatives.hpp>
+#include <FeltElements/TetGenIO.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <ostream>
+#include <range/v3/action/transform.hpp>
+#include <range/v3/to_container.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
+#include <unsupported/Eigen/CXX11/Tensor>
 
 namespace
 {
@@ -143,9 +141,9 @@ inline auto load_tet(char const * const file_name)
 	using namespace FeltElements;
 	FeltElements::Mesh mesh;
 	OpenVolumeMesh::IO::FileManager{}.readFile(file_name, mesh);
-	auto const & vtxhs = Tetrahedron::vtxhs(mesh, 0);
-	auto const & X = Tetrahedron::X(mesh, vtxhs);
-	auto x = Tetrahedron::x(vtxhs, Tetrahedron::x(mesh));
+	auto const & vtxhs = Derivatives::vtxhs(mesh, 0);
+	auto const & X = Derivatives::X(mesh, vtxhs);
+	auto x = Derivatives::x(vtxhs, Derivatives::x(mesh));
 
 	return std::tuple(X, x);
 }

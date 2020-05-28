@@ -3,7 +3,7 @@
 #include <string_view>
 #include <unsupported/Eigen/CXX11/Tensor>
 
-#include "FeltElements/Tetrahedron.hpp"
+#include "FeltElements/Derivatives.hpp"
 #include "FeltElements/Typedefs.hpp"
 
 namespace FeltElements

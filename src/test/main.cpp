@@ -23,16 +23,16 @@ SCENARIO("Metrics of undeformed mesh")
 
 		WHEN("vertex index mapping is fetched")
 		{
-			auto const & vtxhs = Tetrahedron::vtxhs(mesh, 0);
+			auto const & vtxhs = Derivatives::vtxhs(mesh, 0);
 
 			THEN("mapping is expected")
 			{
-				CHECK(vtxhs == Tetrahedron::Vtxhs{ 0, 1, 2, 3 });
+				CHECK(vtxhs == Derivatives::Vtxhs{ 0, 1, 2, 3 });
 			}
 
 			AND_WHEN("material node position tensor is constructed")
 			{
-				Node::Positions X = Tetrahedron::X(mesh, vtxhs);
+				Node::Positions X = Derivatives::X(mesh, vtxhs);
 
 				THEN("expected positions are reported")
 				{
@@ -48,7 +48,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 				AND_WHEN("material volume is calculated")
 				{
-					Scalar V = Tetrahedron::V(X);
+					Scalar V = Derivatives::V(X);
 
 					THEN("volume is correct")
 					{
@@ -59,7 +59,7 @@ SCENARIO("Metrics of undeformed mesh")
 				AND_WHEN("spatial coordinate property is created")
 				{
 					using namespace OpenVolumeMesh;
-					VertexPropertyT<Vec3d> const & x_prop = Tetrahedron::x(mesh);
+					VertexPropertyT<Vec3d> const & x_prop = Derivatives::x(mesh);
 
 					THEN("spatial coordinates equal material coordinates")
 					{
@@ -79,7 +79,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 					AND_WHEN("spatial node position tensor is constructed")
 					{
-						Node::Positions x = Tetrahedron::x(vtxhs, x_prop);
+						Node::Positions x = Derivatives::x(vtxhs, x_prop);
 
 						THEN("spatial node positions equal material positions")
 						{
@@ -121,7 +121,7 @@ SCENARIO("Metrics of deformed mesh")
 
 			AND_WHEN("spatial volume is calculated")
 			{
-				Scalar v = Tetrahedron::V(x);
+				Scalar v = Derivatives::V(x);
 
 				THEN("volume is correct")
 				{
@@ -189,7 +189,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 		AND_WHEN("derivative of material wrt local coords is calculated")
 		{
-			auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+			auto const & dX_by_dL = Derivatives::dX_by_dL(X);
 
 			THEN("derivative is correct")
 			{
@@ -204,7 +204,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 			AND_WHEN("derivative of local wrt material coords is calculated")
 			{
-				auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
+				auto const & dL_by_dX = Derivatives::dL_by_dX(dX_by_dL);
 
 				THEN("derivative is correct")
 				{
@@ -219,7 +219,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 				AND_WHEN("derivative of material wrt shape coords is calculated")
 				{
-					auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+					auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 
 					THEN("derivative is correct")
 					{
@@ -238,7 +238,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 		AND_WHEN("transformation from natural to cartesian coordinates is calculated")
 		{
-			auto const & N_to_x = Tetrahedron::N_to_x(X);
+			auto const & N_to_x = Derivatives::N_to_x(X);
 
 			THEN("matrix is correct")
 			{
@@ -254,7 +254,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 			AND_WHEN("derivative of natural wrt cartesian coords is calculated")
 			{
-				auto const & dN_by_dX = Tetrahedron::dN_by_dX(N_to_x);
+				auto const & dN_by_dX = Derivatives::dN_by_dX(N_to_x);
 
 				THEN("derivative is correct")
 				{
@@ -271,7 +271,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 			AND_WHEN("derivative of cartesian wrt natural coords is calculated")
 			{
-				auto const & dx_by_dN = Tetrahedron::dx_by_dN(N_to_x);
+				auto const & dx_by_dN = Derivatives::dx_by_dN(N_to_x);
 
 				THEN("derivative is correct")
 				{
@@ -311,7 +311,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 		WHEN("derivative of material wrt local coords is calculated")
 		{
-			auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
+			auto const & dX_by_dL = Derivatives::dX_by_dL(X);
 
 			THEN("derivative is correct")
 			{
@@ -326,7 +326,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 			AND_WHEN("derivative of local wrt material coords is calculated")
 			{
-				auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
+				auto const & dL_by_dX = Derivatives::dL_by_dX(dX_by_dL);
 
 				THEN("derivative is correct")
 				{
@@ -357,7 +357,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 		AND_WHEN("derivative of natural wrt material coords is calculated")
 		{
-			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 
 			THEN("derivative is correct")
 			{
@@ -374,7 +374,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 		AND_WHEN("transformation from natural to cartesian coordinates is calculated")
 		{
-			auto const & N_to_x = Tetrahedron::N_to_x(X);
+			auto const & N_to_x = Derivatives::N_to_x(X);
 
 			THEN("matrix is correct")
 			{
@@ -391,7 +391,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 			AND_WHEN("derivative of natural wrt material coords is calculated")
 			{
-				auto const & dN_by_dX = Tetrahedron::dN_by_dX(N_to_x);
+				auto const & dN_by_dX = Derivatives::dN_by_dX(N_to_x);
 
 				THEN("derivative is correct")
 				{
@@ -427,7 +427,7 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 
 			AND_WHEN("derivative of spatial wrt local coords is calculated")
 			{
-				auto const & dx_by_dL = Tetrahedron::dX_by_dL(x);
+				auto const & dx_by_dL = Derivatives::dX_by_dL(x);
 
 				THEN("derivative is correct")
 				{
@@ -442,7 +442,7 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 
 				AND_WHEN("derivative of local wrt spatial coords is calculated")
 				{
-					auto const & dL_by_dx = Tetrahedron::dL_by_dX(dx_by_dL);
+					auto const & dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
 
 					THEN("derivative is correct")
 					{
@@ -459,7 +459,7 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 
 			AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 			{
-				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+				auto const & dN_by_dx = Derivatives::dN_by_dX(x);
 
 				THEN("derivative is correct")
 				{
@@ -489,8 +489,8 @@ SCENARIO("Deformation gradient of undeformed element")
 
 		WHEN("deformation gradient is calculated from natural coordinate derivative")
 		{
-			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
-			auto const & dx_by_dX = Tetrahedron::dx_by_dX(X, dN_by_dX);
+			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
+			auto const & dx_by_dX = Derivatives::dx_by_dX(X, dN_by_dX);
 
 			THEN("gradient is identity")
 			{
@@ -506,9 +506,9 @@ SCENARIO("Deformation gradient of undeformed element")
 
 		WHEN("deformation gradient is calculated from local coordinate derivative")
 		{
-			auto const & dX_by_dL = Tetrahedron::dX_by_dL(X);
-			auto const & dL_by_dX = Tetrahedron::dL_by_dX(dX_by_dL);
-			auto const & dx_by_dX = Tetrahedron::dx_by_dX(dX_by_dL, dL_by_dX);
+			auto const & dX_by_dL = Derivatives::dX_by_dL(X);
+			auto const & dL_by_dX = Derivatives::dL_by_dX(dX_by_dL);
+			auto const & dx_by_dX = Derivatives::dx_by_dX(dX_by_dL, dL_by_dX);
 
 			THEN("gradient is identity")
 			{
@@ -534,8 +534,8 @@ SCENARIO("Deformation gradient of undeformed element")
 
 			AND_WHEN("deformation gradient is calculated")
 			{
-				 auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
-				 auto const & dx_by_dX = Tetrahedron::dx_by_dX(x, dN_by_dX);
+				 auto const & dN_by_dX = Derivatives::dN_by_dX(X);
+				 auto const & dx_by_dX = Derivatives::dx_by_dX(x, dN_by_dX);
 
 				 THEN("gradient is identity")
 				 {
@@ -558,7 +558,7 @@ SCENARIO("Deformation gradient of deformed element")
 	{
 		auto [X, x] = load_tet(file_name_one);
 
-		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 		INFO("Material vertices:")
 		INFO(X)
 
@@ -570,7 +570,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 			AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 			{
-				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+				auto const & dN_by_dx = Derivatives::dN_by_dX(x);
 
 				THEN("derivative is correct")
 				{
@@ -586,7 +586,7 @@ SCENARIO("Deformation gradient of deformed element")
 			}
 			AND_WHEN("deformation gradient is calculated")
 			{
-				auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
+				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
 
 				THEN("deformation gradient is correct")
 				{
@@ -601,7 +601,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 				AND_WHEN("Jacobian of deformation gradient is calculated")
 				{
-					double const J = Tetrahedron::J(F);
+					double const J = Derivatives::J(F);
 
 					THEN("value is correct")
 					{
@@ -611,7 +611,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 				AND_WHEN("Left Cauchy-Green / Finger tensor is calculated")
 				{
-					auto const & b = Tetrahedron::b(F);
+					auto const & b = Derivatives::b(F);
 
 					THEN("tensor is correct")
 					{
@@ -632,7 +632,7 @@ SCENARIO("Deformation gradient of deformed element")
 	{
 		auto [X, x] = load_tet(file_name_two);
 
-		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 
 		INFO("Material vertices:")
 		INFO(X)
@@ -643,7 +643,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 			AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 			{
-				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
+				auto const & dN_by_dx = Derivatives::dN_by_dX(x);
 
 				THEN("derivative is correct")
 				{
@@ -660,7 +660,7 @@ SCENARIO("Deformation gradient of deformed element")
 			}
 			AND_WHEN("deformation gradient is calculated")
 			{
-				auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
+				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
 
 				THEN("deformation gradient is correct")
 				{
@@ -675,7 +675,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 				AND_WHEN("Jacobian of deformation gradient is calculated")
 				{
-					double const J = Tetrahedron::J(F);
+					double const J = Derivatives::J(F);
 
 					THEN("value is correct")
 					{
@@ -685,7 +685,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 				AND_WHEN("Left Cauchy-Green / Finger tensor is calculated")
 				{
-					auto const & b = Tetrahedron::b(F);
+					auto const & b = Derivatives::b(F);
 
 					THEN("tensor is correct")
 					{
@@ -709,7 +709,7 @@ SCENARIO("Internal equivalent nodal force")
 	{
 		auto [X, x] = load_tet(file_name_one);
 
-		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 		//		Tetrahedron::Scalar const lambda = 1;
 		//		Tetrahedron::Scalar const mu = 1;
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
@@ -723,11 +723,11 @@ SCENARIO("Internal equivalent nodal force")
 
 		WHEN("neo-hookean stress is calculated")
 		{
-			auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
-			auto const J = Tetrahedron::J(F);
-			auto const & b = Tetrahedron::b(F);
+			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
+			auto const J = Derivatives::J(F);
+			auto const & b = Derivatives::b(F);
 
-			auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+			auto const & sigma = Derivatives::sigma(J, b, lambda, mu);
 
 			THEN("stress is zero")
 			{
@@ -742,9 +742,9 @@ SCENARIO("Internal equivalent nodal force")
 
 			AND_WHEN("internal equivalent nodal forces are calculated")
 			{
-				auto const v = Tetrahedron::V(x);
-				auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
-				auto const & T = Tetrahedron::T(dN_by_dx, v, sigma);
+				auto const v = Derivatives::V(x);
+				auto const & dN_by_dx = Derivatives::dN_by_dX(x);
+				auto const & T = Derivatives::T(dN_by_dx, v, sigma);
 
 				THEN("nodal forces are zero")
 				{
@@ -767,11 +767,11 @@ SCENARIO("Internal equivalent nodal force")
 
 			AND_WHEN("neo-hookean stress is calculated")
 			{
-				auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
-				auto const J = Tetrahedron::J(F);
-				auto const & b = Tetrahedron::b(F);
+				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
+				auto const J = Derivatives::J(F);
+				auto const & b = Derivatives::b(F);
 
-				auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+				auto const & sigma = Derivatives::sigma(J, b, lambda, mu);
 
 				THEN("stress is correct")
 				{
@@ -786,9 +786,9 @@ SCENARIO("Internal equivalent nodal force")
 
 				AND_WHEN("internal equivalent nodal forces are calculated")
 				{
-					auto const v = Tetrahedron::V(x);
-					auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
-					auto const & T = Tetrahedron::T(dN_by_dx, v, sigma);
+					auto const v = Derivatives::V(x);
+					auto const & dN_by_dx = Derivatives::dN_by_dX(x);
+					auto const & T = Derivatives::T(dN_by_dx, v, sigma);
 
 					THEN("nodal forces are correct")
 					{
@@ -826,18 +826,18 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 		{
 			auto [X, x] = load_tet(file_name_one);
 
-			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
-			auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
-			auto const J = Tetrahedron::J(F);
-			auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
-			auto const v = Tetrahedron::V(x);
+			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
+			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
+			auto const J = Derivatives::J(F);
+			auto const & dN_by_dx = Derivatives::dN_by_dX(x);
+			auto const v = Derivatives::V(x);
 
 			INFO("Material vertices:")
 			INFO(X)
 
 			WHEN("neo-hookian elasticity tensor is calculated")
 			{
-				auto const & c = Tetrahedron::c(J, lambda, mu);
+				auto const & c = Derivatives::c(J, lambda, mu);
 
 				THEN("it has expected values")
 				{
@@ -861,7 +861,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 				}
 				AND_WHEN("constitutive component of tangent tensor is calculated")
 				{
-					auto const & Kc = Tetrahedron::Kc(dN_by_dx, v, c);
+					auto const & Kc = Derivatives::Kc(dN_by_dx, v, c);
 
 					THEN("it has expected values")
 					{
@@ -891,12 +891,12 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 			WHEN("neo-hookian Cauchy stress tensor is calculated")
 			{
-				auto const & b = Tetrahedron::b(F);
-				auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+				auto const & b = Derivatives::b(F);
+				auto const & sigma = Derivatives::sigma(J, b, lambda, mu);
 
 				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
 				{
-					Element::Stiffness const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
+					Element::Stiffness const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
 
 					THEN("stress component is zero")
 					{
@@ -913,22 +913,22 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 			auto [X, x] = load_tet(file_name_one);
 			x(0, 0) += 0.5;
 
-			auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
-			auto const & F = Tetrahedron::dx_by_dX(x, dN_by_dX);
-			auto const J = Tetrahedron::J(F);
-			auto const & dN_by_dx = Tetrahedron::dN_by_dX(x);
-			auto const v = Tetrahedron::V(x);
+			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
+			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
+			auto const J = Derivatives::J(F);
+			auto const & dN_by_dx = Derivatives::dN_by_dX(x);
+			auto const v = Derivatives::V(x);
 
 			INFO("Material vertices:")
 			INFO(X)
 			INFO("Material volume:")
-			INFO(Tetrahedron::V(X))
+			INFO(Derivatives::V(X))
 			INFO("Spatial vertices:")
 			INFO(x)
 
 			WHEN("neo-hookian elasticity tensor is calculated")
 			{
-				auto const & c = Tetrahedron::c(J, lambda, mu);
+				auto const & c = Derivatives::c(J, lambda, mu);
 
 				THEN("it has expected values")
 				{
@@ -953,7 +953,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 				}
 				AND_WHEN("constitutive component of tangent tensor is calculated")
 				{
-					auto const & Kc = Tetrahedron::Kc(dN_by_dx, v, c);
+					auto const & Kc = Derivatives::Kc(dN_by_dx, v, c);
 
 					THEN("it has expected values")
 					{
@@ -984,8 +984,8 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 			WHEN("neo-hookian Cauchy stress tensor is calculated")
 			{
-				auto const & b = Tetrahedron::b(F);
-				auto const & sigma = Tetrahedron::sigma(J, b, lambda, mu);
+				auto const & b = Derivatives::b(F);
+				auto const & sigma = Derivatives::sigma(J, b, lambda, mu);
 
 				THEN("stress is correct")
 				{
@@ -1000,7 +1000,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 				AND_WHEN("initial stress component of tangent stiffness matrix is calculated")
 				{
-					Element::Stiffness const & Ks = Tetrahedron::Ks(dN_by_dx, v, sigma);
+					Element::Stiffness const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
 
 					THEN("stress component is correct")
 					{
@@ -1046,7 +1046,7 @@ SCENARIO("Solution of a single element")
 
 		auto [X, x] = load_tet(file_name_one);
 		x(0, 0) += 0.5;
-		auto const & dN_by_dX = Tetrahedron::dN_by_dX(X);
+		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
@@ -1060,7 +1060,7 @@ SCENARIO("Solution of a single element")
 
 			for (int i = 0; i < 7; i++)
 			{
-				auto [K, T] = Tetrahedron::KT(x, dN_by_dX, lambda, mu);
+				auto [K, T] = Derivatives::KT(x, dN_by_dX, lambda, mu);
 
 				using Displacements = Eigen::Matrix<double, 12, 1>;
 				Eigen::Map<Displacements> B{T.data(), 12, 1};
@@ -1080,7 +1080,7 @@ SCENARIO("Solution of a single element")
 				ss << "K (tensor)" << "\n";
 				ss << K << "\n";
 				ss << "v" << "\n";
-				ss << Tetrahedron::V(x) << "\n";
+				ss << Derivatives::V(x) << "\n";
 				ss << "-T" << "\n";
 				ss << B << "\n";
 				ss << "K" << "\n";
@@ -1098,9 +1098,9 @@ SCENARIO("Solution of a single element")
 
 			THEN("volume returns and strain is zero")
 			{
-				CHECK(Tetrahedron::V(x) == Approx(1.0 / 6));
+				CHECK(Derivatives::V(x) == Approx(1.0 / 6));
 				// clang-format off
-				check_equal(Tetrahedron::b(Tetrahedron::dx_by_dX(x, dN_by_dX)), "b", {
+				check_equal(Derivatives::b(Derivatives::dx_by_dX(x, dN_by_dX)), "b", {
 					{1, 0, 0},
 					{0, 1, 0},
 					{0, 0, 1}
@@ -1181,15 +1181,15 @@ SCENARIO("Mesh attributes")
 					check_equal(
 						dn_by_dX_attribs[*itvtxh],
 						std::string{"dN_by_dX "} + std::to_string(itvtxh),
-						Tetrahedron::dN_by_dX(
-							  Tetrahedron::X(mesh, Tetrahedron::vtxhs(mesh, *itvtxh))),
+						Derivatives::dN_by_dX(
+							Derivatives::X(mesh, Derivatives::vtxhs(mesh, *itvtxh))),
 						"dN_by_dX");
 					itvtxh++;
 					check_equal(
 						dn_by_dX_attribs[*itvtxh],
 						std::string{"dN_by_dX "} + std::to_string(itvtxh),
-						Tetrahedron::dN_by_dX(
-							Tetrahedron::X(mesh, Tetrahedron::vtxhs(mesh, *itvtxh))),
+						Derivatives::dN_by_dX(
+							Derivatives::X(mesh, Derivatives::vtxhs(mesh, *itvtxh))),
 						"dN_by_dX");
 				}
 			}

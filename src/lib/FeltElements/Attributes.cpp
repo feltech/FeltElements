@@ -39,13 +39,13 @@ MaterialShapeDerivative::MaterialShapeDerivative(Mesh& mesh, VertexHandles const
 	: ThisBase{mesh}
 {
 	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
-		(*this)[*itcellh] =Tetrahedron::dN_by_dX(Tetrahedron::X(mesh, vtxhs[*itcellh]));
+		(*this)[*itcellh] = Derivatives::dN_by_dX(Derivatives::X(mesh, vtxhs[*itcellh]));
 }
 
 // clang-format off
 IsoCoordDerivative const
 MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
-	internal::to_tensor(Tetrahedron::IsoCoordDerivativeMatrix{(Eigen::Matrix4d{} <<
+	internal::to_tensor(Derivatives::IsoCoordDerivativeMatrix{(Eigen::Matrix4d{} <<
 		// (1, L) = A * N
 		1, 1, 1, 1,
 		0, 1, 0, 0,
@@ -54,7 +54,7 @@ MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
 
 ShapeDerivative const
 MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
-	internal::to_tensor(Tetrahedron::ShapeDerivativeMatrix{(Eigen::Matrix4d{} <<
+	internal::to_tensor(Derivatives::ShapeDerivativeMatrix{(Eigen::Matrix4d{} <<
 		1, 1, 1, 1,
 		0, 1, 0, 0,
 		0, 0, 1, 0,

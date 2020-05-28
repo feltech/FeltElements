@@ -8,7 +8,7 @@
 
 namespace FeltElements
 {
-class Tetrahedron
+class Derivatives
 {
 public:
 	using Vtxh = OpenVolumeMesh::VertexHandle;
