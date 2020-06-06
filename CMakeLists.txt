@@ -4,7 +4,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 project(FeltElements)
 # Enable testing
-include(CTest)
+set(BUILD_TESTING)
+enable_testing()
 
 ###################################
 # Fetch conan CMake integration
@@ -22,7 +23,11 @@ conan_check(REQUIRED)
 # Initialise targets
 
 # Add extra warnings.
-add_compile_options(-Wall -Wextra -Wpedantic)
+add_compile_options(
+	# Extra warnings
+	-Wall -Wextra -Wpedantic
+	# Enable SSE etc
+	-march=native)
 # Glob lib sources
 file(GLOB_RECURSE _src_lib src/lib/*.cpp)
 # Global compiler definitions
@@ -44,7 +49,7 @@ conan_cmake_run(
 )
 conan_load_buildinfo()
 # Library include directories
-include_directories(src/lib vendor ${CONAN_INCLUDE_DIRS})
+include_directories(src/lib SYSTEM vendor/Fastor ${CONAN_INCLUDE_DIRS})
 
 ###################################
 # Configure tests
@@ -59,14 +64,15 @@ target_sources(tests PRIVATE ${_src_test} ${_src_lib})
 conan_target_link_libraries(tests)
 # Add sanitizer and coverage build options.
 target_compile_options(
-	tests PRIVATE -fsanitize=thread -fsanitize-address-use-after-scope --coverage)
+	tests PRIVATE -fsanitize=address --coverage)
 target_link_options(
-	tests PRIVATE -fsanitize=thread -fsanitize-address-use-after-scope --coverage)
+	tests PRIVATE -fsanitize=address --coverage)
 get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests
 catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")
 # Copy test resources
 set(_resources_dir ${CMAKE_CURRENT_SOURCE_DIR}/src/test/resources)
+# Gather all resources required for tests (i.e. mesh files).
 file(
 	GLOB_RECURSE _resources LIST_DIRECTORIES false RELATIVE ${_resources_dir}
 	CONFIGURE_DEPENDS ${_resources_dir}/*
@@ -77,4 +83,6 @@ foreach (_resource ${_resources})
 	configure_file(
 		${_resources_dir}/${_resource} ${_test_runtime_dir}/resources/${_resource} COPYONLY)
 endforeach()
+# Make directory to store artefacts created in tests for further debugging.
+file(MAKE_DIRECTORY ${_test_runtime_dir}/artefacts)
 

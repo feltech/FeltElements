@@ -11,16 +11,16 @@ SpatialPosition::SpatialPosition(Mesh& mesh) : ThisBase{mesh}
 	for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 	{
 		using OvmVtx = std::decay<decltype(mesh.vertex(*itvtxh))>::type;
-		using OvmVtxTensor = Eigen::Tensor<OvmVtx::value_type const, 1>;
-		OvmVtx const& vtx = mesh.vertex(*itvtxh);
-		(*this)[*itvtxh] = Eigen::TensorMap<OvmVtxTensor>{vtx.data(), OvmVtx::size()};
+		OvmVtx vtx = mesh.vertex(*itvtxh);
+		Data & position = (*this)[*itvtxh];
+		position = Tensor::BaseMap<OvmVtx::value_type, OvmVtx::size()>{vtx.data()};
 	}
 }
 
 Force::Force(Mesh& mesh) : ThisBase{mesh}
 {
 	for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-		(*this)[*itvtxh].setZero();
+		(*this)[*itvtxh] = 0;
 }
 }
 
@@ -45,20 +45,19 @@ MaterialShapeDerivative::MaterialShapeDerivative(Mesh& mesh, VertexHandles const
 // clang-format off
 IsoCoordDerivative const
 MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
-	internal::to_tensor(Derivatives::IsoCoordDerivativeMatrix{(Eigen::Matrix4d{} <<
-		// (1, L) = A * N
-		1, 1, 1, 1,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1).finished().block<3, 4>(1, 0)});
+	Tensor::Matrix<4, 4>{
+		{1, 1, 1, 1},
+		{0, 1, 0, 0},
+		{0, 0, 1, 0},
+		{0, 0, 0, 1}}(Fastor::fseq<1, 4>(), Fastor::all);
 
 ShapeDerivative const
 MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
-	internal::to_tensor(Derivatives::ShapeDerivativeMatrix{(Eigen::Matrix4d{} <<
-		1, 1, 1, 1,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1).finished().inverse().block<4, 3>(0, 1)});
+	Fastor::evaluate(Fastor::inv(Tensor::Matrix<4, 4>{
+		{1, 1, 1, 1},
+		{0, 1, 0, 0},
+		{0, 0, 1, 0},
+		{0, 0, 0, 1}}))(Fastor::all, Fastor::fseq<1, 4>());
 // clang-format on
 
 } // namespace FeltElements::Attribute

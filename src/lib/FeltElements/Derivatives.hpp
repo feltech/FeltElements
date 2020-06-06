@@ -63,6 +63,8 @@ public:
 		Element::ShapeCartesianTransform const& N_to_x);
 
 	[[nodiscard]] static Element::ShapeDerivative dN_by_dX(
+		Element::Gradient const& dL_by_dx);
+	[[nodiscard]] static Element::ShapeDerivative dN_by_dX(
 		Element::ShapeCartesianTransform const& N_to_x);
 	[[nodiscard]] static Element::ShapeDerivative dN_by_dX(
 		Node::Positions const& X);
@@ -74,7 +76,7 @@ public:
 		Mesh const& mesh, Vtxhs const& vtxhs);
 	[[nodiscard]] static SpatialCoordProp x(Mesh& mesh);
 	[[nodiscard]] static Node::Positions x(
-		Vtxhs const& vtxhs, SpatialCoordProp const& x_prop);
+		Vtxhs const& vtxhs, SpatialCoordProp const & x_prop);
 	[[nodiscard]] static Vtxhs vtxhs(
 		Mesh const& mesh,
 		OpenVolumeMesh::CellHandle const& cellh);

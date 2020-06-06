@@ -1,7 +1,6 @@
 #include <OpenVolumeMesh/Core/PropertyDefines.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <string_view>
-#include <unsupported/Eigen/CXX11/Tensor>
 
 #include "FeltElements/Derivatives.hpp"
 #include "FeltElements/Typedefs.hpp"
@@ -42,12 +41,12 @@ protected:
 
 	explicit Base(Prop&& prop) : m_prop{prop} {}
 
-	Data const& operator[](Handle const& handle) const
+	Data & operator[](Handle const & handle)
 	{
 		return m_prop[handle];
 	}
 
-	Data& operator[](Handle const& handle)
+	Data const & operator[](Handle const & handle) const
 	{
 		return m_prop[handle];
 	}

@@ -3,11 +3,10 @@
 #include <FeltElements/TetGenIO.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <ostream>
-#include <range/v3/action/transform.hpp>
-#include <range/v3/to_container.hpp>
-#include <range/v3/view/join.hpp>
-#include <range/v3/view/transform.hpp>
+#include <range/v3/all.hpp>
 #include <unsupported/Eigen/CXX11/Tensor>
+#include <Fastor/Fastor.h>
+#include <fmt/format.h>
 
 namespace
 {
@@ -28,9 +27,7 @@ constexpr auto dimensions()
 
 // std::to_string has non-configurable precision of too many decimal places.
 auto const to_string = [](auto const f) {
-	std::stringstream ss;
-	ss << f;
-	return ss.str();
+	return fmt::format("{:f}", f);
 };
 
 auto const to_int = [](auto const f) {
@@ -38,39 +35,35 @@ auto const to_int = [](auto const f) {
 };
 
 template <class Tensor, Eigen::Index N>
-using ostream_if = std::enable_if_t<Tensor::NumIndices == N, std::ostream &>;
-
-template <class Tensor>
-using InitList = typename Eigen::internal::Initializer<Tensor, Tensor::NumIndices>::InitList;
+using ostream_if = std::enable_if_t<Tensor::dimension_t::value == N, std::ostream &>;
 }
 
 auto equal = [](auto const & a, auto const & b)
 {
-  Eigen::Tensor<bool, 0> comparison = ((a - b).abs() < 0.00001).all();
-  return comparison(0);
+  return Fastor::all_of(a - b < 0.00001);
 };
 
-template <class Tensor>
-ostream_if<Tensor, 4> operator<< (std::ostream& os, Tensor const& value)
+template <std::size_t dim0, std::size_t dim1, std::size_t dim2, std::size_t dim3>
+std::ostream & operator<< (std::ostream& os, FeltElements::Tensor::Multi<dim0,dim1,dim2,dim3> value)
 {
-	using Index = typename Tensor::Index;
+	using namespace FeltElements::Tensor;
 	using boost::algorithm::join;
 
-	constexpr auto dims{dimensions<Tensor>()};
-
-	std::array<std::string, dims[0]> is{};
-	std::array<std::string, dims[1]> js{};
-	std::array<std::string, dims[2]> ks{};
-	for (Index i = 0; i < dims[0]; i++)
+	std::array<std::string, value.dimension(0)> is{};
+	std::array<std::string, value.dimension(1)> js{};
+	std::array<std::string, value.dimension(2)> ks{};
+	for (Index i = 0; i < value.dimension(0); i++)
 	{
-		for (Index j = 0; j < dims[1]; j++)
+		for (Index j = 0; j < value.dimension(1); j++)
 		{
-			for (Index k = 0; k < dims[2]; k++)
+			for (Index k = 0; k < value.dimension(2); k++)
 			{
-				Eigen::Tensor<FeltElements::Scalar, 1> const & vec =
-					value.chip(i, 0).chip(j, 0).chip(k, 0);
+				using FeltElements::Tensor::Func::all;
+				using Vec = Vector<value.dimension(3)>;
+				Vec const & vec = value(i, j, k, all);
+
 				ks[k] = join(
-					ranges::subrange{vec.data(), vec.data() + vec.size()} |
+					ranges::subrange{vec.data(), vec.data() + Vec::size()} |
 						ranges::views::transform(to_string), ", ");
 			}
 			js[j] = join(ks, "}, {");
@@ -81,20 +74,20 @@ ostream_if<Tensor, 4> operator<< (std::ostream& os, Tensor const& value)
 	return os;
 }
 
-template <class Tensor>
-ostream_if<Tensor, 2> operator<< (std::ostream& os, Tensor const& value)
+template <std::size_t dim0, std::size_t dim1>
+std::ostream & operator<< (std::ostream& os, FeltElements::Tensor::Matrix<dim0,dim1> value)
 {
-	using Index = typename Tensor::Index;
+	using namespace FeltElements::Tensor;
 	using boost::algorithm::join;
 
-	constexpr auto dims{dimensions<Tensor>()};
-
-	std::array<std::string, dims[0]> is{};
-	for (Index i = 0; i < dims[0]; i++)
+	std::array<std::string, value.dimension(0)> is{};
+	for (Index i = 0; i < value.dimension(0); i++)
 	{
-		Eigen::Tensor<FeltElements::Scalar, 1> const & vec = value.chip(i, 0);
+		using FeltElements::Tensor::Func::all;
+		using Vec = Vector<value.dimension(1)>;
+		Vec const & vec = value(i, all);
 		is[i] = join(
-			ranges::subrange{vec.data(), vec.data() + vec.size()} |
+			ranges::subrange{vec.data(), vec.data() + Vec::size()} |
 				ranges::views::transform(to_string), ", ");
 	}
 	os << "{\n\t{" << join(is, "},\n\t{") << "}\n}";
@@ -114,10 +107,8 @@ inline std::ostream& operator<< (
 #include <catch2/catch.hpp>	 // Must come after `operator<<` definitions.
 
 template <class Tensor>
-void check_equal( Tensor const & in, std::string_view const desc, InitList<Tensor> const values)
+void check_equal( Tensor const & in, std::string_view const desc, Tensor const & expected)
 {
-	Tensor expected{};
-	expected.setValues(values);
 	INFO(desc)
 	INFO(in)
 	CHECK(equal(in, expected));
