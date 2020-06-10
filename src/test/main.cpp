@@ -1053,17 +1053,21 @@ SCENARIO("Solution of a single element")
 	GIVEN("tangent stiffness and equivalent node force tensors")
 	{
 		using namespace FeltElements;
+		using Tensor::Func::all;
+		using Tensor::Func::last;
+		using Tensor::Func::seq;
+
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
+		double  mu = 0.4; // Shear modulus: 0.0003 - 0.02
 		double const E = 1;	   // Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		mu = lambda = 4;
 
 		auto mesh = load_ovm_mesh(file_name_one);
 		auto const & vtxhs = Derivatives::vtxhs(mesh, 0);
 		auto const & X = Derivatives::X(mesh, vtxhs);
 		auto x = Derivatives::x(vtxhs, Derivatives::x(mesh));
-		x(0, 0) += 0.5;
 		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 
 		std::stringstream s;
@@ -1072,63 +1076,25 @@ SCENARIO("Solution of a single element")
 		INFO("Material vertices:")
 		INFO(X)
 
+		// Push top-most node to the right slightly.
+		x(3, 0) += 0.5;
+
+		// Construct gravity force tensor.
+		Scalar constexpr m = 0.1;
+		Node::Forces G = 0;
+		G(all, 1) = -9.81 * m;
+		INFO("G")
+		INFO(G)
+
 		WHEN("displacement is solved")
 		{
-			std::stringstream ss;
+			std::size_t step;
+			std::size_t constexpr max_steps = 1000;
+			std::string log;
 
-			for (int i = 0; i < 7; i++)
+			for (step = 0; step < max_steps; step++)
 			{
-				Scalar const v = Derivatives::V(x);
-
-				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
-				auto const & b = Derivatives::b(F);
-				Scalar const J = Derivatives::J(F);
-
-				auto const & dx_by_dL = Derivatives::dX_by_dL(x);
-				Element::Gradient const & dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
-				auto const & dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
-
-				auto const & sigma = Derivatives::sigma(J, b, lambda, mu); // Evaluate since used twice?
-
-				auto const & c = Derivatives::c(J, lambda, mu);
-				auto const & Kc = Derivatives::Kc(dN_by_dx, v, c);
-
-				auto const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
-
-				Element::Stiffness K = Kc + Ks;
-//				Element::Stiffness K = Ks;
-				Node::Forces T = Derivatives::T(dN_by_dx, v, sigma);
-
-				using Displacements = Eigen::Matrix<double, 12, 1>;
-				Eigen::Map<Displacements> B{T.data(), 12, 1};
-				B = -B;
-
-				Eigen::Map<
-					Eigen::Matrix<double, 12, 12>> const
-					A{K.data(), 12, 12};
-
-				Displacements u = A.colPivHouseholderQr().solve(B);
-
-				FeltElements::Node::Positions delta =
-					Tensor::Map<4, 3>{u.data()};
-
-				ss << ">>>>>>>>>>>>>>>>>>>>>>> Iteration " << i << "\n\n";
-				ss << "K (tensor)" << "\n";
-				ss << K << "\n";
-				ss << "v" << "\n";
-				ss << Derivatives::V(x) << "\n";
-				ss << "-T" << "\n";
-				ss << B << "\n";
-				ss << "K" << "\n";
-				ss << A << "\n";
-				ss << "u" << "\n";
-				ss << u << "\n";
-				ss << "x" << "\n";
-				ss << x << "\n";
-				ss << "delta" << "\n";
-				ss << delta << "\n";
-
-				x += delta;
+				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<\n", step);
 
 				for (auto node_idx : ranges::views::ints(0ul, X.dimension(0)))
 				{
@@ -1137,26 +1103,80 @@ SCENARIO("Solution of a single element")
 					mesh.set_vertex(vtxhs[node_idx], mesh_vtx);
 				}
 				OpenVolumeMesh::IO::FileManager{}.writeFile(
-					fmt::format("artefacts/single_tet_solve.{}.ovm", i), mesh);
+					fmt::format("artefacts/single_tet_solve.{}.ovm", step), mesh);
+
+				log += fmt::format("\nx\n{}", x);
+
+				Scalar const v = Derivatives::V(x);
+				log += fmt::format("\nv = {}", v);
+
+				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
+				auto const FFt = Derivatives::b(F);
+				Scalar const J = Derivatives::J(F);
+
+				auto const & dx_by_dL = Derivatives::dX_by_dL(x);
+				auto const & dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
+				auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
+
+				auto const & sigma = Derivatives::sigma(J, FFt, lambda, mu);
+
+				auto const & c = Derivatives::c(J, lambda, mu);
+				Node::Forces T = Derivatives::T(dN_by_dx, v, sigma);
+//				T -= G;
+				T(seq(0, 3), seq(0, 3)) = 0;
+				log += fmt::format("\nT (constrained)\n{}", T);
+
+				auto const & Kc = Derivatives::Kc(dN_by_dx, v, c);
+				auto const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
+				Element::Stiffness K = Kc + Ks;
+				// Boundary condition
+				K(0, 0, 0, 0) = 10e4;
+				K(0, 1, 0, 1) = 10e4;
+				K(0, 2, 0, 2) = 10e4;
+				K(1, 0, 1, 0) = 10e4;
+				K(1, 1, 1, 1) = 10e4;
+				K(1, 2, 1, 2) = 10e4;
+				K(2, 0, 2, 0) = 10e4;
+				K(2, 1, 2, 1) = 10e4;
+				K(2, 2, 2, 2) = 10e4;
+				log += fmt::format("\nK (constrained)\n{}", K);
+
+				using Displacements = Eigen::Matrix<double, 12, 1>;
+				Eigen::Map<Displacements> T_vec{T.data(), 12, 1};
+
+				using StiffnessMatrix = Eigen::Matrix<Scalar, 12, 12>;
+				StiffnessMatrix K_mat = Eigen::Map<StiffnessMatrix>{K.data(), 12, 12};
+				log += fmt::format("\nK (matrix)\n{}", K_mat);
+				REQUIRE(K_mat.determinant() != Approx(0).margin(0.00001));
+
+				StiffnessMatrix K_mat_inv = K_mat.inverse();
+				Displacements u_vec = K_mat_inv * (-T_vec);
+				log += fmt::format("\nu (vector)\n{}", u_vec);
+
+				Tensor::Map<4, 3> u{u_vec.data()};
+				// Boundary condition.
+				u(seq(0, 3), all) = 0;
+				log += fmt::format("\nu\n{}", u);
+
+				x += u;
+
+				if (norm(u) < 0.00001)
+					break;
 			}
-			INFO(ss.str())
+
+			INFO(log)
 
 			THEN("volume returns and strain is zero")
 			{
+				CHECK(step < max_steps);
 				CHECK(Derivatives::V(x) == Approx(1.0 / 6));
 				// clang-format off
-				check_equal(Derivatives::b(Derivatives::dx_by_dX(x, dN_by_dX)), "b", {
-					{1, 0, 0},
-					{0, 1, 0},
-					{0, 0, 1}
-				});
 				check_equal(x, "x", {
-					{0.293205, -0.041593, 0.039929},
-					{-0.008307, -0.089325, 0.992196},
-					{1.197739, 0.259919, 0.341441},
-					{-0.008307, 0.910675, -0.007804}
+					{0.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 1.000000},
+					{1.000000, 0.000000, 0.000000},
+					{0.000000, 1.000000, 0.000000}
 				});
-
 				// clang-format on
 			}
 		}

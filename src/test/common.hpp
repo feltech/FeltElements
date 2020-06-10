@@ -7,6 +7,7 @@
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <Fastor/Fastor.h>
 #include <fmt/format.h>
+#include <fmt/ostream.h>
 
 namespace
 {
