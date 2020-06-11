@@ -1080,11 +1080,11 @@ SCENARIO("Solution of a single element")
 		x(3, 0) += 0.5;
 
 		// Construct gravity force tensor.
-		Scalar constexpr m = 0.1;
-		Node::Forces G = 0;
-		G(all, 1) = -9.81 * m;
-		INFO("G")
-		INFO(G)
+//		Scalar constexpr m = 0.1;
+//		Node::Forces G = 0;
+//		G(all, 1) = -9.81 * m;
+//		INFO("G")
+//		INFO(G)
 
 		WHEN("displacement is solved")
 		{
@@ -1135,10 +1135,10 @@ SCENARIO("Solution of a single element")
 				K(0, 2, 0, 2) = 10e4;
 				K(1, 0, 1, 0) = 10e4;
 				K(1, 1, 1, 1) = 10e4;
-				K(1, 2, 1, 2) = 10e4;
-				K(2, 0, 2, 0) = 10e4;
+//				K(1, 2, 1, 2) = 10e4;
+//				K(2, 0, 2, 0) = 10e4;
 				K(2, 1, 2, 1) = 10e4;
-				K(2, 2, 2, 2) = 10e4;
+//				K(2, 2, 2, 2) = 10e4;
 				log += fmt::format("\nK (constrained)\n{}", K);
 
 				using Displacements = Eigen::Matrix<double, 12, 1>;
@@ -1149,13 +1149,121 @@ SCENARIO("Solution of a single element")
 				log += fmt::format("\nK (matrix)\n{}", K_mat);
 				REQUIRE(K_mat.determinant() != Approx(0).margin(0.00001));
 
-				StiffnessMatrix K_mat_inv = K_mat.inverse();
-				Displacements u_vec = K_mat_inv * (-T_vec);
+				Displacements u_vec = K_mat.ldlt().solve(-T_vec);
 				log += fmt::format("\nu (vector)\n{}", u_vec);
 
 				Tensor::Map<4, 3> u{u_vec.data()};
 				// Boundary condition.
-				u(seq(0, 3), all) = 0;
+				u(0, all) = 0;
+				u(1, 0) = 0;
+				u(1, 1) = 0;
+				u(2, 1) = 0;
+				log += fmt::format("\nu\n{}", u);
+
+				x += u;
+
+				if (norm(u) < 0.00001)
+					break;
+			}
+
+			INFO(log)
+
+			THEN("volume returns and strain is zero")
+			{
+				CHECK(step < max_steps);
+				CHECK(Derivatives::V(x) == Approx(1.0 / 6));
+				// clang-format off
+				check_equal(x, "x", {
+					{0.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 1.000000},
+					{1.000000, 0.000000, 0.000000},
+					{0.000000, 1.000000, 0.000000}
+				});
+				// clang-format on
+			}
+		} // WHEN("displacement is solved")
+
+		WHEN("displacement is solved Gauss-Seidel style")
+		{
+			std::size_t step;
+			std::size_t constexpr max_steps = 10;
+			std::string log;
+
+			for (step = 0; step < max_steps; step++)
+			{
+				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<\n", step);
+
+				for (auto node_idx : ranges::views::ints(0ul, X.dimension(0)))
+				{
+					using OvmVec = decltype(mesh)::PointT;
+					OvmVec mesh_vtx{x(node_idx, 0), x(node_idx, 1), x(node_idx, 2)};
+					mesh.set_vertex(vtxhs[node_idx], mesh_vtx);
+				}
+				OpenVolumeMesh::IO::FileManager{}.writeFile(
+					fmt::format("artefacts/single_tet_solve.{}.ovm", step), mesh);
+
+				log += fmt::format("\nx\n{}", x);
+
+				Scalar const v = Derivatives::V(x);
+				log += fmt::format("\nv = {}", v);
+
+				auto const &F = Derivatives::dx_by_dX(x, dN_by_dX);
+				auto const FFt = Derivatives::b(F);
+				Scalar const J = Derivatives::J(F);
+
+				auto const &dx_by_dL = Derivatives::dX_by_dL(x);
+				auto const &dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
+				auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
+
+				auto const &sigma = Derivatives::sigma(J, FFt, lambda, mu);
+
+				auto const &c = Derivatives::c(J, lambda, mu);
+				Node::Forces T = Derivatives::T(dN_by_dx, v, sigma);
+				//				T -= G;
+				T(seq(0, 3), seq(0, 3)) = 0;
+				log += fmt::format("\nT (constrained)\n{}", T);
+
+				auto const &Kc = Derivatives::Kc(dN_by_dx, v, c);
+				auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
+				Element::Stiffness K = Kc + Ks;
+				// Boundary condition
+				K(0, 0, 0, 0) = 10e4;
+				K(0, 1, 0, 1) = 10e4;
+				K(0, 2, 0, 2) = 10e4;
+				K(1, 0, 1, 0) = 10e4;
+				K(1, 1, 1, 1) = 10e4;
+				//				K(1, 2, 1, 2) = 10e4;
+				//				K(2, 0, 2, 0) = 10e4;
+				K(2, 1, 2, 1) = 10e4;
+				//				K(2, 2, 2, 2) = 10e4;
+				log += fmt::format("\nK (constrained)\n{}", K);
+
+				Node::Positions u = 0;
+
+				for (Tensor::Index a = 0; a < u.dimension(0); a++)
+				{
+					using namespace Tensor;
+					using Func::einsum;
+					auto u_a = u(a, all);
+//					auto const & T_a = T(a, all);
+//					auto const & K_a = K(a, all, all, all);
+//					auto const & K_a_a = K(a, all, a, all);
+					Tensor::Map<3> const & T_a{&T(a, 0)};
+					Tensor::Map<3, 4, 3> const & K_a{&K(a, 0, 0, 0)};
+					Tensor::Matrix<3> const & K_a_a = K(a, all, a, all);
+//					Tensor::Vector<3> const & Ku = einsum<Idxs<i, b, j>, Idxs<b, j>>(K_a, u);
+//					Tensor::Vector<3> const & TKu = T_a - Ku;
+//					Tensor::Matrix<3> const & invKa = inv(K_a_a);
+//					Tensor::Vector<3> delta = invKa % TKu;
+//					u_a += delta;
+					u_a += inv(K_a_a) % (-T_a - einsum<Idxs<i, b, j>, Idxs<b, j>>(K_a, u));
+				}
+
+				// Boundary condition.
+				u(0, all) = 0;
+				u(1, 0) = 0;
+				u(1, 1) = 0;
+				u(2, 1) = 0;
 				log += fmt::format("\nu\n{}", u);
 
 				x += u;
