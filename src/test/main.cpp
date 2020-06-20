@@ -1274,7 +1274,7 @@ SCENARIO("Solution of a single element")
 
 			INFO(log)
 
-			THEN("volume returns and strain is zero")
+			THEN("solution converges to material configuration")
 			{
 				CHECK(step < max_steps);
 				CHECK(Derivatives::V(x) == Approx(1.0 / 6));
@@ -1297,55 +1297,56 @@ SCENARIO("Mesh attributes")
 	{
 		auto mesh = load_ovm_mesh(file_name_two);
 
-		WHEN("nodal force attributes are constructed")
+		WHEN("element nodal force attributes are constructed")
 		{
-			Node::Attribute::Force const attribs{mesh};
+			Element::Attribute::NodalForces const attrib_forces{mesh};
 
 			THEN("properties are default initialised")
 			{
-				Tensor::Vector<3> zero = 0;
-				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-					check_equal(attribs[*itvtxh], "force", zero, "zero");
+				auto itcellh = mesh.cells_begin();
+				Node::Forces T = attrib_forces[*itcellh];
+				CHECK(Tensor::Func::all_of(T == 0));
+				itcellh++;
+				T = attrib_forces[*itcellh];
+				CHECK(Tensor::Func::all_of(T == 0));
 			}
 		}
 
-		WHEN("spatial position attributes are constructed")
+		WHEN("element stiffness attributes are constructed")
 		{
-			Node::Attribute::SpatialPosition const attribs{mesh};
+			Element::Attribute::Stiffness const attrib_stiffness{mesh};
 
-			THEN("attributes are initialised to material position")
+			THEN("properties are default initialised")
 			{
-				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-				{
-					check_equal(
-						attribs[*itvtxh],
-						"x",
-						reinterpret_cast<Node::Pos const &>(mesh.vertex(*itvtxh)),
-						"X");
-				}
+				auto itcellh = mesh.cells_begin();
+				Element::Stiffness K = attrib_stiffness[*itcellh];
+				CHECK(Tensor::Func::all_of(K == 0));
+				itcellh++;
+				K = attrib_stiffness[*itcellh];
+				CHECK(Tensor::Func::all_of(K == 0));
 			}
 		}
 
 		WHEN("element vertex mapping attributes are constructed")
 		{
-			FeltElements::Element::Attribute::VertexHandles const vtxh_attribs{mesh};
+			FeltElements::Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
 
 			THEN("properties are populated")
 			{
 				auto itvtxh = mesh.cells_begin();
 				CHECK(
-					vtxh_attribs[*itvtxh] ==
+					attrib_vtxhs[*itvtxh] ==
 					std::array<OpenVolumeMesh::VertexHandle, 4>{0, 3, 1, 4});
 				itvtxh++;
 				CHECK(
-					vtxh_attribs[*itvtxh] ==
+					attrib_vtxhs[*itvtxh] ==
 					std::array<OpenVolumeMesh::VertexHandle, 4>{2, 0, 1, 4});
 			}
 
 			AND_WHEN("element natural wrt material coords attributes are constructed")
 			{
 				FeltElements::Element::Attribute::MaterialShapeDerivative const dn_by_dX_attribs{
-					mesh, vtxh_attribs};
+					mesh, attrib_vtxhs};
 
 				THEN("properties are populated")
 				{
@@ -1366,5 +1367,280 @@ SCENARIO("Mesh attributes")
 				}
 			}
 		}
+
+		WHEN("spatial position attributes are constructed")
+		{
+			Node::Attribute::SpatialPosition const attrib_x{mesh};
+
+			THEN("attributes are initialised to material position")
+			{
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					check_equal(
+						attrib_x[*itvtxh],
+						"x",
+						reinterpret_cast<Node::Pos const &>(mesh.vertex(*itvtxh)),
+						"X");
+				}
+			}
+
+			AND_WHEN("element nodal spatial position tensor is constructed")
+			{
+				Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+
+				auto itcellh = mesh.cells_begin();
+				Node::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				itcellh++;
+				Node::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+
+				THEN("positions are expected")
+				{
+					// clang-format off
+					check_equal(x1, "x1", {
+						{0.000000, 0.000000, 0.000000},
+						{0.000000, 0.000000, 1.000000},
+						{1.000000, 0.000000, 0.000000},
+						{0.000000, 0.500000, 0.500000}
+					});
+					check_equal(x2, "x2", {
+						{0.000000, 1.000000, 0.000000},
+						{0.000000, 0.000000, 0.000000},
+						{1.000000, 0.000000, 0.000000},
+						{0.000000, 0.500000, 0.500000}
+					});
+					// clang-format on
+				}
+			}
+		}
+	}
+}
+
+#define EIGEN_FASTOR_ALIGN BOOST_PP_CAT(Eigen::Aligned, FASTOR_MEMORY_ALIGNMENT_VALUE)
+template <int rows, int cols>
+using EigenConstTensorMap = Eigen::Map<
+	Eigen::Matrix<Scalar, rows, cols, Eigen::RowMajor> const, EIGEN_FASTOR_ALIGN>;
+
+SCENARIO("Solution of two elements")
+{
+	GIVEN("tangent stiffness and equivalent node force tensors")
+	{
+		using namespace FeltElements;
+		using Tensor::Func::all;
+		using Tensor::Func::last;
+		using Tensor::Func::seq;
+		using OvmVtx = Mesh::PointT;
+		using VerticesMatrix = Eigen::Matrix<
+			Scalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+		using EigenMapOvmVertices = Eigen::Map<VerticesMatrix const>;
+		using EigenMapTensorVertices = Eigen::Map<
+			VerticesMatrix const, Eigen::Unaligned,
+			Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
+		using FixedDOF = Eigen::Vector3d;
+		using FixedDOFs = Eigen::VectorXd;
+
+		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
+		double mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
+		double const E = 1;	 // Young's modulus: 0.001 - 0.05
+		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		mu = lambda = 4;
+
+		auto mesh = load_ovm_mesh(file_name_two);
+
+		Node::Attribute::SpatialPosition attrib_x{mesh};
+		Element::Attribute::VertexHandles const attrib_vtxh{mesh};
+		Element::Attribute::MaterialShapeDerivative const attrib_dN_by_dX{mesh, attrib_vtxh};
+		Element::Attribute::NodalForces attrib_T{mesh};
+		Element::Attribute::Stiffness attrib_K{mesh};
+
+		FixedDOFs fixedDofs{3 * mesh.n_vertices()};
+		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+		{
+			OvmVtx const & vtx = mesh.vertex(*itvtxh);
+			Eigen::Index vtx_idx = int{*itvtxh};
+
+			if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
+				fixedDofs.block<3, 1>(3 * vtx_idx, 0) = FixedDOF{1.0, 1.0, 1.0};
+			else
+				fixedDofs.block<3, 1>(3 * vtx_idx, 0) = FixedDOF{0, 0, 0};
+		}
+
+		auto const material_volume =
+			Derivatives::V(attrib_x.for_element(attrib_vtxh[0])) +
+			Derivatives::V(attrib_x.for_element(attrib_vtxh[1]));
+
+		// Deform vertex.
+		attrib_x[0](0) += 0.5;
+
+		auto const initial_deformed_volume =
+			Derivatives::V(attrib_x.for_element(attrib_vtxh[0])) +
+			Derivatives::V(attrib_x.for_element(attrib_vtxh[1]));
+
+		CAPTURE(lambda, mu, material_volume, initial_deformed_volume);
+
+		auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
+		Eigen::Index constexpr cols = 3;
+
+		INFO("Mesh material vertices")
+		EigenMapOvmVertices mat_vtxs{mesh.vertex(0).data(), rows, cols};
+		INFO(mat_vtxs)
+
+		INFO("Mesh spatial vertices")
+		EigenMapTensorVertices const & mat_x{attrib_x[0].data(), rows, cols};
+		INFO(mat_x)
+
+		WHEN("displacement is solved")
+		{
+			std::size_t step;
+			std::size_t constexpr max_steps = 10;
+			std::string log;
+
+			for (step = 0; step < max_steps; step++)
+			{
+				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<", step);
+
+				for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
+				{
+					log += fmt::format("\n\nElement {}", int{*itcellh});
+
+					auto const &x = attrib_x.for_element(attrib_vtxh[*itcellh]);
+//					log += fmt::format("\nx\n{}", x);
+
+					Scalar const v = Derivatives::V(x);
+					log += fmt::format("\nv = {}", v);
+
+					auto const &dN_by_dX = attrib_dN_by_dX[*itcellh];
+
+					auto const &F = Derivatives::dx_by_dX(x, dN_by_dX);
+					auto const FFt = Derivatives::b(F);
+					Scalar const J = Derivatives::J(F);
+
+					auto const &dx_by_dL = Derivatives::dX_by_dL(x);
+					auto const &dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
+					auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
+
+					auto const &sigma = Derivatives::sigma(J, FFt, lambda, mu);
+
+					auto const &c = Derivatives::c(J, lambda, mu);
+					Node::Forces const & T = Derivatives::T(dN_by_dx, v, sigma);
+					//				T -= G;
+//					log += fmt::format("\nT\n{}", T);
+
+					auto const &Kc = Derivatives::Kc(dN_by_dx, v, c);
+					auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
+					Element::Stiffness const & K = Kc + Ks;
+//					log += fmt::format("\nK\n{}", K);
+
+					attrib_T[*itcellh] = T;
+					attrib_K[*itcellh] = K;
+				}
+
+				static auto constexpr const index_of = [](auto const & haystack, auto && needle) {
+					auto const & it = std::find(
+						haystack.cbegin(), haystack.cend(), std::forward<decltype(needle)>(needle));
+					return std::distance(haystack.cbegin(), it);
+				};
+
+				Eigen::VectorXd mat_T{3 * mesh.n_vertices()};
+				mat_T.setZero();
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					auto const vtx_idx = (*itvtxh).idx();
+					for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
+					{
+						auto const & cell_vtxhs = attrib_vtxh[*itcellh];
+						auto const & cell_vtx_idx = index_of(cell_vtxhs, *itvtxh);
+						auto const & cell_T = attrib_T[*itcellh];
+
+						mat_T.block<3, 1>(3 * vtx_idx, 0) +=
+						    EigenConstTensorMap<4, 3>{cell_T.data()}.block<1, 3>(cell_vtx_idx, 0);
+					}
+				}
+				mat_T.array() *= (Eigen::VectorXd::Ones(fixedDofs.size()) - fixedDofs).array();
+
+				Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
+				mat_K.setZero();
+
+				auto const update_submatrix = [&log, &mat_K, &attrib_K, &attrib_vtxh](
+					auto const vtxh_src, auto const vtxh_dst, auto const cellh)
+				{
+				  auto const & cell_K = attrib_K[cellh];
+				  auto const & cell_vtxhs = attrib_vtxh[cellh];
+				  auto const cell_a = index_of(cell_vtxhs, vtxh_src);
+				  auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
+				  auto const a = vtxh_src.idx();
+				  auto const b = vtxh_dst.idx();
+
+				  Tensor::Matrix<3> const Kab = cell_K(cell_a, all, cell_b, all);
+
+//				  log += fmt::format("\nK_{},{}\n{}", a, b, Kab);
+//				  log += fmt::format("\nK_{},{}\n{} (mapped)", a, b, EigenMap{Kab.data()});
+				  mat_K.block<3, 3>(3 * a, 3 * b) += EigenConstTensorMap<3, 3>{Kab.data()};
+				};
+
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
+					{
+						update_submatrix(*itvtxh, *itvtxh, *itcellh);
+					}
+				}
+				for (auto itheh = mesh.halfedges_begin(); itheh != mesh.halfedges_end(); itheh++)
+				{
+					auto const & halfedge = mesh.halfedge(*itheh);
+					auto const & vtxh_src = halfedge.from_vertex();
+					auto const & vtxh_dst = halfedge.to_vertex();
+					for (auto itcellh = mesh.hec_iter(*itheh); itcellh.valid(); itcellh++)
+					{
+						update_submatrix(vtxh_src, vtxh_dst, *itcellh);
+					}
+				}
+
+//				log += fmt::format("\nT\n{}", mat_T);
+//				log += fmt::format("\nK (unconstrained)\n{}", mat_K);
+				mat_K += 10e5 * fixedDofs.asDiagonal();
+//				log += fmt::format("\nK (constrained)\n{}", mat_K);
+
+				REQUIRE(mat_K.determinant() != Approx(0).margin(0.00001));
+
+				Eigen::VectorXd mat_u{3 * mesh.n_vertices()};
+				mat_u.setZero();
+				mat_u = mat_K.ldlt().solve(-mat_T);
+//				log += fmt::format("\nu (unconstrained)\n{}", mat_u);
+				mat_u.array() *= (Eigen::VectorXd::Ones(fixedDofs.size()) - fixedDofs).array();
+				log += fmt::format("\nu (constrained)\n{}", mat_u);
+
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					auto const vtx_idx = (*itvtxh).idx();
+					attrib_x[*itvtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtx_idx, 0).data()};
+				}
+
+				if (mat_u.lpNorm<Eigen::Infinity>() < 0.00001)
+					break;
+			}
+
+			INFO(log)
+
+			THEN("solution converges to deformed mesh")
+			{
+				CHECK(step < max_steps);
+				// clang-format off
+				check_equal(mat_x, "x", (VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
+					0.500000, 0.000000, 0.000000,
+					1.000000, 0.000000, 0.000000,
+					0.333333, 1.154972, -0.122244,
+					0.000000, 0.000000, 1.000000,
+					0.333333, 0.619084, 0.518097
+				).finished(), "expected");
+				// clang-format on
+
+				auto const total_volume =
+					Derivatives::V(attrib_x.for_element(attrib_vtxh[0])) +
+					Derivatives::V(attrib_x.for_element(attrib_vtxh[1]));
+				CHECK(total_volume == Approx(0.1077625528));
+
+			}
+		} // WHEN("displacement is solved")
 	}
 }

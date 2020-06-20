@@ -17,12 +17,16 @@ SpatialPosition::SpatialPosition(Mesh& mesh) : ThisBase{mesh}
 	}
 }
 
-Force::Force(Mesh& mesh) : ThisBase{mesh}
+Node::Positions SpatialPosition::for_element(Element::Vtxhs const & vtxhs) const
 {
-	for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-		(*this)[*itvtxh] = 0;
+	using Tensor::Func::all;
+	Node::Positions x;
+	for (Tensor::Index node_idx = 0; node_idx < Node::Positions::dimension(0); node_idx++)
+		x(node_idx, all) = m_prop[vtxhs[node_idx]];
+
+	return x;
 }
-}
+} // namespace Node::Attribute
 
 namespace Element::Attribute
 {
@@ -60,5 +64,16 @@ MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
 		{0, 0, 0, 1}}))(Fastor::all, Fastor::fseq<1, 4>());
 // clang-format on
 
+NodalForces::NodalForces(Mesh &mesh) : ThisBase{mesh}
+{
+	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_begin(); itcellh++)
+		(*this)[*itcellh] = 0;
+}
+
+Stiffness::Stiffness(Mesh& mesh) : ThisBase(mesh)
+{
+	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_begin(); itcellh++)
+		(*this)[*itcellh] = 0;
+}
 } // namespace FeltElements::Attribute
 }

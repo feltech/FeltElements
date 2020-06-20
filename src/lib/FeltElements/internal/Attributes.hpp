@@ -14,9 +14,7 @@ namespace internal::Attribute
  */
 
 template <typename T>
-struct always_false : std::false_type
-{
-};
+struct always_false : std::false_type {};
 template <class Derived>
 struct Traits
 {
@@ -101,12 +99,13 @@ protected:
 namespace Node::Attribute
 {
 class SpatialPosition;
-class Force;
 }  // namespace Node::Attribute
 namespace Element::Attribute
 {
 class VertexHandles;
 class MaterialShapeDerivative;
+class NodalForces;
+class Stiffness;
 }  // namespace Element::Attribute
 
 /*
@@ -122,18 +121,25 @@ struct Traits<SpatialPosition> : public VertexTraits<Node::Pos>
 	static constexpr std::string_view prop_name = "spatial_position";
 };
 
+using namespace Element::Attribute;
 template <>
-struct Traits<Force> : public VertexTraits<Node::Force>
+struct Traits<VertexHandles> : public CellTraits<Element::Vtxhs>
 {
-	static constexpr std::string_view prop_name = "force";
+	static constexpr std::string_view prop_name = "vertices";
 };
 
 using namespace Element::Attribute;
 template <>
-struct Traits<VertexHandles>
-	: public CellTraits<std::array<OpenVolumeMesh::VertexHandle, Node::count>>
+struct Traits<NodalForces> : public CellTraits<Node::Forces>
 {
-	static constexpr std::string_view prop_name = "vertices";
+	static constexpr std::string_view prop_name = "nodal_forces";
+};
+
+using namespace Element::Attribute;
+template <>
+struct Traits<Stiffness> : public CellTraits<Element::Stiffness>
+{
+	static constexpr std::string_view prop_name = "stiffness";
 };
 
 template <>

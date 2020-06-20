@@ -9,6 +9,7 @@ AccessModifierOffset: -4
 ConstructorInitializerIndentWidth: 4
 BreakBeforeBraces: Allman
 AlignAfterOpenBracket: AlwaysBreak
+AlignOperands: false
 AllowAllParametersOfDeclarationOnNextLine: true
 PointerAlignment: Middle
 BinPackArguments: false

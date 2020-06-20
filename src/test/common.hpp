@@ -35,13 +35,20 @@ auto const to_int = [](auto const f) {
 	return int{f};
 };
 
-template <class Tensor, Eigen::Index N>
+template <class Tensor, FeltElements::Tensor::Index N>
 using ostream_if = std::enable_if_t<Tensor::dimension_t::value == N, std::ostream &>;
+
+template <class Matrix>
+using void_if_eigen = std::enable_if_t<!Matrix::IsVectorAtCompileTime, void>;
+template <class Matrix>
+using ostream_if_eigen = std::enable_if_t<!Matrix::IsVectorAtCompileTime, std::ostream &>;
+
+constexpr FeltElements::Scalar epsilon = 0.00001;
 }
 
 auto equal = [](auto const & a, auto const & b)
 {
-  return Fastor::all_of(a - b < 0.00001);
+  return Fastor::all_of(a - b < epsilon);
 };
 
 template <std::size_t dim0, std::size_t dim1, std::size_t dim2, std::size_t dim3>
@@ -95,12 +102,41 @@ std::ostream & operator<< (std::ostream& os, FeltElements::Tensor::Matrix<dim0,d
 	return os;
 }
 
+template <class Matrix>
+ostream_if_eigen<Matrix> operator<< (std::ostream & os, Matrix value)
+{
+	using namespace FeltElements::Tensor;
+	using boost::algorithm::join;
+
+	std::vector<std::string> is{};
+	is.reserve(value.rows());
+	for (Eigen::Index i = 0; i < value.rows(); i++)
+	{
+		using Vec = Eigen::Matrix<typename Matrix::Scalar, Matrix::ColsAtCompileTime, 1>;
+		Vec const & vec = value.row(i);
+		is.push_back(join(
+			ranges::subrange{vec.data(), vec.data() + vec.rows()} |
+			ranges::views::transform(to_string), ", "));
+	}
+	os << join(is, ",\n\t") << "\n";
+	return os;
+}
+
 inline std::ostream& operator<< (
 	std::ostream& os, std::vector<OpenVolumeMesh::VertexHandle> const& vtxhs)
 {
 	using ranges::views::transform;
 	using boost::algorithm::join;
 	os << join(vtxhs | transform(to_int) | transform(to_string), ", ") << "\n";
+	return os;
+}
+
+inline std::ostream& operator<< (
+	std::ostream& os, FeltElements::Mesh::PointT const& vtx)
+{
+	using ranges::views::transform;
+	using boost::algorithm::join;
+	os << fmt::format("{{{}, {}, {}}}\n", vtx[0], vtx[1], vtx[2]);
 	return os;
 }
 
@@ -115,29 +151,25 @@ void check_equal( Tensor const & in, std::string_view const desc, Tensor const &
 	CHECK(equal(in, expected));
 }
 
-template <class Tensor>
+
+template <class In, class Expected>
 void check_equal(
-	Tensor const & in, std::string_view const desc_in,
-	Tensor const & expected, std::string_view const desc_expected)
+	In const & in, std::string_view const desc_in,
+	Expected const & expected, std::string_view const desc_expected)
 {
 	INFO(desc_in)
 	INFO(in)
 	INFO("==")
 	INFO(desc_expected)
 	INFO(expected)
-	CHECK(equal(in, expected));
-}
-
-inline auto load_tet(char const * const file_name)
-{
-	using namespace FeltElements;
-	FeltElements::Mesh mesh;
-	OpenVolumeMesh::IO::FileManager{}.readFile(file_name, mesh);
-	auto const & vtxhs = Derivatives::vtxhs(mesh, 0);
-	auto const & X = Derivatives::X(mesh, vtxhs);
-	auto x = Derivatives::x(vtxhs, Derivatives::x(mesh));
-
-	return std::tuple(X, x);
+	if constexpr (std::is_base_of_v<Eigen::MatrixBase<In>, In>)
+	{
+		CHECK(in.isApprox(expected, epsilon));
+	}
+	else
+	{
+		CHECK(equal(in, expected));
+	}
 }
 
 inline auto load_ovm_mesh(char const * const file_name)
@@ -148,3 +180,14 @@ inline auto load_ovm_mesh(char const * const file_name)
 	file_manager.readFile(file_name, mesh);
 	return mesh;
 }
+inline auto load_tet(char const * const file_name)
+{
+	using namespace FeltElements;
+	FeltElements::Mesh mesh = load_ovm_mesh(file_name);
+	auto const & vtxhs = Derivatives::vtxhs(mesh, 0);
+	auto const & X = Derivatives::X(mesh, vtxhs);
+	auto x = Derivatives::x(vtxhs, Derivatives::x(mesh));
+
+	return std::tuple(X, x);
+}
+

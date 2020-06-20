@@ -5,6 +5,8 @@
 namespace FeltElements
 {
 using Mesh = OpenVolumeMesh::GeometricTetrahedralMeshV3d;
+using Vtxh = OpenVolumeMesh::VertexHandle;
+using Cellh = OpenVolumeMesh::CellHandle;
 using Scalar = Mesh::PointT::value_type;
 
 namespace Tensor
@@ -33,6 +35,8 @@ template <typename value_type, Index... indices>
 using BaseMap = Fastor::TensorMap<value_type, indices...>;
 template <Index... indices>
 using Map = BaseMap<Scalar, indices...>;
+template <Index... indices>
+using ConstMap = BaseMap<Scalar const, indices...>;
 }
 
 namespace Node
@@ -49,6 +53,7 @@ using Forces = Fastor::Tensor<Scalar, count, dim>;
 
 namespace Element
 {
+using Vtxhs = std::array<OpenVolumeMesh::VertexHandle, Node::count>;
 using IsoCoordDerivative = Tensor::Matrix<Node::dim, Node::count>;
 using ShapeDerivative = Tensor::Matrix<Node::count, Node::dim>;
 using Elasticity = Tensor::Multi<Node::dim, Node::dim, Node::dim, Node::dim>;

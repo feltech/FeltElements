@@ -13,15 +13,7 @@ class SpatialPosition : private internal::Attribute::Vertex<SpatialPosition>
 public:
 	explicit SpatialPosition(Mesh& mesh);
 	using ThisBase::operator[];
-};
-
-class Force : private internal::Attribute::Vertex<Force>
-{
-	using ThisBase = internal::Attribute::Vertex<Force>;
-
-public:
-	explicit Force(Mesh& mesh);
-	using ThisBase::operator[];
+	[[nodiscard]] Node::Positions for_element(Element::Vtxhs const & vtxhs) const;
 };
 }  // namespace Node::Attribute
 
@@ -42,6 +34,28 @@ class MaterialShapeDerivative : private internal::Attribute::Cell<MaterialShapeD
 
 public:
 	explicit MaterialShapeDerivative(Mesh& mesh, VertexHandles const& vtxhs);
+	using ThisBase::operator[];
+	static IsoCoordDerivative const dL_by_dN;
+	static ShapeDerivative const dN_by_dL;
+};
+
+class NodalForces : private internal::Attribute::Cell<NodalForces>
+{
+	using ThisBase = internal::Attribute::Cell<NodalForces>;
+
+public:
+	explicit NodalForces(Mesh& mesh);
+	using ThisBase::operator[];
+	static IsoCoordDerivative const dL_by_dN;
+	static ShapeDerivative const dN_by_dL;
+};
+
+class Stiffness : private internal::Attribute::Cell<Stiffness>
+{
+	using ThisBase = internal::Attribute::Cell<Stiffness>;
+
+public:
+	explicit Stiffness(Mesh& mesh);
 	using ThisBase::operator[];
 	static IsoCoordDerivative const dL_by_dN;
 	static ShapeDerivative const dN_by_dL;
