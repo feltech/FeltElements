@@ -1256,7 +1256,7 @@ SCENARIO("Solution of a single element")
 //					Tensor::Matrix<3> const & invKa = inv(K_a_a);
 //					Tensor::Vector<3> delta = invKa % TKu;
 //					u_a += delta;
-					u_a += inv(K_a_a) % (-T_a - einsum<Idxs<i, b, j>, Idxs<b, j>>(K_a, u));
+					u_a = inv(K_a_a) % (-T_a - einsum<Idxs<i, b, j>, Idxs<b, j>>(K_a, u));
 				}
 
 				// Boundary condition.
@@ -1420,6 +1420,12 @@ template <int rows, int cols>
 using EigenConstTensorMap = Eigen::Map<
 	Eigen::Matrix<Scalar, rows, cols, Eigen::RowMajor> const, EIGEN_FASTOR_ALIGN>;
 
+static auto constexpr const index_of = [](auto const & haystack, auto && needle) {
+  auto const & it = std::find(
+	  haystack.cbegin(), haystack.cend(), std::forward<decltype(needle)>(needle));
+  return std::distance(haystack.cbegin(), it);
+};
+
 SCENARIO("Solution of two elements")
 {
 	GIVEN("tangent stiffness and equivalent node force tensors")
@@ -1535,12 +1541,6 @@ SCENARIO("Solution of two elements")
 					attrib_K[*itcellh] = K;
 				}
 
-				static auto constexpr const index_of = [](auto const & haystack, auto && needle) {
-					auto const & it = std::find(
-						haystack.cbegin(), haystack.cend(), std::forward<decltype(needle)>(needle));
-					return std::distance(haystack.cbegin(), it);
-				};
-
 				Eigen::VectorXd mat_T{3 * mesh.n_vertices()};
 				mat_T.setZero();
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
@@ -1596,12 +1596,12 @@ SCENARIO("Solution of two elements")
 					}
 				}
 
-//				log += fmt::format("\nT\n{}", mat_T);
+				log += fmt::format("\nT\n{}", mat_T);
 //				log += fmt::format("\nK (unconstrained)\n{}", mat_K);
 				mat_K += 10e5 * fixedDofs.asDiagonal();
-//				log += fmt::format("\nK (constrained)\n{}", mat_K);
+				log += fmt::format("\nK (constrained)\n{}", mat_K);
 
-				REQUIRE(mat_K.determinant() != Approx(0).margin(0.00001));
+				REQUIRE(mat_K.determinant() != Approx(0).margin(epsilon));
 
 				Eigen::VectorXd mat_u{3 * mesh.n_vertices()};
 				mat_u.setZero();
@@ -1616,7 +1616,7 @@ SCENARIO("Solution of two elements")
 					attrib_x[*itvtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtx_idx, 0).data()};
 				}
 
-				if (mat_u.lpNorm<Eigen::Infinity>() < 0.00001)
+				if (mat_u.lpNorm<Eigen::Infinity>() < epsilon)
 					break;
 			}
 
@@ -1624,6 +1624,7 @@ SCENARIO("Solution of two elements")
 
 			THEN("solution converges to deformed mesh")
 			{
+				WARN(fmt::format("Converged in {} steps", step));
 				CHECK(step < max_steps);
 				// clang-format off
 				check_equal(mat_x, "x", (VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
@@ -1642,5 +1643,140 @@ SCENARIO("Solution of two elements")
 
 			}
 		} // WHEN("displacement is solved")
+
+		WHEN("displacement is solved Gauss-Seidel style")
+		{
+			std::size_t step;
+			std::size_t constexpr max_steps = 20;
+			std::string log;
+
+			for (step = 0; step < max_steps; step++)
+			{
+				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<", step);
+
+				for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
+				{
+					log += fmt::format("\n\nElement {}", int{*itcellh});
+
+					auto const &x = attrib_x.for_element(attrib_vtxh[*itcellh]);
+					log += fmt::format("\nx\n{}", x);
+
+					Scalar const v = Derivatives::V(x);
+					log += fmt::format("\nv = {}", v);
+
+					auto const &dN_by_dX = attrib_dN_by_dX[*itcellh];
+
+					auto const &F = Derivatives::dx_by_dX(x, dN_by_dX);
+					auto const FFt = Derivatives::b(F);
+					Scalar const J = Derivatives::J(F);
+
+					auto const &dx_by_dL = Derivatives::dX_by_dL(x);
+					auto const &dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
+					auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
+
+					auto const &sigma = Derivatives::sigma(J, FFt, lambda, mu);
+
+					auto const &c = Derivatives::c(J, lambda, mu);
+					Node::Forces const &T = Derivatives::T(dN_by_dx, v, sigma);
+					log += fmt::format("\nT\n{}", T);
+
+					auto const &Kc = Derivatives::Kc(dN_by_dx, v, c);
+					auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
+					Element::Stiffness const &K = Kc + Ks;
+					log += fmt::format("\nK\n{}", K);
+
+					attrib_T[*itcellh] = T;
+					attrib_K[*itcellh] = K;
+				}
+
+				std::vector<Node::Pos> u{};
+				u.resize(mesh.n_vertices());
+				for (auto & u_a : u)
+					u_a.zeros();
+
+				Scalar max_norm = 0;
+
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					auto const & vtxh_src = *itvtxh;
+					auto const a = vtxh_src.idx();
+					auto const vtx = mesh.vertex(vtxh_src);
+					Scalar fixed = 0.0;
+					if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
+						fixed = 1.0;
+
+					Node::Force Ta = 0;
+					Tensor::Matrix<3> Kaa = 0;
+					Node::Force Ka_u = 0;
+					for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
+					{
+						auto const & cell_vtxhs = attrib_vtxh[*itcellh];
+						auto const & cell_a = index_of(cell_vtxhs, *itvtxh);
+						auto const & cell_T = attrib_T[*itcellh];
+						auto const & cell_K = attrib_K[*itcellh];
+
+						Ta += cell_T(cell_a, all);
+						Kaa += cell_K(cell_a, all, cell_a, all);
+					}
+					diag(Kaa) += 10e5 * fixed;
+
+					for (auto itheh = mesh.voh_iter(vtxh_src); itheh.valid(); itheh++)
+					{
+						Tensor::Multi<Node::dim, Node::dim> Kab = 0;
+						auto const & halfedge = mesh.halfedge(*itheh);
+						auto const & vtxh_dst = halfedge.to_vertex();
+						auto const b = vtxh_dst.idx();
+
+						for (auto itcellh = mesh.hec_iter(*itheh); itcellh.valid(); itcellh++)
+						{
+							auto const & cell_K = attrib_K[*itcellh];
+							auto const & cell_vtxhs = attrib_vtxh[*itcellh];
+							auto const cell_a = index_of(cell_vtxhs, vtxh_src);
+							auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
+//							Tensor::Multi<Node::dim, Node::dim> cell_Kab = cell_K(cell_a, all, cell_b, all);
+//							log += fmt::format("\nK[{}, {}, {}]{}{} = {}", (*itcellh).idx(), cell_a, cell_b, a, b, cell_Kab);
+							Kab += cell_K(cell_a, all, cell_b, all);
+						}
+//						log += fmt::format("\nK{}{} = {}", a, b, Kab);
+						Ka_u += Kab % u[b];
+					}
+					using Tensor::Func::inv;
+					u[a] = inv(Kaa) % (-Ta - Ka_u) * (1.0 - fixed);
+
+//					log += fmt::format("\nT{} = {}", a, Ta);
+//					log += fmt::format("\nK{}{} = {}", a, a, Kaa);
+//					log += fmt::format("\nK{} * u = {}", a, Ka_u);
+					log += fmt::format("\nu[{}] = {}", a, u[a]);
+				}
+
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					auto const a = (*itvtxh).idx();
+					attrib_x[a] += u[a];
+					max_norm = std::max(norm(u[a]), max_norm);
+				}
+
+				if (max_norm < epsilon)
+					break;
+			}
+
+			INFO(log);
+
+			THEN("solution converges to deformed mesh")
+			{
+				WARN(fmt::format("Converged in {} steps", step));
+				CHECK(step < max_steps);
+				check_equal(attrib_x[0], "x0", {0.500000, 0.000000, 0.000000});
+				check_equal(attrib_x[1], "x1", {1.000000, 0.000000, 0.000000});
+				check_equal(attrib_x[2], "x2", {0.333333, 1.154972, -0.122244});
+				check_equal(attrib_x[3], "x3", {0.000000, 0.000000, 1.000000});
+				check_equal(attrib_x[4], "x4", {0.333333, 0.619084, 0.518097});
+
+				auto const total_volume =
+					Derivatives::V(attrib_x.for_element(attrib_vtxh[0])) +
+					Derivatives::V(attrib_x.for_element(attrib_vtxh[1]));
+				CHECK(total_volume == Approx(0.1077625528));
+			}
+		}
 	}
 }
