@@ -71,14 +71,5 @@ public:
 
 	[[nodiscard]] static Element::ShapeCartesianTransform N_to_x(
 		Node::Positions const& X);
-
-	[[nodiscard]] static Node::Positions X(
-		Mesh const& mesh, Vtxhs const& vtxhs);
-	[[nodiscard]] static SpatialCoordProp x(Mesh& mesh);
-	[[nodiscard]] static Node::Positions x(
-		Vtxhs const& vtxhs, SpatialCoordProp const & x_prop);
-	[[nodiscard]] static Vtxhs vtxhs(
-		Mesh const& mesh,
-		OpenVolumeMesh::CellHandle const& cellh);
 };
 }  // namespace FeltElements

@@ -15,6 +15,7 @@ public:
 	using ThisBase::operator[];
 	[[nodiscard]] Node::Positions for_element(Element::Vtxhs const & vtxhs) const;
 };
+
 }  // namespace Node::Attribute
 
 namespace Element::Attribute
@@ -28,12 +29,24 @@ public:
 	using ThisBase::operator[];
 };
 
+class MaterialPosition : private internal::Attribute::Cell<MaterialPosition>
+{
+	using ThisBase = internal::Attribute::Cell<MaterialPosition>;
+
+public:
+	explicit MaterialPosition(Mesh& mesh, VertexHandles const& vtxhs);
+	using ThisBase::operator[];
+
+private:
+	Data & operator[](Handle const & handle) = delete;
+};
+
 class MaterialShapeDerivative : private internal::Attribute::Cell<MaterialShapeDerivative>
 {
 	using ThisBase = internal::Attribute::Cell<MaterialShapeDerivative>;
 
 public:
-	explicit MaterialShapeDerivative(Mesh& mesh, VertexHandles const& vtxhs);
+	explicit MaterialShapeDerivative(Mesh& mesh, MaterialPosition const& X);
 	using ThisBase::operator[];
 	static IsoCoordDerivative const dL_by_dN;
 	static ShapeDerivative const dN_by_dL;
@@ -46,8 +59,6 @@ class NodalForces : private internal::Attribute::Cell<NodalForces>
 public:
 	explicit NodalForces(Mesh& mesh);
 	using ThisBase::operator[];
-	static IsoCoordDerivative const dL_by_dN;
-	static ShapeDerivative const dN_by_dL;
 };
 
 class Stiffness : private internal::Attribute::Cell<Stiffness>
@@ -57,8 +68,6 @@ class Stiffness : private internal::Attribute::Cell<Stiffness>
 public:
 	explicit Stiffness(Mesh& mesh);
 	using ThisBase::operator[];
-	static IsoCoordDerivative const dL_by_dN;
-	static ShapeDerivative const dN_by_dL;
 };
 }  // namespace Element::Attribute
 }  // namespace FeltElements

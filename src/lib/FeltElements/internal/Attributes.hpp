@@ -83,9 +83,9 @@ template <class Derived>
 class Cell : protected Base<Derived>
 {
 	using ThisBase = Base<Derived>;
-	using Data = typename ThisBase::Data;
 
 protected:
+	using Data = typename ThisBase::Data;
 	explicit Cell(Mesh& mesh)
 		: ThisBase{mesh.request_cell_property<Data>(ThisBase::prop_name.data())}
 	{
@@ -102,6 +102,7 @@ class SpatialPosition;
 }  // namespace Node::Attribute
 namespace Element::Attribute
 {
+class MaterialPosition;
 class VertexHandles;
 class MaterialShapeDerivative;
 class NodalForces;
@@ -128,14 +129,18 @@ struct Traits<VertexHandles> : public CellTraits<Element::Vtxhs>
 	static constexpr std::string_view prop_name = "vertices";
 };
 
-using namespace Element::Attribute;
+template <>
+struct Traits<MaterialPosition> : public CellTraits<Node::Positions>
+{
+	static constexpr std::string_view prop_name = "material_position";
+};
+
 template <>
 struct Traits<NodalForces> : public CellTraits<Node::Forces>
 {
 	static constexpr std::string_view prop_name = "nodal_forces";
 };
 
-using namespace Element::Attribute;
 template <>
 struct Traits<Stiffness> : public CellTraits<Element::Stiffness>
 {

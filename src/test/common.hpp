@@ -180,13 +180,16 @@ inline auto load_ovm_mesh(char const * const file_name)
 	file_manager.readFile(file_name, mesh);
 	return mesh;
 }
+
 inline auto load_tet(char const * const file_name)
 {
 	using namespace FeltElements;
 	FeltElements::Mesh mesh = load_ovm_mesh(file_name);
-	auto const & vtxhs = Derivatives::vtxhs(mesh, 0);
-	auto const & X = Derivatives::X(mesh, vtxhs);
-	auto x = Derivatives::x(vtxhs, Derivatives::x(mesh));
+	Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+	Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxhs};
+	Node::Attribute::SpatialPosition const attrib_x{mesh};
+	Node::Positions X = attrib_X[0];  // De-constify.
+	Node::Positions x = attrib_x.for_element(attrib_vtxhs[0]);
 
 	return std::tuple(X, x);
 }

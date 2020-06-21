@@ -14,6 +14,129 @@ using namespace FeltElements;
 //	getcwd(cwd, 500);
 //	std::cerr << "Executing tests in " << cwd << std::endl;
 
+SCENARIO("Mesh attributes")
+{
+	GIVEN("a two-element mesh")
+	{
+		auto mesh = load_ovm_mesh(file_name_two);
+
+		WHEN("element nodal force attributes are constructed")
+		{
+			Element::Attribute::NodalForces const attrib_forces{mesh};
+
+			THEN("properties are default initialised")
+			{
+				auto itcellh = mesh.cells_begin();
+				Node::Forces T = attrib_forces[*itcellh];
+				CHECK(Tensor::Func::all_of(T == 0));
+				itcellh++;
+				T = attrib_forces[*itcellh];
+				CHECK(Tensor::Func::all_of(T == 0));
+			}
+		}
+
+		WHEN("element stiffness attributes are constructed")
+		{
+			Element::Attribute::Stiffness const attrib_stiffness{mesh};
+
+			THEN("properties are default initialised")
+			{
+				auto itcellh = mesh.cells_begin();
+				Element::Stiffness K = attrib_stiffness[*itcellh];
+				CHECK(Tensor::Func::all_of(K == 0));
+				itcellh++;
+				K = attrib_stiffness[*itcellh];
+				CHECK(Tensor::Func::all_of(K == 0));
+			}
+		}
+
+		WHEN("element vertex mapping attributes are constructed")
+		{
+			FeltElements::Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+
+			THEN("properties are populated")
+			{
+				auto itcellh = mesh.cells_begin();
+				CHECK(
+					attrib_vtxhs[*itcellh] ==
+					std::array<OpenVolumeMesh::VertexHandle, 4>{0, 3, 1, 4});
+				itcellh++;
+				CHECK(
+					attrib_vtxhs[*itcellh] ==
+					std::array<OpenVolumeMesh::VertexHandle, 4>{2, 0, 1, 4});
+			}
+
+			AND_WHEN("element natural wrt material coords attributes are constructed")
+			{
+				Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxhs};
+				FeltElements::Element::Attribute::MaterialShapeDerivative const dn_by_dX_attribs{
+					mesh, attrib_X};
+
+				THEN("properties are populated")
+				{
+					auto itcellh = mesh.cells_begin();
+					check_equal(
+						dn_by_dX_attribs[*itcellh],
+						std::string{"dN_by_dX "} + std::to_string(itcellh),
+						Derivatives::dN_by_dX(attrib_X[*itcellh]),
+						"dN_by_dX");
+					itcellh++;
+					check_equal(
+						dn_by_dX_attribs[*itcellh],
+						std::string{"dN_by_dX "} + std::to_string(itcellh),
+						Derivatives::dN_by_dX(attrib_X[*itcellh]),
+						"dN_by_dX");
+				}
+			}
+		}
+
+		WHEN("spatial position attributes are constructed")
+		{
+			Node::Attribute::SpatialPosition const attrib_x{mesh};
+
+			THEN("attributes are initialised to material position")
+			{
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					check_equal(
+						attrib_x[*itvtxh],
+						"x",
+						reinterpret_cast<Node::Pos const &>(mesh.vertex(*itvtxh)),
+						"X");
+				}
+			}
+
+			AND_WHEN("element nodal spatial position tensor is constructed")
+			{
+				Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+
+				auto itcellh = mesh.cells_begin();
+				Node::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				itcellh++;
+				Node::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+
+				THEN("positions are expected")
+				{
+					// clang-format off
+					check_equal(x1, "x1", {
+						{0.000000, 0.000000, 0.000000},
+						{0.000000, 0.000000, 1.000000},
+						{1.000000, 0.000000, 0.000000},
+						{0.000000, 0.500000, 0.500000}
+					});
+					check_equal(x2, "x2", {
+						{0.000000, 1.000000, 0.000000},
+						{0.000000, 0.000000, 0.000000},
+						{1.000000, 0.000000, 0.000000},
+						{0.000000, 0.500000, 0.500000}
+					});
+					// clang-format on
+				}
+			}
+		}
+	}
+}
+
 SCENARIO("Metrics of undeformed mesh")
 {
 	GIVEN("one-element mesh")
@@ -23,7 +146,8 @@ SCENARIO("Metrics of undeformed mesh")
 
 		WHEN("vertex index mapping is fetched")
 		{
-			auto const & vtxhs = Derivatives::vtxhs(mesh, 0);
+			Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+			auto const & vtxhs = attrib_vtxhs[0];
 
 			THEN("mapping is expected")
 			{
@@ -32,7 +156,8 @@ SCENARIO("Metrics of undeformed mesh")
 
 			AND_WHEN("material node position tensor is constructed")
 			{
-				Node::Positions X = Derivatives::X(mesh, vtxhs);
+				Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxhs};
+				Node::Positions X = attrib_X[0];
 
 				THEN("expected positions are reported")
 				{
@@ -59,7 +184,7 @@ SCENARIO("Metrics of undeformed mesh")
 				AND_WHEN("spatial coordinate property is created")
 				{
 					using namespace OpenVolumeMesh;
-					VertexPropertyT<Vec3d> const & x_prop = Derivatives::x(mesh);
+					Node::Attribute::SpatialPosition const attrib_x{mesh};
 
 					THEN("spatial coordinates equal material coordinates")
 					{
@@ -70,8 +195,9 @@ SCENARIO("Metrics of undeformed mesh")
 							 it_vtx != mesh.vertices_end();
 							 it_vtx++)
 						{
+							auto const & x = attrib_x[*it_vtx];
 							all_X.push_back(mesh.vertex(*it_vtx));
-							all_x.push_back(x_prop[*it_vtx]);
+							all_x.emplace_back(x(0), x(1), x(2));
 						}
 
 						CHECK(all_X == all_x);
@@ -79,7 +205,8 @@ SCENARIO("Metrics of undeformed mesh")
 
 					AND_WHEN("spatial node position tensor is constructed")
 					{
-						Node::Positions x = Derivatives::x(vtxhs, x_prop);
+						Node::Attribute::SpatialPosition attrib_x{mesh};
+						auto const x = attrib_x.for_element(vtxhs);
 
 						THEN("spatial node positions equal material positions")
 						{
@@ -1065,9 +1192,12 @@ SCENARIO("Solution of a single element")
 		mu = lambda = 4;
 
 		auto mesh = load_ovm_mesh(file_name_one);
-		auto const & vtxhs = Derivatives::vtxhs(mesh, 0);
-		auto const & X = Derivatives::X(mesh, vtxhs);
-		auto x = Derivatives::x(vtxhs, Derivatives::x(mesh));
+		Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+		Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxhs};
+		Node::Attribute::SpatialPosition attrib_x{mesh};
+		auto const & vtxhs = attrib_vtxhs[0];
+		auto const & X = attrib_X[0];
+		auto x = attrib_x.for_element(attrib_vtxhs[0]);
 		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 
 		std::stringstream s;
@@ -1291,130 +1421,6 @@ SCENARIO("Solution of a single element")
 	}
 }
 
-SCENARIO("Mesh attributes")
-{
-	GIVEN("a two-element mesh")
-	{
-		auto mesh = load_ovm_mesh(file_name_two);
-
-		WHEN("element nodal force attributes are constructed")
-		{
-			Element::Attribute::NodalForces const attrib_forces{mesh};
-
-			THEN("properties are default initialised")
-			{
-				auto itcellh = mesh.cells_begin();
-				Node::Forces T = attrib_forces[*itcellh];
-				CHECK(Tensor::Func::all_of(T == 0));
-				itcellh++;
-				T = attrib_forces[*itcellh];
-				CHECK(Tensor::Func::all_of(T == 0));
-			}
-		}
-
-		WHEN("element stiffness attributes are constructed")
-		{
-			Element::Attribute::Stiffness const attrib_stiffness{mesh};
-
-			THEN("properties are default initialised")
-			{
-				auto itcellh = mesh.cells_begin();
-				Element::Stiffness K = attrib_stiffness[*itcellh];
-				CHECK(Tensor::Func::all_of(K == 0));
-				itcellh++;
-				K = attrib_stiffness[*itcellh];
-				CHECK(Tensor::Func::all_of(K == 0));
-			}
-		}
-
-		WHEN("element vertex mapping attributes are constructed")
-		{
-			FeltElements::Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
-
-			THEN("properties are populated")
-			{
-				auto itvtxh = mesh.cells_begin();
-				CHECK(
-					attrib_vtxhs[*itvtxh] ==
-					std::array<OpenVolumeMesh::VertexHandle, 4>{0, 3, 1, 4});
-				itvtxh++;
-				CHECK(
-					attrib_vtxhs[*itvtxh] ==
-					std::array<OpenVolumeMesh::VertexHandle, 4>{2, 0, 1, 4});
-			}
-
-			AND_WHEN("element natural wrt material coords attributes are constructed")
-			{
-				FeltElements::Element::Attribute::MaterialShapeDerivative const dn_by_dX_attribs{
-					mesh, attrib_vtxhs};
-
-				THEN("properties are populated")
-				{
-					auto itvtxh = mesh.cells_begin();
-					check_equal(
-						dn_by_dX_attribs[*itvtxh],
-						std::string{"dN_by_dX "} + std::to_string(itvtxh),
-						Derivatives::dN_by_dX(
-							Derivatives::X(mesh, Derivatives::vtxhs(mesh, *itvtxh))),
-						"dN_by_dX");
-					itvtxh++;
-					check_equal(
-						dn_by_dX_attribs[*itvtxh],
-						std::string{"dN_by_dX "} + std::to_string(itvtxh),
-						Derivatives::dN_by_dX(
-							Derivatives::X(mesh, Derivatives::vtxhs(mesh, *itvtxh))),
-						"dN_by_dX");
-				}
-			}
-		}
-
-		WHEN("spatial position attributes are constructed")
-		{
-			Node::Attribute::SpatialPosition const attrib_x{mesh};
-
-			THEN("attributes are initialised to material position")
-			{
-				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-				{
-					check_equal(
-						attrib_x[*itvtxh],
-						"x",
-						reinterpret_cast<Node::Pos const &>(mesh.vertex(*itvtxh)),
-						"X");
-				}
-			}
-
-			AND_WHEN("element nodal spatial position tensor is constructed")
-			{
-				Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
-
-				auto itcellh = mesh.cells_begin();
-				Node::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
-				itcellh++;
-				Node::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
-
-				THEN("positions are expected")
-				{
-					// clang-format off
-					check_equal(x1, "x1", {
-						{0.000000, 0.000000, 0.000000},
-						{0.000000, 0.000000, 1.000000},
-						{1.000000, 0.000000, 0.000000},
-						{0.000000, 0.500000, 0.500000}
-					});
-					check_equal(x2, "x2", {
-						{0.000000, 1.000000, 0.000000},
-						{0.000000, 0.000000, 0.000000},
-						{1.000000, 0.000000, 0.000000},
-						{0.000000, 0.500000, 0.500000}
-					});
-					// clang-format on
-				}
-			}
-		}
-	}
-}
-
 #define EIGEN_FASTOR_ALIGN BOOST_PP_CAT(Eigen::Aligned, FASTOR_MEMORY_ALIGNMENT_VALUE)
 template <int rows, int cols>
 using EigenConstTensorMap = Eigen::Map<
@@ -1455,7 +1461,8 @@ SCENARIO("Solution of two elements")
 
 		Node::Attribute::SpatialPosition attrib_x{mesh};
 		Element::Attribute::VertexHandles const attrib_vtxh{mesh};
-		Element::Attribute::MaterialShapeDerivative const attrib_dN_by_dX{mesh, attrib_vtxh};
+		Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxh};
+		Element::Attribute::MaterialShapeDerivative const attrib_dN_by_dX{mesh, attrib_X};
 		Element::Attribute::NodalForces attrib_T{mesh};
 		Element::Attribute::Stiffness attrib_K{mesh};
 

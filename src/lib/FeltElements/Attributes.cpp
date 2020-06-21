@@ -3,7 +3,6 @@
 
 namespace FeltElements
 {
-
 namespace Node::Attribute
 {
 SpatialPosition::SpatialPosition(Mesh& mesh) : ThisBase{mesh}
@@ -39,24 +38,40 @@ VertexHandles::VertexHandles(Mesh& mesh) : ThisBase{mesh}
 	}
 }
 
-MaterialShapeDerivative::MaterialShapeDerivative(Mesh& mesh, VertexHandles const& vtxhs)
+MaterialPosition::MaterialPosition(Mesh& mesh, VertexHandles const& vtxhs)
 	: ThisBase{mesh}
 {
 	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
-		(*this)[*itcellh] = Derivatives::dN_by_dX(Derivatives::X(mesh, vtxhs[*itcellh]));
+	{
+		using OvmVtx = Mesh::PointT;
+		auto const & cell_vtxhs = vtxhs[*itcellh];
+		auto & X = m_prop[*itcellh];
+		for (Tensor::Index node_idx = 0; node_idx < Node::Positions::dimension(0); node_idx++)
+		{
+			OvmVtx vtx = mesh.vertex(cell_vtxhs[node_idx]);
+			auto const & pos = Tensor::BaseMap<OvmVtx::value_type, OvmVtx::size()>{vtx.data()};
+			using Tensor::Func::all;
+			X(node_idx, all) = pos;
+		}
+	}
+}
+
+MaterialShapeDerivative::MaterialShapeDerivative(Mesh& mesh, MaterialPosition const& X)
+	: ThisBase{mesh}
+{
+	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
+		(*this)[*itcellh] = Derivatives::dN_by_dX(X[*itcellh]);
 }
 
 // clang-format off
-IsoCoordDerivative const
-MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
+IsoCoordDerivative const MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
 	Tensor::Matrix<4, 4>{
 		{1, 1, 1, 1},
 		{0, 1, 0, 0},
 		{0, 0, 1, 0},
 		{0, 0, 0, 1}}(Fastor::fseq<1, 4>(), Fastor::all);
 
-ShapeDerivative const
-MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
+ShapeDerivative const MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
 	Fastor::evaluate(Fastor::inv(Tensor::Matrix<4, 4>{
 		{1, 1, 1, 1},
 		{0, 1, 0, 0},
