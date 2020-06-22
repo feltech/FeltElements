@@ -96,135 +96,134 @@ auto const c = [](Scalar J, Scalar lambda, Scalar mu) {
 };
 
 
-auto const Kc = [](auto const & dN_by_dx, Scalar const v, auto const & c) {
+auto const Kc = [](auto const & dN_by_dx, auto const & c) {
 
   // Kc = v * dN_a/dx_k * c_ikjl * dN_b/dx_l
-	return v * Func::einsum<Idxs<a, k>, Idxs<i, k, j, l>, Idxs<b, l>, Order<a, i, b, j>>(
+	return Func::einsum<Idxs<a, k>, Idxs<i, k, j, l>, Idxs<b, l>, Order<a, i, b, j>>(
 	  dN_by_dx, c, dN_by_dx);
 };
 
 
-auto const Ks = [](auto const & dN_by_dx, Scalar const v, auto const & s)
+auto const Ks = [](auto const & dN_by_dx, auto const & s)
 {
 	// Ks = v * dN_a/dx_k * sigma_kl * dN_b/dx_l * delta_ij
-	return v * Func::einsum<Idxs<a, k>, Idxs<k, l>, Idxs<b, l>, Idxs<i, j>, Order<a, i, b, j>>(
+	return Func::einsum<Idxs<a, k>, Idxs<k, l>, Idxs<b, l>, Idxs<i, j>, Order<a, i, b, j>>(
 		dN_by_dx, s, dN_by_dx, I);
 };
 }
 
 
-namespace FeltElements
+namespace FeltElements::Derivatives
 {
-Element::StiffnessAndForces Derivatives::KT(
+Element::StiffnessAndForces KT(
 	Node::Positions const & x, Element::ShapeDerivative const & dN_by_dX,
 	Scalar const lambda, Scalar const mu)
 {
-	Scalar const v = Derivatives::V(x);
+	Scalar const v = V(x);
 
-	auto const & F = ex::dx_by_dX(x, dN_by_dX);
-	auto const & b = ex::finger(F);
+	Element::Gradient const F = ex::dx_by_dX(x, dN_by_dX);
+	auto const b = ex::finger(F);
 	Scalar const J = Derivatives::J(F);
 
 	auto const & dx_by_dL = ex::dX_by_dL(x);
 	auto const & dL_by_dx = ex::dL_by_dX(dx_by_dL);
-	auto const & dN_by_dx = ex::dN_by_dX(dL_by_dx);
+	Element::ShapeDerivative const dN_by_dx = ex::dN_by_dX(dL_by_dx);
 
-	auto const & sigma = ex::sigma(J, b, lambda, mu); // Evaluate since used twice?
+	Element::Stress const sigma = ex::sigma(J, b, lambda, mu);
 
 	auto const & c = ex::c(J, lambda, mu);
-	auto const & Kc = ex::Kc(dN_by_dx, v, c);
+	auto const & Kc = ex::Kc(dN_by_dx, c);
+	auto const & Ks = ex::Ks(dN_by_dx, sigma);
 
-	auto const & Ks = ex::Ks(dN_by_dx, v, sigma);
-
-	Element::Stiffness K = Kc + Ks;
+	Element::Stiffness K = v * (Kc + Ks);
 	Node::Forces T = ex::T(dN_by_dx, v, sigma);
 
 	return Element::StiffnessAndForces(K, T);
 }
 
-Element::Stiffness Derivatives::Kc(
+Element::Stiffness Kc(
 	Element::ShapeDerivative const & dN_by_dx, Scalar const v, Element::Elasticity const & c)
 {
-	return ex::Kc(dN_by_dx, v, c);
+	return v * ex::Kc(dN_by_dx, c);
 }
 
-Element::Stiffness Derivatives::Ks(
+Element::Stiffness Ks(
 	Element::ShapeDerivative const & dN_by_dx, Scalar const v, Element::Stress const & s)
 {
-	return ex::Ks(dN_by_dx, v, s);
+	return v * ex::Ks(dN_by_dx, s);
 }
 
-Element::Elasticity Derivatives::c(Scalar J, Scalar lambda, Scalar mu)
+Element::Elasticity c(Scalar J, Scalar lambda, Scalar mu)
 {
 	return ex::c(J, lambda, mu);
 }
 
-Node::Forces Derivatives::T(
+Node::Forces T(
 	Element::ShapeDerivative const & dN_by_dx, Scalar const v, Element::Stress const & sigma)
 {
 	return ex::T(dN_by_dx, v, sigma);
 }
 
-Element::Stress Derivatives::sigma(
+Element::Stress sigma(
 	Scalar const J, Element::Gradient const & b,
 	Scalar const lambda, Scalar const mu)
 {
 	return ex::sigma(J, b, lambda, mu);
 }
 
-Scalar Derivatives::J(Element::Gradient const & dx_by_dX)
+Scalar J(Element::Gradient const & dx_by_dX)
 {
 	return Fastor::det(dx_by_dX);
 }
 
-Element::Gradient Derivatives::b(Element::Gradient const & F)
+Element::Gradient b(Element::Gradient const & F)
 {
 	return ex::finger(F);
 }
 
-Element::Gradient Derivatives::dx_by_dX(
+Element::Gradient dx_by_dX(
 	Node::Positions const & x, Element::ShapeDerivative const & dN_by_dX)
 {
 	return ex::dx_by_dX(x, dN_by_dX);
 }
 
-Element::Gradient Derivatives::dx_by_dX(
+Element::Gradient dx_by_dX(
 	Element::Gradient const & dx_by_dL, Element::Gradient const & dL_by_dX)
 {
 	using namespace Tensor;
 	return Func::einsum<Idxs<k, i>, Idxs<j, k>>(dx_by_dL, dL_by_dX);
 }
 
-Element::ShapeDerivative Derivatives::dN_by_dX(Element::Gradient const& dL_by_dx)
+Element::ShapeDerivative dN_by_dX(Element::Gradient const& dL_by_dx)
 {
 	return ex::dN_by_dX(dL_by_dx);
 }
 
-Element::ShapeDerivative Derivatives::dN_by_dX(Node::Positions const & X)
+Element::ShapeDerivative dN_by_dX(Node::Positions const & X)
 {
 	auto const & dX_by_dL = ex::dX_by_dL(X);
 	auto const & dL_by_dX = ex::dL_by_dX(dX_by_dL);
 	return ex::dN_by_dX(dL_by_dX);
 }
 
-Element::CartesianDerivative Derivatives::dx_by_dN(
+Element::CartesianDerivative dx_by_dN(
 	Element::ShapeCartesianTransform const & N_to_x)
 {
 	using namespace Tensor::Func;
 	return N_to_x(fseq<1, last>{}, all);
 }
 
-Element::Gradient Derivatives::dL_by_dX(Element::Gradient const & dX_by_dL)
+Element::Gradient dL_by_dX(Element::Gradient const & dX_by_dL)
 {
 	return ex::dL_by_dX(dX_by_dL);
 }
 
-Element::Gradient Derivatives::dX_by_dL(Node::Positions const & X)
+Element::Gradient dX_by_dL(Node::Positions const & X)
 {
 	return ex::dX_by_dL(X);
 }
 
-Element::ShapeDerivative Derivatives::dN_by_dX(Element::ShapeCartesianTransform const & N_to_x)
+Element::ShapeDerivative dN_by_dX(Element::ShapeCartesianTransform const & N_to_x)
 {
 	using namespace Tensor::Func;
 	// Interpolation: (1, x, y, z)^T = N_to_x * N, where N is 4x natural coordinates (corners).
@@ -232,7 +231,7 @@ Element::ShapeDerivative Derivatives::dN_by_dX(Element::ShapeCartesianTransform 
 	return evaluate(inv(N_to_x))(all, fseq<1, last>{});
 }
 
-Element::ShapeCartesianTransform Derivatives::N_to_x(Node::Positions const & X)
+Element::ShapeCartesianTransform N_to_x(Node::Positions const & X)
 {
 	Element::ShapeCartesianTransform mat;
 	mat(Fastor::ffirst, Fastor::all) = 1.0;
@@ -240,7 +239,7 @@ Element::ShapeCartesianTransform Derivatives::N_to_x(Node::Positions const & X)
 	return mat;
 }
 
-Scalar Derivatives::V(Node::Positions const & x)
+Scalar V(Node::Positions const & x)
 {
 	using namespace Tensor::Func;
 	auto const & start_3x3 = x(fseq<0, 3>{}, all);

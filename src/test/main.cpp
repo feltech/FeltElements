@@ -1,4 +1,5 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
+#include <FeltElements/Solver.hpp>
 #include <boost/range/irange.hpp>
 
 #define CATCH_CONFIG_MAIN
@@ -68,24 +69,22 @@ SCENARIO("Mesh attributes")
 
 			AND_WHEN("element natural wrt material coords attributes are constructed")
 			{
-				Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxhs};
-				FeltElements::Element::Attribute::MaterialShapeDerivative const dn_by_dX_attribs{
-					mesh, attrib_X};
+				Node::Attribute::MaterialPosition const attrib_X{mesh};
+				FeltElements::Element::Attribute::MaterialShapeDerivative const attrib_dN_by_dX{
+					mesh, attrib_vtxhs, attrib_X};
 
 				THEN("properties are populated")
 				{
 					auto itcellh = mesh.cells_begin();
 					check_equal(
-						dn_by_dX_attribs[*itcellh],
+						attrib_dN_by_dX[*itcellh],
 						std::string{"dN_by_dX "} + std::to_string(itcellh),
-						Derivatives::dN_by_dX(attrib_X[*itcellh]),
-						"dN_by_dX");
+						Derivatives::dN_by_dX(attrib_X.for_element(attrib_vtxhs[*itcellh])));
 					itcellh++;
 					check_equal(
-						dn_by_dX_attribs[*itcellh],
+						attrib_dN_by_dX[*itcellh],
 						std::string{"dN_by_dX "} + std::to_string(itcellh),
-						Derivatives::dN_by_dX(attrib_X[*itcellh]),
-						"dN_by_dX");
+						Derivatives::dN_by_dX(attrib_X.for_element(attrib_vtxhs[*itcellh])));
 				}
 			}
 		}
@@ -151,13 +150,13 @@ SCENARIO("Metrics of undeformed mesh")
 
 			THEN("mapping is expected")
 			{
-				CHECK(vtxhs == Derivatives::Vtxhs{ 0, 1, 2, 3 });
+				CHECK(vtxhs == Element::Vtxhs{ 0, 1, 2, 3 });
 			}
 
 			AND_WHEN("material node position tensor is constructed")
 			{
-				Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxhs};
-				Node::Positions X = attrib_X[0];
+				Node::Attribute::MaterialPosition const attrib_X{mesh};
+				Node::Positions const X = attrib_X.for_element(vtxhs);
 
 				THEN("expected positions are reported")
 				{
@@ -1192,13 +1191,13 @@ SCENARIO("Solution of a single element")
 		mu = lambda = 4;
 
 		auto mesh = load_ovm_mesh(file_name_one);
-		Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
-		Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxhs};
-		Node::Attribute::SpatialPosition attrib_x{mesh};
-		auto const & vtxhs = attrib_vtxhs[0];
-		auto const & X = attrib_X[0];
-		auto x = attrib_x.for_element(attrib_vtxhs[0]);
-		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
+		Attributes attrib{mesh};
+		auto const & vtxhs = attrib.vtxh[0];
+		auto const & X = attrib.X.for_element(vtxhs);
+		// Push top-most node to the right slightly.
+		attrib.x[3](0) += 0.5;
+		auto x = attrib.x.for_element(vtxhs);
+		auto const & dN_by_dX = attrib.dN_by_dX[0];
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
@@ -1206,15 +1205,45 @@ SCENARIO("Solution of a single element")
 		INFO("Material vertices:")
 		INFO(X)
 
-		// Push top-most node to the right slightly.
-		x(3, 0) += 0.5;
-
 		// Construct gravity force tensor.
 //		Scalar constexpr m = 0.1;
 //		Node::Forces G = 0;
 //		G(all, 1) = -9.81 * m;
 //		INFO("G")
 //		INFO(G)
+
+		WHEN("element stiffness and internal force tensor attributes are constructed")
+		{
+			Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
+
+			THEN("attributes hold correct solutions")
+			{
+				Cellh const cellh{0};
+				auto const &x = attrib.x.for_element(attrib.vtxh[cellh]);
+				Scalar const v = Derivatives::V(x);
+				auto const &dN_by_dX = attrib.dN_by_dX[cellh];
+
+				auto const &F = Derivatives::dx_by_dX(x, dN_by_dX);
+				auto const FFt = Derivatives::b(F);
+				Scalar const J = Derivatives::J(F);
+
+				auto const &dx_by_dL = Derivatives::dX_by_dL(x);
+				auto const &dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
+				auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
+
+				auto const &sigma = Derivatives::sigma(J, FFt, lambda, mu);
+
+				auto const &c = Derivatives::c(J, lambda, mu);
+				Node::Forces const & T = Derivatives::T(dN_by_dx, v, sigma);
+
+				auto const &Kc = Derivatives::Kc(dN_by_dx, v, c);
+				auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
+				Element::Stiffness const & K = Kc + Ks;
+
+				check_equal(attrib.T[cellh], "T (attribute)", T, "T (check)");
+				check_equal(attrib.K[cellh], "K (attribute)", K, "K (check)");
+			}
+		}
 
 		WHEN("displacement is solved")
 		{
@@ -1458,13 +1487,7 @@ SCENARIO("Solution of two elements")
 		mu = lambda = 4;
 
 		auto mesh = load_ovm_mesh(file_name_two);
-
-		Node::Attribute::SpatialPosition attrib_x{mesh};
-		Element::Attribute::VertexHandles const attrib_vtxh{mesh};
-		Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxh};
-		Element::Attribute::MaterialShapeDerivative const attrib_dN_by_dX{mesh, attrib_X};
-		Element::Attribute::NodalForces attrib_T{mesh};
-		Element::Attribute::Stiffness attrib_K{mesh};
+		Attributes attrib{mesh};
 
 		FixedDOFs fixedDofs{3 * mesh.n_vertices()};
 		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
@@ -1479,15 +1502,15 @@ SCENARIO("Solution of two elements")
 		}
 
 		auto const material_volume =
-			Derivatives::V(attrib_x.for_element(attrib_vtxh[0])) +
-			Derivatives::V(attrib_x.for_element(attrib_vtxh[1]));
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[0])) +
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[1]));
 
 		// Deform vertex.
-		attrib_x[0](0) += 0.5;
+		attrib.x[0](0) += 0.5;
 
 		auto const initial_deformed_volume =
-			Derivatives::V(attrib_x.for_element(attrib_vtxh[0])) +
-			Derivatives::V(attrib_x.for_element(attrib_vtxh[1]));
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[0])) +
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[1]));
 
 		CAPTURE(lambda, mu, material_volume, initial_deformed_volume);
 
@@ -1499,7 +1522,7 @@ SCENARIO("Solution of two elements")
 		INFO(mat_vtxs)
 
 		INFO("Mesh spatial vertices")
-		EigenMapTensorVertices const & mat_x{attrib_x[0].data(), rows, cols};
+		EigenMapTensorVertices const & mat_x{attrib.x[0].data(), rows, cols};
 		INFO(mat_x)
 
 		WHEN("displacement is solved")
@@ -1512,41 +1535,7 @@ SCENARIO("Solution of two elements")
 			{
 				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<", step);
 
-				for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
-				{
-					log += fmt::format("\n\nElement {}", int{*itcellh});
-
-					auto const &x = attrib_x.for_element(attrib_vtxh[*itcellh]);
-//					log += fmt::format("\nx\n{}", x);
-
-					Scalar const v = Derivatives::V(x);
-					log += fmt::format("\nv = {}", v);
-
-					auto const &dN_by_dX = attrib_dN_by_dX[*itcellh];
-
-					auto const &F = Derivatives::dx_by_dX(x, dN_by_dX);
-					auto const FFt = Derivatives::b(F);
-					Scalar const J = Derivatives::J(F);
-
-					auto const &dx_by_dL = Derivatives::dX_by_dL(x);
-					auto const &dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
-					auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
-
-					auto const &sigma = Derivatives::sigma(J, FFt, lambda, mu);
-
-					auto const &c = Derivatives::c(J, lambda, mu);
-					Node::Forces const & T = Derivatives::T(dN_by_dx, v, sigma);
-					//				T -= G;
-//					log += fmt::format("\nT\n{}", T);
-
-					auto const &Kc = Derivatives::Kc(dN_by_dx, v, c);
-					auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
-					Element::Stiffness const & K = Kc + Ks;
-//					log += fmt::format("\nK\n{}", K);
-
-					attrib_T[*itcellh] = T;
-					attrib_K[*itcellh] = K;
-				}
+				Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
 
 				Eigen::VectorXd mat_T{3 * mesh.n_vertices()};
 				mat_T.setZero();
@@ -1555,9 +1544,9 @@ SCENARIO("Solution of two elements")
 					auto const vtx_idx = (*itvtxh).idx();
 					for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
 					{
-						auto const & cell_vtxhs = attrib_vtxh[*itcellh];
+						auto const & cell_vtxhs = attrib.vtxh[*itcellh];
 						auto const & cell_vtx_idx = index_of(cell_vtxhs, *itvtxh);
-						auto const & cell_T = attrib_T[*itcellh];
+						auto const & cell_T = attrib.T[*itcellh];
 
 						mat_T.block<3, 1>(3 * vtx_idx, 0) +=
 						    EigenConstTensorMap<4, 3>{cell_T.data()}.block<1, 3>(cell_vtx_idx, 0);
@@ -1568,11 +1557,11 @@ SCENARIO("Solution of two elements")
 				Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
 				mat_K.setZero();
 
-				auto const update_submatrix = [&log, &mat_K, &attrib_K, &attrib_vtxh](
+				auto const update_submatrix = [&log, &mat_K, &attrib](
 					auto const vtxh_src, auto const vtxh_dst, auto const cellh)
 				{
-				  auto const & cell_K = attrib_K[cellh];
-				  auto const & cell_vtxhs = attrib_vtxh[cellh];
+				  auto const & cell_K = attrib.K[cellh];
+				  auto const & cell_vtxhs = attrib.vtxh[cellh];
 				  auto const cell_a = index_of(cell_vtxhs, vtxh_src);
 				  auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
 				  auto const a = vtxh_src.idx();
@@ -1620,7 +1609,7 @@ SCENARIO("Solution of two elements")
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
 					auto const vtx_idx = (*itvtxh).idx();
-					attrib_x[*itvtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtx_idx, 0).data()};
+					attrib.x[*itvtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtx_idx, 0).data()};
 				}
 
 				if (mat_u.lpNorm<Eigen::Infinity>() < epsilon)
@@ -1644,8 +1633,8 @@ SCENARIO("Solution of two elements")
 				// clang-format on
 
 				auto const total_volume =
-					Derivatives::V(attrib_x.for_element(attrib_vtxh[0])) +
-					Derivatives::V(attrib_x.for_element(attrib_vtxh[1]));
+					Derivatives::V(attrib.x.for_element(attrib.vtxh[0])) +
+					Derivatives::V(attrib.x.for_element(attrib.vtxh[1]));
 				CHECK(total_volume == Approx(0.1077625528));
 
 			}
@@ -1661,40 +1650,7 @@ SCENARIO("Solution of two elements")
 			{
 				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<", step);
 
-				for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
-				{
-					log += fmt::format("\n\nElement {}", int{*itcellh});
-
-					auto const &x = attrib_x.for_element(attrib_vtxh[*itcellh]);
-					log += fmt::format("\nx\n{}", x);
-
-					Scalar const v = Derivatives::V(x);
-					log += fmt::format("\nv = {}", v);
-
-					auto const &dN_by_dX = attrib_dN_by_dX[*itcellh];
-
-					auto const &F = Derivatives::dx_by_dX(x, dN_by_dX);
-					auto const FFt = Derivatives::b(F);
-					Scalar const J = Derivatives::J(F);
-
-					auto const &dx_by_dL = Derivatives::dX_by_dL(x);
-					auto const &dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
-					auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
-
-					auto const &sigma = Derivatives::sigma(J, FFt, lambda, mu);
-
-					auto const &c = Derivatives::c(J, lambda, mu);
-					Node::Forces const &T = Derivatives::T(dN_by_dx, v, sigma);
-					log += fmt::format("\nT\n{}", T);
-
-					auto const &Kc = Derivatives::Kc(dN_by_dx, v, c);
-					auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
-					Element::Stiffness const &K = Kc + Ks;
-					log += fmt::format("\nK\n{}", K);
-
-					attrib_T[*itcellh] = T;
-					attrib_K[*itcellh] = K;
-				}
+				Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
 
 				std::vector<Node::Pos> u{};
 				u.resize(mesh.n_vertices());
@@ -1717,10 +1673,10 @@ SCENARIO("Solution of two elements")
 					Node::Force Ka_u = 0;
 					for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
 					{
-						auto const & cell_vtxhs = attrib_vtxh[*itcellh];
+						auto const & cell_vtxhs = attrib.vtxh[*itcellh];
 						auto const & cell_a = index_of(cell_vtxhs, *itvtxh);
-						auto const & cell_T = attrib_T[*itcellh];
-						auto const & cell_K = attrib_K[*itcellh];
+						auto const & cell_T = attrib.T[*itcellh];
+						auto const & cell_K = attrib.K[*itcellh];
 
 						Ta += cell_T(cell_a, all);
 						Kaa += cell_K(cell_a, all, cell_a, all);
@@ -1736,8 +1692,8 @@ SCENARIO("Solution of two elements")
 
 						for (auto itcellh = mesh.hec_iter(*itheh); itcellh.valid(); itcellh++)
 						{
-							auto const & cell_K = attrib_K[*itcellh];
-							auto const & cell_vtxhs = attrib_vtxh[*itcellh];
+							auto const & cell_K = attrib.K[*itcellh];
+							auto const & cell_vtxhs = attrib.vtxh[*itcellh];
 							auto const cell_a = index_of(cell_vtxhs, vtxh_src);
 							auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
 //							Tensor::Multi<Node::dim, Node::dim> cell_Kab = cell_K(cell_a, all, cell_b, all);
@@ -1759,7 +1715,7 @@ SCENARIO("Solution of two elements")
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
 					auto const a = (*itvtxh).idx();
-					attrib_x[a] += u[a];
+					attrib.x[a] += u[a];
 					max_norm = std::max(norm(u[a]), max_norm);
 				}
 
@@ -1767,21 +1723,21 @@ SCENARIO("Solution of two elements")
 					break;
 			}
 
-			INFO(log);
+			INFO(log)
 
 			THEN("solution converges to deformed mesh")
 			{
 				WARN(fmt::format("Converged in {} steps", step));
 				CHECK(step < max_steps);
-				check_equal(attrib_x[0], "x0", {0.500000, 0.000000, 0.000000});
-				check_equal(attrib_x[1], "x1", {1.000000, 0.000000, 0.000000});
-				check_equal(attrib_x[2], "x2", {0.333333, 1.154972, -0.122244});
-				check_equal(attrib_x[3], "x3", {0.000000, 0.000000, 1.000000});
-				check_equal(attrib_x[4], "x4", {0.333333, 0.619084, 0.518097});
+				check_equal(attrib.x[0], "x0", {0.500000, 0.000000, 0.000000});
+				check_equal(attrib.x[1], "x1", {1.000000, 0.000000, 0.000000});
+				check_equal(attrib.x[2], "x2", {0.333333, 1.154972, -0.122244});
+				check_equal(attrib.x[3], "x3", {0.000000, 0.000000, 1.000000});
+				check_equal(attrib.x[4], "x4", {0.333333, 0.619084, 0.518097});
 
 				auto const total_volume =
-					Derivatives::V(attrib_x.for_element(attrib_vtxh[0])) +
-					Derivatives::V(attrib_x.for_element(attrib_vtxh[1]));
+					Derivatives::V(attrib.x.for_element(attrib.vtxh[0])) +
+					Derivatives::V(attrib.x.for_element(attrib.vtxh[1]));
 				CHECK(total_volume == Approx(0.1077625528));
 			}
 		}

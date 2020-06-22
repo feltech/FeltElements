@@ -64,9 +64,9 @@ target_sources(tests PRIVATE ${_src_test} ${_src_lib})
 conan_target_link_libraries(tests)
 # Add sanitizer and coverage build options.
 target_compile_options(
-	tests PRIVATE -fsanitize=address --coverage)
+	tests PRIVATE -fsanitize=address -static-libasan --coverage)
 target_link_options(
-	tests PRIVATE -fsanitize=address --coverage)
+	tests PRIVATE -fsanitize=address -static-libasan --coverage)
 get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests
 catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")

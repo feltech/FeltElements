@@ -72,6 +72,33 @@ protected:
 	}
 };
 
+
+template <class Derived>
+class Position : protected Vertex<Derived>
+{
+	using ThisBase = Vertex<Derived>;
+public:
+	explicit Position(Mesh& mesh) : ThisBase{mesh}
+	{
+		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+		{
+			Mesh::PointT vtx = mesh.vertex(*itvtxh);
+			(*this)[*itvtxh] =
+				Tensor::BaseMap<Mesh::PointT::value_type, Mesh::PointT::size()>{vtx.data()};
+		}
+	}
+
+	[[nodiscard]] Node::Positions for_element(Element::Vtxhs const & vtxhs) const
+	{
+		using Tensor::Func::all;
+		Node::Positions x;
+		for (Tensor::Index node_idx = 0; node_idx < Node::Positions::dimension(0); node_idx++)
+			x(node_idx, all) = ThisBase::m_prop[vtxhs[node_idx]];
+
+		return x;
+	}
+};
+
 template <typename TData>
 struct CellTraits : public BaseTraits<TData>
 {
@@ -98,11 +125,11 @@ protected:
  */
 namespace Node::Attribute
 {
+class MaterialPosition;
 class SpatialPosition;
 }  // namespace Node::Attribute
 namespace Element::Attribute
 {
-class MaterialPosition;
 class VertexHandles;
 class MaterialShapeDerivative;
 class NodalForces;
@@ -122,17 +149,17 @@ struct Traits<SpatialPosition> : public VertexTraits<Node::Pos>
 	static constexpr std::string_view prop_name = "spatial_position";
 };
 
+template <>
+struct Traits<MaterialPosition> : public VertexTraits<Node::Pos>
+{
+	static constexpr std::string_view prop_name = "material_position";
+};
+
 using namespace Element::Attribute;
 template <>
 struct Traits<VertexHandles> : public CellTraits<Element::Vtxhs>
 {
 	static constexpr std::string_view prop_name = "vertices";
-};
-
-template <>
-struct Traits<MaterialPosition> : public CellTraits<Node::Positions>
-{
-	static constexpr std::string_view prop_name = "material_position";
 };
 
 template <>

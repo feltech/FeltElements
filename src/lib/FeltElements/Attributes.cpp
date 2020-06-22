@@ -3,30 +3,6 @@
 
 namespace FeltElements
 {
-namespace Node::Attribute
-{
-SpatialPosition::SpatialPosition(Mesh& mesh) : ThisBase{mesh}
-{
-	for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-	{
-		using OvmVtx = std::decay<decltype(mesh.vertex(*itvtxh))>::type;
-		OvmVtx vtx = mesh.vertex(*itvtxh);
-		Data & position = (*this)[*itvtxh];
-		position = Tensor::BaseMap<OvmVtx::value_type, OvmVtx::size()>{vtx.data()};
-	}
-}
-
-Node::Positions SpatialPosition::for_element(Element::Vtxhs const & vtxhs) const
-{
-	using Tensor::Func::all;
-	Node::Positions x;
-	for (Tensor::Index node_idx = 0; node_idx < Node::Positions::dimension(0); node_idx++)
-		x(node_idx, all) = m_prop[vtxhs[node_idx]];
-
-	return x;
-}
-} // namespace Node::Attribute
-
 namespace Element::Attribute
 {
 VertexHandles::VertexHandles(Mesh& mesh) : ThisBase{mesh}
@@ -38,29 +14,14 @@ VertexHandles::VertexHandles(Mesh& mesh) : ThisBase{mesh}
 	}
 }
 
-MaterialPosition::MaterialPosition(Mesh& mesh, VertexHandles const& vtxhs)
-	: ThisBase{mesh}
+MaterialShapeDerivative::MaterialShapeDerivative(
+	Mesh& mesh, VertexHandles const & vtxhs, Node::Attribute::MaterialPosition const& X) :
+	ThisBase{mesh}
 {
 	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
 	{
-		using OvmVtx = Mesh::PointT;
-		auto const & cell_vtxhs = vtxhs[*itcellh];
-		auto & X = m_prop[*itcellh];
-		for (Tensor::Index node_idx = 0; node_idx < Node::Positions::dimension(0); node_idx++)
-		{
-			OvmVtx vtx = mesh.vertex(cell_vtxhs[node_idx]);
-			auto const & pos = Tensor::BaseMap<OvmVtx::value_type, OvmVtx::size()>{vtx.data()};
-			using Tensor::Func::all;
-			X(node_idx, all) = pos;
-		}
+		(*this)[*itcellh] = Derivatives::dN_by_dX(X.for_element(vtxhs[*itcellh]));
 	}
-}
-
-MaterialShapeDerivative::MaterialShapeDerivative(Mesh& mesh, MaterialPosition const& X)
-	: ThisBase{mesh}
-{
-	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
-		(*this)[*itcellh] = Derivatives::dN_by_dX(X[*itcellh]);
 }
 
 // clang-format off
@@ -91,4 +52,8 @@ Stiffness::Stiffness(Mesh& mesh) : ThisBase(mesh)
 		(*this)[*itcellh] = 0;
 }
 } // namespace FeltElements::Attribute
+
+Attributes::Attributes(Mesh& mesh) :
+	x{mesh}, X{mesh}, vtxh{mesh}, dN_by_dX{mesh, vtxh, X}, T{mesh}, K{mesh}
+{}
 }

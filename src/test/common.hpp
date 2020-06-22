@@ -185,12 +185,9 @@ inline auto load_tet(char const * const file_name)
 {
 	using namespace FeltElements;
 	FeltElements::Mesh mesh = load_ovm_mesh(file_name);
-	Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
-	Element::Attribute::MaterialPosition const attrib_X{mesh, attrib_vtxhs};
-	Node::Attribute::SpatialPosition const attrib_x{mesh};
-	Node::Positions X = attrib_X[0];  // De-constify.
-	Node::Positions x = attrib_x.for_element(attrib_vtxhs[0]);
+	FeltElements::Attributes attrib{mesh};
+	auto const & cell_vtxhs = attrib.vtxh[0];
 
-	return std::tuple(X, x);
+	return std::tuple(attrib.X.for_element(cell_vtxhs), attrib.x.for_element(cell_vtxhs));
 }
 
