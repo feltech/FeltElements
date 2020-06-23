@@ -5,7 +5,6 @@ boost/1.69.0@conan/stable
 Catch2/2.10.2@catchorg/stable
 eigen/3.3.4@conan/stable
 range-v3/0.10.0@ericniebler/stable
-OpenVolumeMesh/2.0.0@weatherhead99/testing
 fmt/6.0.0@bincrafters/stable
 
 [options]

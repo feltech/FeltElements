@@ -60,11 +60,11 @@ SCENARIO("Mesh attributes")
 				auto itcellh = mesh.cells_begin();
 				CHECK(
 					attrib_vtxhs[*itcellh] ==
-					std::array<OpenVolumeMesh::VertexHandle, 4>{0, 3, 1, 4});
+					std::array<Vtxh, 4>{Vtxh{0}, Vtxh{3}, Vtxh{1}, Vtxh{4}});
 				itcellh++;
 				CHECK(
 					attrib_vtxhs[*itcellh] ==
-					std::array<OpenVolumeMesh::VertexHandle, 4>{2, 0, 1, 4});
+					std::array<Vtxh, 4>{Vtxh{2}, Vtxh{0}, Vtxh{1}, Vtxh{4}});
 			}
 
 			AND_WHEN("element natural wrt material coords attributes are constructed")
@@ -146,11 +146,11 @@ SCENARIO("Metrics of undeformed mesh")
 		WHEN("vertex index mapping is fetched")
 		{
 			Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
-			auto const & vtxhs = attrib_vtxhs[0];
+			auto const & vtxhs = attrib_vtxhs[Cellh{0}];
 
 			THEN("mapping is expected")
 			{
-				CHECK(vtxhs == Element::Vtxhs{ 0, 1, 2, 3 });
+				CHECK(vtxhs == Element::Vtxhs{Vtxh{0}, Vtxh{1}, Vtxh{2}, Vtxh{3}});
 			}
 
 			AND_WHEN("material node position tensor is constructed")
@@ -1192,12 +1192,12 @@ SCENARIO("Solution of a single element")
 
 		auto mesh = load_ovm_mesh(file_name_one);
 		Attributes attrib{mesh};
-		auto const & vtxhs = attrib.vtxh[0];
+		auto const & vtxhs = attrib.vtxh[Cellh{0}];
 		auto const & X = attrib.X.for_element(vtxhs);
 		// Push top-most node to the right slightly.
-		attrib.x[3](0) += 0.5;
+		attrib.x[Vtxh{3}](0) += 0.5;
 		auto x = attrib.x.for_element(vtxhs);
-		auto const & dN_by_dX = attrib.dN_by_dX[0];
+		auto const & dN_by_dX = attrib.dN_by_dX[Cellh{0}];
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
@@ -1254,16 +1254,6 @@ SCENARIO("Solution of a single element")
 			for (step = 0; step < max_steps; step++)
 			{
 				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<\n", step);
-
-				for (auto node_idx : ranges::views::ints(0ul, X.dimension(0)))
-				{
-					using OvmVec = decltype(mesh)::PointT;
-					OvmVec mesh_vtx{x(node_idx, 0), x(node_idx, 1), x(node_idx, 2)};
-					mesh.set_vertex(vtxhs[node_idx], mesh_vtx);
-				}
-				OpenVolumeMesh::IO::FileManager{}.writeFile(
-					fmt::format("artefacts/single_tet_solve.{}.ovm", step), mesh);
-
 				log += fmt::format("\nx\n{}", x);
 
 				Scalar const v = Derivatives::V(x);
@@ -1471,7 +1461,7 @@ SCENARIO("Solution of two elements")
 		using Tensor::Func::seq;
 		using OvmVtx = Mesh::PointT;
 		using VerticesMatrix = Eigen::Matrix<
-			Scalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+			Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
 		using EigenMapOvmVertices = Eigen::Map<VerticesMatrix const>;
 		using EigenMapTensorVertices = Eigen::Map<
 			VerticesMatrix const, Eigen::Unaligned,
@@ -1488,12 +1478,13 @@ SCENARIO("Solution of two elements")
 
 		auto mesh = load_ovm_mesh(file_name_two);
 		Attributes attrib{mesh};
+		write_ovm_mesh(mesh, attrib.x, "two_elem_initial");
 
 		FixedDOFs fixedDofs{3 * mesh.n_vertices()};
 		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 		{
 			OvmVtx const & vtx = mesh.vertex(*itvtxh);
-			Eigen::Index vtx_idx = int{*itvtxh};
+			Eigen::Index vtx_idx = (*itvtxh).idx();
 
 			if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
 				fixedDofs.block<3, 1>(3 * vtx_idx, 0) = FixedDOF{1.0, 1.0, 1.0};
@@ -1502,15 +1493,15 @@ SCENARIO("Solution of two elements")
 		}
 
 		auto const material_volume =
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[0])) +
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[1]));
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
 
 		// Deform vertex.
-		attrib.x[0](0) += 0.5;
+		attrib.x[Vtxh{0}](0) += 0.5;
 
 		auto const initial_deformed_volume =
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[0])) +
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[1]));
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
 
 		CAPTURE(lambda, mu, material_volume, initial_deformed_volume);
 
@@ -1518,11 +1509,11 @@ SCENARIO("Solution of two elements")
 		Eigen::Index constexpr cols = 3;
 
 		INFO("Mesh material vertices")
-		EigenMapOvmVertices mat_vtxs{mesh.vertex(0).data(), rows, cols};
+		EigenMapOvmVertices mat_vtxs{mesh.vertex(Vtxh{0}).data(), rows, cols};
 		INFO(mat_vtxs)
 
 		INFO("Mesh spatial vertices")
-		EigenMapTensorVertices const & mat_x{attrib.x[0].data(), rows, cols};
+		EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
 		INFO(mat_x)
 
 		WHEN("displacement is solved")
@@ -1612,6 +1603,8 @@ SCENARIO("Solution of two elements")
 					attrib.x[*itvtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtx_idx, 0).data()};
 				}
 
+				write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
+
 				if (mat_u.lpNorm<Eigen::Infinity>() < epsilon)
 					break;
 			}
@@ -1633,8 +1626,8 @@ SCENARIO("Solution of two elements")
 				// clang-format on
 
 				auto const total_volume =
-					Derivatives::V(attrib.x.for_element(attrib.vtxh[0])) +
-					Derivatives::V(attrib.x.for_element(attrib.vtxh[1]));
+					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
+					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
 				CHECK(total_volume == Approx(0.1077625528));
 
 			}
@@ -1712,12 +1705,14 @@ SCENARIO("Solution of two elements")
 					log += fmt::format("\nu[{}] = {}", a, u[a]);
 				}
 
-				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 				{
-					auto const a = (*itvtxh).idx();
-					attrib.x[a] += u[a];
+					auto const a = vtxh.idx();
+					attrib.x[vtxh] += u[a];
 					max_norm = std::max(norm(u[a]), max_norm);
 				}
+
+				write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));
 
 				if (max_norm < epsilon)
 					break;
@@ -1729,15 +1724,15 @@ SCENARIO("Solution of two elements")
 			{
 				WARN(fmt::format("Converged in {} steps", step));
 				CHECK(step < max_steps);
-				check_equal(attrib.x[0], "x0", {0.500000, 0.000000, 0.000000});
-				check_equal(attrib.x[1], "x1", {1.000000, 0.000000, 0.000000});
-				check_equal(attrib.x[2], "x2", {0.333333, 1.154972, -0.122244});
-				check_equal(attrib.x[3], "x3", {0.000000, 0.000000, 1.000000});
-				check_equal(attrib.x[4], "x4", {0.333333, 0.619084, 0.518097});
+				check_equal(attrib.x[Vtxh{0}], "x0", {0.500000, 0.000000, 0.000000});
+				check_equal(attrib.x[Vtxh{1}], "x1", {1.000000, 0.000000, 0.000000});
+				check_equal(attrib.x[Vtxh{2}], "x2", {0.333333, 1.154972, -0.122244});
+				check_equal(attrib.x[Vtxh{3}], "x3", {0.000000, 0.000000, 1.000000});
+				check_equal(attrib.x[Vtxh{4}], "x4", {0.333333, 0.619084, 0.518097});
 
 				auto const total_volume =
-					Derivatives::V(attrib.x.for_element(attrib.vtxh[0])) +
-					Derivatives::V(attrib.x.for_element(attrib.vtxh[1]));
+					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
+					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
 				CHECK(total_volume == Approx(0.1077625528));
 			}
 		}

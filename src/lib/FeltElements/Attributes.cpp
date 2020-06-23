@@ -56,4 +56,4 @@ Stiffness::Stiffness(Mesh& mesh) : ThisBase(mesh)
 Attributes::Attributes(Mesh& mesh) :
 	x{mesh}, X{mesh}, vtxh{mesh}, dN_by_dX{mesh, vtxh, X}, T{mesh}, K{mesh}
 {}
-}
+} // namespace FeltElements

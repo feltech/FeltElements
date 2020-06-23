@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
+include(ExternalProject)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -48,8 +49,18 @@ conan_cmake_run(
 	BUILD missing  # build packages with no binary available
 )
 conan_load_buildinfo()
+
+set(OpenVolumeMesh_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/OpenVolumeMesh)
+ExternalProject_Add(
+	OpenVolumeMeshGit
+	GIT_REPOSITORY "https://www.graphics.rwth-aachen.de:9000/OpenVolumeMesh/OpenVolumeMesh.git"
+	PREFIX "${CMAKE_CURRENT_BINARY_DIR}/OpenVolumeMesh"
+	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${OpenVolumeMesh_DIR}
+	BUILD_BYPRODUCTS # Required for ninja
+)
+
 # Library include directories
-include_directories(src/lib SYSTEM vendor/Fastor ${CONAN_INCLUDE_DIRS})
+include_directories(src/lib SYSTEM vendor/Fastor ${OpenVolumeMesh_DIR}/include ${CONAN_INCLUDE_DIRS})
 
 ###################################
 # Configure tests
@@ -62,6 +73,10 @@ file(GLOB _src_test LIST_DIRECTORIES false src/test/*.cpp)
 target_sources(tests PRIVATE ${_src_test} ${_src_lib})
 # Add libraries to link.
 conan_target_link_libraries(tests)
+# Link OpenVolumeMesh
+add_dependencies(tests OpenVolumeMeshGit)
+target_link_directories(tests PRIVATE ${OpenVolumeMesh_DIR}/lib)
+target_link_libraries(tests OpenVolumeMeshd)
 # Add sanitizer and coverage build options.
 target_compile_options(
 	tests PRIVATE -fsanitize=address -static-libasan --coverage)
