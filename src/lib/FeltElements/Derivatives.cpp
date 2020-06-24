@@ -2,7 +2,6 @@
 
 #include "Attributes.hpp"
 #include "TetGenIO.hpp"
-#include "internal/Conversions.hpp"
 
 namespace
 {
