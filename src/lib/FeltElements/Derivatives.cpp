@@ -59,18 +59,18 @@ auto const dX_by_dL = [](auto const & X) {
 		X, Element::Attribute::MaterialShapeDerivative::dN_by_dL);
 };
 
-auto const dL_by_dX = [](auto const & dX_by_dL) {
-	return Func::inv(dX_by_dL);
+auto const dL_by_dX = [](auto const & dX_by_dL_) {
+	return Func::inv(dX_by_dL_);
 };
 
-auto const dN_by_dX = [](auto const & dL_by_dX) {
+auto const dN_by_dX = [](auto const & dL_by_dX_) {
 	// dN/dX^T = dX/dL^(-T) * dN/dL^T => dN/dX = dN/dL * dX/dL^(-1) = dN/dL * dL/dX
 	return Func::einsum<Idxs<i, k>, Idxs<k, j>>(
-		Element::Attribute::MaterialShapeDerivative::dN_by_dL, dL_by_dX);
+		Element::Attribute::MaterialShapeDerivative::dN_by_dL, dL_by_dX_);
 };
 
-auto const dx_by_dX = [](auto const & x, auto const & dN_by_dX) {
-	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(x, dN_by_dX);
+auto const dx_by_dX = [](auto const & x, auto const & dN_by_dX_) {
+	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(x, dN_by_dX_);
 };
 
 auto const finger = [](auto const & F) {
@@ -83,9 +83,9 @@ auto const sigma = [](
 	return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
 };
 
-auto const T = [](auto const & dN_by_dx, Scalar const v, auto const & sigma) {
+auto const T = [](auto const & dN_by_dx, Scalar const v, auto const & sigma_) {
 	// T = v * sigma * dN/dx^T
-	return v * Func::einsum<Idxs<a, k>, Idxs<i, k>>(dN_by_dx, sigma);
+	return v * Func::einsum<Idxs<a, k>, Idxs<i, k>>(dN_by_dx, sigma_);
 };
 
 auto const c = [](Scalar J, Scalar lambda, Scalar mu) {
@@ -96,11 +96,11 @@ auto const c = [](Scalar J, Scalar lambda, Scalar mu) {
 };
 
 
-auto const Kc = [](auto const & dN_by_dx, auto const & c) {
+auto const Kc = [](auto const & dN_by_dx, auto const & c_) {
 
   // Kc = v * dN_a/dx_k * c_ikjl * dN_b/dx_l
 	return Func::einsum<Idxs<a, k>, Idxs<i, k, j, l>, Idxs<b, l>, Order<a, i, b, j>>(
-	  dN_by_dx, c, dN_by_dx);
+	  dN_by_dx, c_, dN_by_dx);
 };
 
 

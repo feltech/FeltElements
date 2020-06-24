@@ -12,7 +12,8 @@
 namespace
 {
 template <class Tensor, std::size_t idx>
-const Eigen::Index size = Eigen::internal::get<idx, typename Tensor::Dimensions::Base>::value;
+const Eigen::Index size =
+	Eigen::internal::get<static_cast<int>(idx), typename Tensor::Dimensions::Base>::value;
 
 template <class Tensor, std::size_t... dim>
 constexpr auto dimensions(std::index_sequence<dim...>)
@@ -109,7 +110,7 @@ ostream_if_eigen<Matrix> operator<< (std::ostream & os, Matrix value)
 	using boost::algorithm::join;
 
 	std::vector<std::string> is{};
-	is.reserve(value.rows());
+	is.reserve(static_cast<size_t>(value.rows()));
 	for (Eigen::Index i = 0; i < value.rows(); i++)
 	{
 		using Vec = Eigen::Matrix<typename Matrix::Scalar, Matrix::ColsAtCompileTime, 1>;

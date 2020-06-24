@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 include(ExternalProject)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -7,6 +8,12 @@ project(FeltElements)
 # Enable testing
 set(BUILD_TESTING)
 enable_testing()
+
+###################################
+# Setup reusable interface projects
+add_library(project_warnings INTERFACE)
+include(CompilerWarnings)
+set_project_warnings(project_warnings)
 
 ###################################
 # Fetch conan CMake integration
@@ -25,8 +32,6 @@ conan_check(REQUIRED)
 
 # Add extra warnings.
 add_compile_options(
-	# Extra warnings
-	-Wall -Wextra -Wpedantic
 	# Enable SSE etc
 	-march=native)
 # Glob lib sources
@@ -40,7 +45,7 @@ add_compile_definitions(
 add_executable(tests)
 
 ###################################
-# Install C++ libraries from conan.
+# Install C++ libraries.
 
 conan_cmake_run(
 	CONANFILE conanfile.txt  # Install from conanfile
@@ -76,12 +81,12 @@ conan_target_link_libraries(tests)
 # Link OpenVolumeMesh
 add_dependencies(tests OpenVolumeMeshGit)
 target_link_directories(tests PRIVATE ${OpenVolumeMesh_DIR}/lib)
-target_link_libraries(tests OpenVolumeMeshd)
 # Add sanitizer and coverage build options.
 target_compile_options(
-	tests PRIVATE -fsanitize=address -static-libasan --coverage)
+	tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage -Wno-system-headers)
 target_link_options(
-	tests PRIVATE -fsanitize=address -static-libasan --coverage)
+	tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage)
+target_link_libraries(tests OpenVolumeMeshd project_warnings)
 get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests
 catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")

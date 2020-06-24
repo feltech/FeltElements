@@ -14,10 +14,12 @@ TetGenIO::TetGenIO(std::string&& file_name) : m_file_name{file_name}, m_io{}
 	m_io.load_tet(const_cast<char *>(m_file_name.c_str()));
 	m_io.load_face(const_cast<char *>(m_file_name.c_str()));
 	m_io.numberofpointattributes = 3;
-	m_io.pointattributelist = new REAL[m_io.numberofpointattributes * m_io.numberofpoints];
+	m_io.pointattributelist = new REAL[
+		static_cast<unsigned long>(m_io.numberofpointattributes * m_io.numberofpoints)];
 	memset(
 		m_io.pointattributelist, 0,
-		m_io.numberofpointattributes * m_io.numberofpoints * sizeof(REAL));
+		static_cast<unsigned long>(
+			m_io.numberofpointattributes * m_io.numberofpoints) * sizeof(REAL));
 }
 TetGenIO::~TetGenIO() = default;
 
@@ -50,17 +52,17 @@ OpenVolumeMesh::GeometricTetrahedralMeshV3d TetGenIO::to_mesh() const
 
 std::size_t TetGenIO::num_points() const
 {
-	return m_io.numberofpoints;
+	return static_cast<size_t>(m_io.numberofpoints);
 }
 
 std::size_t TetGenIO::num_simplexes() const
 {
-	return m_io.numberoftetrahedra;
+	return static_cast<size_t>(m_io.numberoftetrahedra);
 }
 
 std::size_t TetGenIO::num_corners() const
 {
-	return m_io.numberofcorners;
+	return static_cast<size_t>(m_io.numberofcorners);
 }
 
 double * TetGenIO::points() const
@@ -86,7 +88,7 @@ std::array<double, 3> TetGenIO::vertex(std::size_t const vertex_idx) const
 
 std::size_t TetGenIO::tet_vertex_idx(std::size_t const tet_idx, std::size_t const corner_idx) const
 {
-	return corners()[tet_idx * num_corners() + corner_idx];
+	return static_cast<size_t>(corners()[tet_idx * num_corners() + corner_idx]);
 }
 
 std::size_t TetGenIO::point_idx(std::size_t vertex_idx)

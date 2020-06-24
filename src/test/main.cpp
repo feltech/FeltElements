@@ -97,10 +97,11 @@ SCENARIO("Mesh attributes")
 			{
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
+					Tensor::ConstMap<3> const vtx{mesh.vertex(*itvtxh).data()};
 					check_equal(
 						attrib_x[*itvtxh],
 						"x",
-						reinterpret_cast<Node::Pos const &>(mesh.vertex(*itvtxh)),
+						vtx,
 						"X");
 				}
 			}
@@ -204,7 +205,6 @@ SCENARIO("Metrics of undeformed mesh")
 
 					AND_WHEN("spatial node position tensor is constructed")
 					{
-						Node::Attribute::SpatialPosition attrib_x{mesh};
 						auto const x = attrib_x.for_element(vtxhs);
 
 						THEN("spatial node positions equal material positions")
@@ -1176,7 +1176,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 SCENARIO("Solution of a single element")
 {
-	GIVEN("tangent stiffness and equivalent node force tensors")
+	GIVEN("single element mesh and material properties")
 	{
 		using namespace FeltElements;
 		using Tensor::Func::all;
@@ -1196,8 +1196,6 @@ SCENARIO("Solution of a single element")
 		auto const & X = attrib.X.for_element(vtxhs);
 		// Push top-most node to the right slightly.
 		attrib.x[Vtxh{3}](0) += 0.5;
-		auto x = attrib.x.for_element(vtxhs);
-		auto const & dN_by_dX = attrib.dN_by_dX[Cellh{0}];
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
@@ -1250,6 +1248,9 @@ SCENARIO("Solution of a single element")
 			std::size_t step;
 			std::size_t constexpr max_steps = 1000;
 			std::string log;
+
+			auto x = attrib.x.for_element(vtxhs);
+			auto const & dN_by_dX = attrib.dN_by_dX[Cellh{0}];
 
 			for (step = 0; step < max_steps; step++)
 			{
@@ -1337,6 +1338,9 @@ SCENARIO("Solution of a single element")
 			std::size_t step;
 			std::size_t constexpr max_steps = 10;
 			std::string log;
+
+			auto x = attrib.x.for_element(vtxhs);
+			auto const & dN_by_dX = attrib.dN_by_dX[Cellh{0}];
 
 			for (step = 0; step < max_steps; step++)
 			{
@@ -1448,7 +1452,7 @@ using EigenConstTensorMap = Eigen::Map<
 static auto constexpr const index_of = [](auto const & haystack, auto && needle) {
   auto const & it = std::find(
 	  haystack.cbegin(), haystack.cend(), std::forward<decltype(needle)>(needle));
-  return std::distance(haystack.cbegin(), it);
+  return static_cast<FeltElements::Tensor::Index>(std::distance(haystack.cbegin(), it));
 };
 
 SCENARIO("Solution of two elements")
@@ -1540,7 +1544,8 @@ SCENARIO("Solution of two elements")
 						auto const & cell_T = attrib.T[*itcellh];
 
 						mat_T.block<3, 1>(3 * vtx_idx, 0) +=
-						    EigenConstTensorMap<4, 3>{cell_T.data()}.block<1, 3>(cell_vtx_idx, 0);
+						    EigenConstTensorMap<4, 3>{cell_T.data()}.block<1, 3>(
+								static_cast<Eigen::Index>(cell_vtx_idx), 0);
 					}
 				}
 				mat_T.array() *= (Eigen::VectorXd::Ones(fixedDofs.size()) - fixedDofs).array();
@@ -1655,7 +1660,7 @@ SCENARIO("Solution of two elements")
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
 					auto const & vtxh_src = *itvtxh;
-					auto const a = vtxh_src.idx();
+					auto const a = static_cast<Tensor::Index>(vtxh_src.idx());
 					auto const vtx = mesh.vertex(vtxh_src);
 					Scalar fixed = 0.0;
 					if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
@@ -1681,7 +1686,7 @@ SCENARIO("Solution of two elements")
 						Tensor::Multi<Node::dim, Node::dim> Kab = 0;
 						auto const & halfedge = mesh.halfedge(*itheh);
 						auto const & vtxh_dst = halfedge.to_vertex();
-						auto const b = vtxh_dst.idx();
+						auto const b = static_cast<Tensor::Index>(vtxh_dst.idx());
 
 						for (auto itcellh = mesh.hec_iter(*itheh); itcellh.valid(); itcellh++)
 						{
@@ -1707,7 +1712,7 @@ SCENARIO("Solution of two elements")
 
 				for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 				{
-					auto const a = vtxh.idx();
+					auto const a = static_cast<Tensor::Index>(vtxh.idx());
 					attrib.x[vtxh] += u[a];
 					max_norm = std::max(norm(u[a]), max_norm);
 				}
