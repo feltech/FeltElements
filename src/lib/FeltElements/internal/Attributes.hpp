@@ -5,13 +5,12 @@
 #include "FeltElements/Derivatives.hpp"
 #include "FeltElements/Typedefs.hpp"
 
-namespace FeltElements
-{
-namespace Attribute::internal
+namespace FeltElements::Attribute::internal
 {
 template <class Derived>
 struct Traits
 {
+	// Enforce that this must be specialised.
 	template <typename T>
 	struct missing_traits : std::false_type
 	{
@@ -71,12 +70,12 @@ protected:
 };
 
 template <class Derived>
-class PositionBase : protected VertexBase<Derived>
+class VertexPositionBase : protected VertexBase<Derived>
 {
 	using ThisBase = VertexBase<Derived>;
 
-public:
-	explicit PositionBase(Mesh& mesh) : ThisBase{mesh}
+protected:
+	explicit VertexPositionBase(Mesh& mesh) : ThisBase{mesh}
 	{
 		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 		{
@@ -116,6 +115,4 @@ protected:
 	{
 	}
 };
-}  // namespace Attribute::internal
-
-}  // namespace FeltElements
+}  // namespace FeltElements::Attribute::internal

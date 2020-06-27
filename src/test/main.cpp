@@ -88,6 +88,47 @@ SCENARIO("Mesh attributes")
 			}
 		}
 
+		WHEN("material position attributes are constructed")
+		{
+			Attribute::Vertex::MaterialPosition const attrib_x{mesh};
+
+			THEN("attributes are initialised to material position")
+			{
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					Tensor::ConstMap<3> const vtx{mesh.vertex(*itvtxh).data()};
+					check_equal(attrib_x[*itvtxh], "x", vtx, "X");
+				}
+			}
+
+			AND_WHEN("element nodal spatial position tensor is constructed")
+			{
+				Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
+
+				auto itcellh = mesh.cells_begin();
+				Node::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				itcellh++;
+				Node::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+
+				THEN("positions are expected")
+				{
+					// clang-format off
+					check_equal(x1, "x1", {
+						{0.000000, 0.000000, 0.000000},
+						{0.000000, 0.000000, 1.000000},
+						{1.000000, 0.000000, 0.000000},
+						{0.000000, 0.500000, 0.500000}
+					});
+					check_equal(x2, "x2", {
+						{0.000000, 1.000000, 0.000000},
+						{0.000000, 0.000000, 0.000000},
+						{1.000000, 0.000000, 0.000000},
+						{0.000000, 0.500000, 0.500000}
+					});
+					// clang-format on
+				}
+			}
+		}
 		WHEN("spatial position attributes are constructed")
 		{
 			Attribute::Vertex::SpatialPosition const attrib_x{mesh};
@@ -130,6 +171,21 @@ SCENARIO("Mesh attributes")
 						{0.000000, 0.500000, 0.500000}
 					});
 					// clang-format on
+				}
+			}
+		}
+
+		WHEN("fixed degree of freedom attributes are constructed")
+		{
+			Attribute::Vertex::FixedDOF const attrib{mesh};
+
+			THEN("attributes are initialised to zero")
+			{
+				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				{
+					Node::Pos zero;
+					zero.zeros();
+					check_equal(attrib[*itvtxh], "fixed DOFs", zero, "zero");
 				}
 			}
 		}

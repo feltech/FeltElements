@@ -13,6 +13,7 @@ namespace Vertex
 {
 class MaterialPosition;
 class SpatialPosition;
+class FixedDOF;
 }  // namespace Vertex
 namespace Cell
 {
@@ -25,14 +26,19 @@ class Stiffness;
 namespace internal
 {
 template <>
+struct Traits<Vertex::MaterialPosition> : public VertexTraits<Node::Pos>
+{
+	static constexpr std::string_view prop_name = "material_position";
+};
+template <>
 struct Traits<Vertex::SpatialPosition> : public VertexTraits<Node::Pos>
 {
 	static constexpr std::string_view prop_name = "spatial_position";
 };
 template <>
-struct Traits<Vertex::MaterialPosition> : public VertexTraits<Node::Pos>
+struct Traits<Vertex::FixedDOF> : public VertexTraits<Node::Pos>
 {
-	static constexpr std::string_view prop_name = "material_position";
+	static constexpr std::string_view prop_name = "spatial_position";
 };
 
 using namespace Attribute::Cell;
@@ -63,24 +69,33 @@ struct Traits<MaterialShapeDerivative> : public CellTraits<Element::ShapeDerivat
 
 namespace Vertex
 {
-class SpatialPosition final : private internal::PositionBase<SpatialPosition>
+class MaterialPosition final : private internal::VertexPositionBase<MaterialPosition>
 {
-	using ThisBase = internal::PositionBase<SpatialPosition>;
+	using ThisBase = internal::VertexPositionBase<MaterialPosition>;
 
 public:
-	using ThisBase::PositionBase;
+	explicit MaterialPosition(Mesh& mesh);
 	using ThisBase::operator[];
 	using ThisBase::for_element;
 };
 
-class MaterialPosition final : private internal::PositionBase<MaterialPosition>
+class SpatialPosition final : private internal::VertexPositionBase<SpatialPosition>
 {
-	using ThisBase = internal::PositionBase<MaterialPosition>;
+	using ThisBase = internal::VertexPositionBase<SpatialPosition>;
 
 public:
-	using ThisBase::PositionBase;
+	explicit SpatialPosition(Mesh& mesh);
 	using ThisBase::operator[];
 	using ThisBase::for_element;
+};
+
+class FixedDOF final : private internal::VertexBase<FixedDOF>
+{
+	using ThisBase = internal::VertexBase<FixedDOF>;
+
+public:
+	explicit FixedDOF(Mesh& mesh);
+	using ThisBase::operator[];
 };
 }  // namespace Vertex
 
