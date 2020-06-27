@@ -12,10 +12,6 @@ auto constexpr delta = [](auto const i, auto const j)
 	return i == j;
 };
 
-template <typename Matrix>
-using is_ovm_vector = typename std::enable_if<
-	(std::is_same<Matrix, typename Matrix::vector_type>::value), void*>::type;
-
 Element::Elasticity const c_lambda = ([]() { // NOLINT(cert-err58-cpp)
   std::size_t constexpr N = 3;
   Element::Elasticity c{};
@@ -55,7 +51,7 @@ using namespace Tensor;
 
 auto const dX_by_dL = [](auto const & X) {
 	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(
-		X, Element::Attribute::MaterialShapeDerivative::dN_by_dL);
+		X, Attribute::Cell::MaterialShapeDerivative::dN_by_dL);
 };
 
 auto const dL_by_dX = [](auto const & dX_by_dL_) {
@@ -65,7 +61,7 @@ auto const dL_by_dX = [](auto const & dX_by_dL_) {
 auto const dN_by_dX = [](auto const & dL_by_dX_) {
 	// dN/dX^T = dX/dL^(-T) * dN/dL^T => dN/dX = dN/dL * dX/dL^(-1) = dN/dL * dL/dX
 	return Func::einsum<Idxs<i, k>, Idxs<k, j>>(
-		Element::Attribute::MaterialShapeDerivative::dN_by_dL, dL_by_dX_);
+		Attribute::Cell::MaterialShapeDerivative::dN_by_dL, dL_by_dX_);
 };
 
 auto const dx_by_dX = [](auto const & x, auto const & dN_by_dX_) {

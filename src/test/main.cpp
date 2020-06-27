@@ -1,6 +1,5 @@
 #define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
 #include <FeltElements/Solver.hpp>
-#include <boost/range/irange.hpp>
 
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_CONSOLE_WIDTH 200
@@ -23,7 +22,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("element nodal force attributes are constructed")
 		{
-			Element::Attribute::NodalForces const attrib_forces{mesh};
+			Attribute::Cell::NodalForces const attrib_forces{mesh};
 
 			THEN("properties are default initialised")
 			{
@@ -38,7 +37,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("element stiffness attributes are constructed")
 		{
-			Element::Attribute::Stiffness const attrib_stiffness{mesh};
+			Attribute::Cell::Stiffness const attrib_stiffness{mesh};
 
 			THEN("properties are default initialised")
 			{
@@ -53,7 +52,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("element vertex mapping attributes are constructed")
 		{
-			FeltElements::Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+			FeltElements::Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
 
 			THEN("properties are populated")
 			{
@@ -69,8 +68,8 @@ SCENARIO("Mesh attributes")
 
 			AND_WHEN("element natural wrt material coords attributes are constructed")
 			{
-				Node::Attribute::MaterialPosition const attrib_X{mesh};
-				FeltElements::Element::Attribute::MaterialShapeDerivative const attrib_dN_by_dX{
+				Attribute::Vertex::MaterialPosition const attrib_X{mesh};
+				FeltElements::Attribute::Cell::MaterialShapeDerivative const attrib_dN_by_dX{
 					mesh, attrib_vtxhs, attrib_X};
 
 				THEN("properties are populated")
@@ -91,7 +90,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("spatial position attributes are constructed")
 		{
-			Node::Attribute::SpatialPosition const attrib_x{mesh};
+			Attribute::Vertex::SpatialPosition const attrib_x{mesh};
 
 			THEN("attributes are initialised to material position")
 			{
@@ -108,7 +107,7 @@ SCENARIO("Mesh attributes")
 
 			AND_WHEN("element nodal spatial position tensor is constructed")
 			{
-				Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+				Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
 
 				auto itcellh = mesh.cells_begin();
 				Node::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
@@ -146,7 +145,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 		WHEN("vertex index mapping is fetched")
 		{
-			Element::Attribute::VertexHandles const attrib_vtxhs{mesh};
+			Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
 			auto const & vtxhs = attrib_vtxhs[Cellh{0}];
 
 			THEN("mapping is expected")
@@ -156,7 +155,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 			AND_WHEN("material node position tensor is constructed")
 			{
-				Node::Attribute::MaterialPosition const attrib_X{mesh};
+				Attribute::Vertex::MaterialPosition const attrib_X{mesh};
 				Node::Positions const X = attrib_X.for_element(vtxhs);
 
 				THEN("expected positions are reported")
@@ -184,7 +183,7 @@ SCENARIO("Metrics of undeformed mesh")
 				AND_WHEN("spatial coordinate property is created")
 				{
 					using namespace OpenVolumeMesh;
-					Node::Attribute::SpatialPosition const attrib_x{mesh};
+					Attribute::Vertex::SpatialPosition const attrib_x{mesh};
 
 					THEN("spatial coordinates equal material coordinates")
 					{
@@ -263,7 +262,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	THEN("derivative of shape wrt local coords is correct")
 	{
 		check_equal(
-			Element::Attribute::MaterialShapeDerivative::dN_by_dL,
+			Attribute::Cell::MaterialShapeDerivative::dN_by_dL,
 			"dN_by_dL",
 			{
 				// clang-format off
@@ -278,7 +277,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	THEN("derivative of local wrt shape coords is correct")
 	{
 		check_equal(
-			Element::Attribute::MaterialShapeDerivative::dL_by_dN,
+			Attribute::Cell::MaterialShapeDerivative::dL_by_dN,
 			"dL_by_dN",
 			{
 				// clang-format off
@@ -295,8 +294,8 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 		using namespace Tensor;
 		using namespace Tensor::Func;
 		Matrix<3> const identity = einsum<Indices<i, k>, Indices<k, j>>(
-			Element::Attribute::MaterialShapeDerivative::dL_by_dN,
-			Element::Attribute::MaterialShapeDerivative::dN_by_dL);
+			Attribute::Cell::MaterialShapeDerivative::dL_by_dN,
+			Attribute::Cell::MaterialShapeDerivative::dN_by_dL);
 
 		check_equal(
 			identity,
@@ -1318,7 +1317,7 @@ SCENARIO("Solution of a single element")
 
 			INFO(log)
 
-			THEN("volume returns and strain is zero")
+			THEN("solution converges to material configuration")
 			{
 				CHECK(step < max_steps);
 				CHECK(Derivatives::V(x) == Approx(1.0 / 6));
@@ -1457,7 +1456,7 @@ static auto constexpr const index_of = [](auto const & haystack, auto && needle)
 
 SCENARIO("Solution of two elements")
 {
-	GIVEN("tangent stiffness and equivalent node force tensors")
+	GIVEN("two element mesh and material properties")
 	{
 		using namespace FeltElements;
 		using Tensor::Func::all;
@@ -1520,7 +1519,7 @@ SCENARIO("Solution of two elements")
 		EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
 		INFO(mat_x)
 
-		WHEN("displacement is solved")
+		WHEN("displacement is solved using Eigen LDLT")
 		{
 			std::size_t step;
 			std::size_t constexpr max_steps = 10;
@@ -1657,9 +1656,8 @@ SCENARIO("Solution of two elements")
 
 				Scalar max_norm = 0;
 
-				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+				for (auto vtxh_src : boost::make_iterator_range(mesh.vertices()))
 				{
-					auto const & vtxh_src = *itvtxh;
 					auto const a = static_cast<Tensor::Index>(vtxh_src.idx());
 					auto const vtx = mesh.vertex(vtxh_src);
 					Scalar fixed = 0.0;
@@ -1669,32 +1667,31 @@ SCENARIO("Solution of two elements")
 					Node::Force Ta = 0;
 					Tensor::Matrix<3> Kaa = 0;
 					Node::Force Ka_u = 0;
-					for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
+					for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh_src)))
 					{
-						auto const & cell_vtxhs = attrib.vtxh[*itcellh];
-						auto const & cell_a = index_of(cell_vtxhs, *itvtxh);
-						auto const & cell_T = attrib.T[*itcellh];
-						auto const & cell_K = attrib.K[*itcellh];
+						auto const & cell_vtxhs = attrib.vtxh[cellh];
+						auto const & cell_a = index_of(cell_vtxhs, vtxh_src);
+						auto const & cell_T = attrib.T[cellh];
+						auto const & cell_K = attrib.K[cellh];
 
 						Ta += cell_T(cell_a, all);
 						Kaa += cell_K(cell_a, all, cell_a, all);
 					}
 					diag(Kaa) += 10e5 * fixed;
 
-					for (auto itheh = mesh.voh_iter(vtxh_src); itheh.valid(); itheh++)
+					for (auto heh : boost::make_iterator_range(mesh.outgoing_halfedges(vtxh_src)))
 					{
 						Tensor::Multi<Node::dim, Node::dim> Kab = 0;
-						auto const & halfedge = mesh.halfedge(*itheh);
+						auto const & halfedge = mesh.halfedge(heh);
 						auto const & vtxh_dst = halfedge.to_vertex();
 						auto const b = static_cast<Tensor::Index>(vtxh_dst.idx());
 
-						for (auto itcellh = mesh.hec_iter(*itheh); itcellh.valid(); itcellh++)
+						for (auto cellh : boost::make_iterator_range(mesh.halfedge_cells(heh)))
 						{
-							auto const & cell_K = attrib.K[*itcellh];
-							auto const & cell_vtxhs = attrib.vtxh[*itcellh];
+							auto const & cell_K = attrib.K[cellh];
+							auto const & cell_vtxhs = attrib.vtxh[cellh];
 							auto const cell_a = index_of(cell_vtxhs, vtxh_src);
 							auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
-//							Tensor::Multi<Node::dim, Node::dim> cell_Kab = cell_K(cell_a, all, cell_b, all);
 //							log += fmt::format("\nK[{}, {}, {}]{}{} = {}", (*itcellh).idx(), cell_a, cell_b, a, b, cell_Kab);
 							Kab += cell_K(cell_a, all, cell_b, all);
 						}
@@ -1703,18 +1700,12 @@ SCENARIO("Solution of two elements")
 					}
 					using Tensor::Func::inv;
 					u[a] = inv(Kaa) % (-Ta - Ka_u) * (1.0 - fixed);
-
+					attrib.x[vtxh_src] += u[a];
+					max_norm = std::max(norm(u[a]), max_norm);
 //					log += fmt::format("\nT{} = {}", a, Ta);
 //					log += fmt::format("\nK{}{} = {}", a, a, Kaa);
 //					log += fmt::format("\nK{} * u = {}", a, Ka_u);
 					log += fmt::format("\nu[{}] = {}", a, u[a]);
-				}
-
-				for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
-				{
-					auto const a = static_cast<Tensor::Index>(vtxh.idx());
-					attrib.x[vtxh] += u[a];
-					max_norm = std::max(norm(u[a]), max_norm);
 				}
 
 				write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));

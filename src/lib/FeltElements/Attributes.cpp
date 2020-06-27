@@ -2,7 +2,7 @@
 
 namespace FeltElements
 {
-namespace Element::Attribute
+namespace Attribute::Cell
 {
 VertexHandles::VertexHandles(Mesh& mesh) : ThisBase{mesh}
 {
@@ -14,7 +14,7 @@ VertexHandles::VertexHandles(Mesh& mesh) : ThisBase{mesh}
 }
 
 MaterialShapeDerivative::MaterialShapeDerivative(
-	Mesh& mesh, VertexHandles const & vtxhs, Node::Attribute::MaterialPosition const& X) :
+	Mesh& mesh, VertexHandles const & vtxhs, Vertex::MaterialPosition const& X) :
 	ThisBase{mesh}
 {
 	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
@@ -24,14 +24,14 @@ MaterialShapeDerivative::MaterialShapeDerivative(
 }
 
 // clang-format off
-IsoCoordDerivative const MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
+Element::IsoCoordDerivative const MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
 	Tensor::Matrix<4, 4>{
 		{1, 1, 1, 1},
 		{0, 1, 0, 0},
 		{0, 0, 1, 0},
 		{0, 0, 0, 1}}(Fastor::fseq<1, 4>(), Fastor::all);
 
-ShapeDerivative const MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
+Element::ShapeDerivative const MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
 	Fastor::evaluate(Fastor::inv(Tensor::Matrix<4, 4>{
 		{1, 1, 1, 1},
 		{0, 1, 0, 0},

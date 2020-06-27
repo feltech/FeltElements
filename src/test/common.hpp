@@ -194,7 +194,7 @@ inline auto load_tet(char const * const file_name)
 
 inline void write_ovm_mesh(
 	FeltElements::Mesh const & mesh_src,
-	FeltElements::Node::Attribute::SpatialPosition const & attrib_x,
+	FeltElements::Attribute::Vertex::SpatialPosition const & attrib_x,
 	std::string_view const & file_name)
 {
 	FeltElements::Mesh mesh_dst{mesh_src};

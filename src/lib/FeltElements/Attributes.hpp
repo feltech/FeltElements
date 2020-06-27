@@ -4,81 +4,139 @@
 
 namespace FeltElements
 {
-namespace Node::Attribute
+namespace Attribute
 {
+/*
+ * Forward declarations
+ */
+namespace Vertex
+{
+class MaterialPosition;
+class SpatialPosition;
+}  // namespace Vertex
+namespace Cell
+{
+class VertexHandles;
+class MaterialShapeDerivative;
+class NodalForces;
+class Stiffness;
+}  // namespace Cell
 
-class SpatialPosition final : private internal::Attribute::Position<SpatialPosition>
+namespace internal
 {
-	using ThisBase = internal::Attribute::Position<SpatialPosition>;
+template <>
+struct Traits<Vertex::SpatialPosition> : public VertexTraits<Node::Pos>
+{
+	static constexpr std::string_view prop_name = "spatial_position";
+};
+template <>
+struct Traits<Vertex::MaterialPosition> : public VertexTraits<Node::Pos>
+{
+	static constexpr std::string_view prop_name = "material_position";
+};
+
+using namespace Attribute::Cell;
+template <>
+struct Traits<VertexHandles> : public CellTraits<Element::Vtxhs>
+{
+	static constexpr std::string_view prop_name = "vertices";
+};
+
+template <>
+struct Traits<NodalForces> : public CellTraits<Node::Forces>
+{
+	static constexpr std::string_view prop_name = "nodal_forces";
+};
+
+template <>
+struct Traits<Stiffness> : public CellTraits<Element::Stiffness>
+{
+	static constexpr std::string_view prop_name = "stiffness";
+};
+
+template <>
+struct Traits<MaterialShapeDerivative> : public CellTraits<Element::ShapeDerivative>
+{
+	static constexpr std::string_view prop_name = "material_shape_derivative";
+};
+}  // namespace internal
+
+namespace Vertex
+{
+class SpatialPosition final : private internal::PositionBase<SpatialPosition>
+{
+	using ThisBase = internal::PositionBase<SpatialPosition>;
+
 public:
-	using ThisBase::Position;
+	using ThisBase::PositionBase;
 	using ThisBase::operator[];
 	using ThisBase::for_element;
 };
 
-class MaterialPosition final : private internal::Attribute::Position<MaterialPosition>
+class MaterialPosition final : private internal::PositionBase<MaterialPosition>
 {
-	using ThisBase = internal::Attribute::Position<MaterialPosition>;
+	using ThisBase = internal::PositionBase<MaterialPosition>;
+
 public:
-	using ThisBase::Position;
+	using ThisBase::PositionBase;
 	using ThisBase::operator[];
 	using ThisBase::for_element;
 };
+}  // namespace Vertex
 
-}  // namespace Node::Attribute
-
-namespace Element::Attribute
+namespace Cell
 {
-class VertexHandles final : private internal::Attribute::Cell<VertexHandles>
+class VertexHandles final : private internal::CellBase<VertexHandles>
 {
-	using ThisBase = internal::Attribute::Cell<VertexHandles>;
+	using ThisBase = internal::CellBase<VertexHandles>;
 
 public:
 	explicit VertexHandles(Mesh& mesh);
 	using ThisBase::operator[];
 };
 
-class MaterialShapeDerivative final : private internal::Attribute::Cell<MaterialShapeDerivative>
+class MaterialShapeDerivative final : private internal::CellBase<MaterialShapeDerivative>
 {
-	using ThisBase = internal::Attribute::Cell<MaterialShapeDerivative>;
+	using ThisBase = internal::CellBase<MaterialShapeDerivative>;
 
 public:
 	explicit MaterialShapeDerivative(
-		Mesh& mesh, VertexHandles const & vtxhs, Node::Attribute::MaterialPosition const& X);
+		Mesh& mesh, VertexHandles const& vtxhs, Vertex::MaterialPosition const& X);
 	using ThisBase::operator[];
 	static Node::Positions const X;
-	static IsoCoordDerivative const dL_by_dN;
-	static ShapeDerivative const dN_by_dL;
+	static Element::IsoCoordDerivative const dL_by_dN;
+	static Element::ShapeDerivative const dN_by_dL;
 };
 
-class NodalForces final : private internal::Attribute::Cell<NodalForces>
+class NodalForces final : private internal::CellBase<NodalForces>
 {
-	using ThisBase = internal::Attribute::Cell<NodalForces>;
+	using ThisBase = internal::CellBase<NodalForces>;
 
 public:
 	explicit NodalForces(Mesh& mesh);
 	using ThisBase::operator[];
 };
 
-class Stiffness final : private internal::Attribute::Cell<Stiffness>
+class Stiffness final : private internal::CellBase<Stiffness>
 {
-	using ThisBase = internal::Attribute::Cell<Stiffness>;
+	using ThisBase = internal::CellBase<Stiffness>;
 
 public:
 	explicit Stiffness(Mesh& mesh);
 	using ThisBase::operator[];
 };
-}  // namespace Element::Attribute
+}  // namespace Cell
+}  // namespace Attribute
 
-struct Attributes
+struct Attributes final
 {
 	explicit Attributes(Mesh& mesh);
-	Node::Attribute::SpatialPosition x;
-	Node::Attribute::MaterialPosition const X;
-	Element::Attribute::VertexHandles const vtxh;
-	Element::Attribute::MaterialShapeDerivative const dN_by_dX;
-	Element::Attribute::NodalForces T;
-	Element::Attribute::Stiffness K;
+	Attribute::Vertex::SpatialPosition x;
+	Attribute::Vertex::MaterialPosition const X;
+	Attribute::Cell::VertexHandles const vtxh;
+	Attribute::Cell::MaterialShapeDerivative const dN_by_dX;
+	Attribute::Cell::NodalForces T;
+	Attribute::Cell::Stiffness K;
 };
 
 }  // namespace FeltElements

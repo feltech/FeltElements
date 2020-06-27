@@ -7,18 +7,16 @@
 
 namespace FeltElements
 {
-namespace internal::Attribute
+namespace Attribute::internal
 {
-/*
- * Base traits
- */
-
-template <typename T>
-struct always_false : std::false_type {};
 template <class Derived>
 struct Traits
 {
-	static_assert(always_false<Derived>::value, "Traits are required");
+	template <typename T>
+	struct missing_traits : std::false_type
+	{
+	};
+	static_assert(missing_traits<Derived>::value, "Traits are required");
 };
 
 template <class TData>
@@ -39,12 +37,12 @@ protected:
 
 	explicit Base(Prop&& prop) : m_prop{prop} {}
 
-	Data & operator[](Handle const & handle)
+	Data& operator[](Handle const& handle)
 	{
 		return m_prop[handle];
 	}
 
-	Data const & operator[](Handle const & handle) const
+	Data const& operator[](Handle const& handle) const
 	{
 		return m_prop[handle];
 	}
@@ -60,25 +58,25 @@ struct VertexTraits : public BaseTraits<TData>
 };
 
 template <class Derived>
-class Vertex : protected Base<Derived>
+class VertexBase : protected Base<Derived>
 {
 	using ThisBase = Base<Derived>;
 
 protected:
 	using Data = typename ThisBase::Data;
-	explicit Vertex(Mesh& mesh)
+	explicit VertexBase(Mesh& mesh)
 		: ThisBase{mesh.request_vertex_property<Data>(ThisBase::prop_name.data())}
 	{
 	}
 };
 
-
 template <class Derived>
-class Position : protected Vertex<Derived>
+class PositionBase : protected VertexBase<Derived>
 {
-	using ThisBase = Vertex<Derived>;
+	using ThisBase = VertexBase<Derived>;
+
 public:
-	explicit Position(Mesh& mesh) : ThisBase{mesh}
+	explicit PositionBase(Mesh& mesh) : ThisBase{mesh}
 	{
 		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 		{
@@ -88,7 +86,7 @@ public:
 		}
 	}
 
-	[[nodiscard]] Node::Positions for_element(Element::Vtxhs const & vtxhs) const
+	[[nodiscard]] Node::Positions for_element(Element::Vtxhs const& vtxhs) const
 	{
 		using Tensor::Func::all;
 		Node::Positions x;
@@ -107,77 +105,17 @@ struct CellTraits : public BaseTraits<TData>
 };
 
 template <class Derived>
-class Cell : protected Base<Derived>
+class CellBase : protected Base<Derived>
 {
 	using ThisBase = Base<Derived>;
 
 protected:
 	using Data = typename ThisBase::Data;
-	explicit Cell(Mesh& mesh)
+	explicit CellBase(Mesh& mesh)
 		: ThisBase{mesh.request_cell_property<Data>(ThisBase::prop_name.data())}
 	{
 	}
 };
-}  // namespace internal::Attribute
+}  // namespace Attribute::internal
 
-/*
- * Forward declarations
- */
-namespace Node::Attribute
-{
-class MaterialPosition;
-class SpatialPosition;
-}  // namespace Node::Attribute
-namespace Element::Attribute
-{
-class VertexHandles;
-class MaterialShapeDerivative;
-class NodalForces;
-class Stiffness;
-}  // namespace Element::Attribute
-
-/*
- * Specific traits.
- */
-namespace internal::Attribute
-{
-using namespace Node::Attribute;
-
-template <>
-struct Traits<SpatialPosition> : public VertexTraits<Node::Pos>
-{
-	static constexpr std::string_view prop_name = "spatial_position";
-};
-
-template <>
-struct Traits<MaterialPosition> : public VertexTraits<Node::Pos>
-{
-	static constexpr std::string_view prop_name = "material_position";
-};
-
-using namespace Element::Attribute;
-template <>
-struct Traits<VertexHandles> : public CellTraits<Element::Vtxhs>
-{
-	static constexpr std::string_view prop_name = "vertices";
-};
-
-template <>
-struct Traits<NodalForces> : public CellTraits<Node::Forces>
-{
-	static constexpr std::string_view prop_name = "nodal_forces";
-};
-
-template <>
-struct Traits<Stiffness> : public CellTraits<Element::Stiffness>
-{
-	static constexpr std::string_view prop_name = "stiffness";
-};
-
-template <>
-struct Traits<MaterialShapeDerivative> : public CellTraits<Element::ShapeDerivative>
-{
-	static constexpr std::string_view prop_name = "material_shape_derivative";
-};
-}  // namespace internal::Attribute
 }  // namespace FeltElements
