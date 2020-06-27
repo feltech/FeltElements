@@ -66,7 +66,8 @@ Stiffness::Stiffness(Mesh& mesh) : ThisBase(mesh)
 }  // namespace Attribute
 
 Attributes::Attributes(Mesh& mesh)
-	: x{mesh}, X{mesh}, vtxh{mesh}, dN_by_dX{mesh, vtxh, X}, T{mesh}, K{mesh}
+	: x{mesh}, X{mesh}, fixed_dof(mesh),
+	  vtxh{mesh}, dN_by_dX{mesh, vtxh, X}, T{mesh}, K{mesh}
 {
 }
 }  // namespace FeltElements

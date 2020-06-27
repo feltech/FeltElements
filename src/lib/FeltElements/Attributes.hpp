@@ -38,7 +38,7 @@ struct Traits<Vertex::SpatialPosition> : public VertexTraits<Node::Pos>
 template <>
 struct Traits<Vertex::FixedDOF> : public VertexTraits<Node::Pos>
 {
-	static constexpr std::string_view prop_name = "spatial_position";
+	static constexpr std::string_view prop_name = "fixed_dof";
 };
 
 using namespace Attribute::Cell;
@@ -148,6 +148,7 @@ struct Attributes final
 	explicit Attributes(Mesh& mesh);
 	Attribute::Vertex::SpatialPosition x;
 	Attribute::Vertex::MaterialPosition const X;
+	Attribute::Vertex::FixedDOF fixed_dof;
 	Attribute::Cell::VertexHandles const vtxh;
 	Attribute::Cell::MaterialShapeDerivative const dN_by_dX;
 	Attribute::Cell::NodalForces T;

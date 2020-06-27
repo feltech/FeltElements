@@ -1301,7 +1301,7 @@ SCENARIO("Solution of a single element")
 		WHEN("displacement is solved")
 		{
 			std::size_t step;
-			std::size_t constexpr max_steps = 1000;
+			std::size_t constexpr max_steps = 10;
 			std::string log;
 
 			auto x = attrib.x.for_element(vtxhs);
@@ -1515,9 +1515,17 @@ SCENARIO("Solution of two elements")
 	GIVEN("two element mesh and material properties")
 	{
 		using namespace FeltElements;
+		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
+		Scalar mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
+		Scalar const E = 1;	 // Young's modulus: 0.001 - 0.05
+		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+		Scalar lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		mu = lambda = 4;
+
 		using Tensor::Func::all;
 		using Tensor::Func::last;
 		using Tensor::Func::seq;
+
 		using OvmVtx = Mesh::PointT;
 		using VerticesMatrix = Eigen::Matrix<
 			Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
@@ -1525,37 +1533,27 @@ SCENARIO("Solution of two elements")
 		using EigenMapTensorVertices = Eigen::Map<
 			VerticesMatrix const, Eigen::Unaligned,
 			Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
-		using FixedDOF = Eigen::Vector3d;
-		using FixedDOFs = Eigen::VectorXd;
-
-		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
-		double const E = 1;	 // Young's modulus: 0.001 - 0.05
-		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
-		mu = lambda = 4;
+		using EigenFixedDOFs = Eigen::VectorXd;
 
 		auto mesh = load_ovm_mesh(file_name_two);
 		Attributes attrib{mesh};
 		write_ovm_mesh(mesh, attrib.x, "two_elem_initial");
 
-		FixedDOFs fixedDofs{3 * mesh.n_vertices()};
-		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-		{
-			OvmVtx const & vtx = mesh.vertex(*itvtxh);
-			Eigen::Index vtx_idx = (*itvtxh).idx();
-
-			if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
-				fixedDofs.block<3, 1>(3 * vtx_idx, 0) = FixedDOF{1.0, 1.0, 1.0};
-			else
-				fixedDofs.block<3, 1>(3 * vtx_idx, 0) = FixedDOF{0, 0, 0};
-		}
-
+		auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
+		Eigen::Index constexpr cols = 3;
 		auto const material_volume =
 			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
 			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
 
-		// Deform vertex.
+		// Set boundary condition.
+		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
+		{
+			OvmVtx const & vtx = mesh.vertex(vtxh);
+
+			if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
+				attrib.fixed_dof[vtxh] = Node::Pos{1.0, 1.0, 1.0};
+		}
+		// Set initial condition.
 		attrib.x[Vtxh{0}](0) += 0.5;
 
 		auto const initial_deformed_volume =
@@ -1564,8 +1562,15 @@ SCENARIO("Solution of two elements")
 
 		CAPTURE(lambda, mu, material_volume, initial_deformed_volume);
 
-		auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
-		Eigen::Index constexpr cols = 3;
+		EigenFixedDOFs const & mat_fixed_dof = ([&attrib, rows, cols]() {
+			using EigenMapVectorFixedDOFs = Eigen::Map<Eigen::VectorXd>;
+			EigenMapTensorVertices const &map{
+				attrib.fixed_dof[Vtxh{0}].data(), rows, cols};
+			  // Copy to remove per-row alignment.
+			EigenFixedDOFs mat =
+				EigenMapVectorFixedDOFs{VerticesMatrix{map}.data(), rows * cols};
+			return mat;
+		})();
 
 		INFO("Mesh material vertices")
 		EigenMapOvmVertices mat_vtxs{mesh.vertex(Vtxh{0}).data(), rows, cols};
@@ -1603,7 +1608,8 @@ SCENARIO("Solution of two elements")
 								static_cast<Eigen::Index>(cell_vtx_idx), 0);
 					}
 				}
-				mat_T.array() *= (Eigen::VectorXd::Ones(fixedDofs.size()) - fixedDofs).array();
+				mat_T.array() *=
+					(Eigen::VectorXd::Ones(mat_fixed_dof.size()) - mat_fixed_dof).array();
 
 				Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
 				mat_K.setZero();
@@ -1645,7 +1651,7 @@ SCENARIO("Solution of two elements")
 
 				log += fmt::format("\nT\n{}", mat_T);
 //				log += fmt::format("\nK (unconstrained)\n{}", mat_K);
-				mat_K += 10e5 * fixedDofs.asDiagonal();
+				mat_K += 10e5 * mat_fixed_dof.asDiagonal();
 				log += fmt::format("\nK (constrained)\n{}", mat_K);
 
 				REQUIRE(mat_K.determinant() != Approx(0).margin(epsilon));
@@ -1654,7 +1660,7 @@ SCENARIO("Solution of two elements")
 				mat_u.setZero();
 				mat_u = mat_K.ldlt().solve(-mat_T);
 //				log += fmt::format("\nu (unconstrained)\n{}", mat_u);
-				mat_u.array() *= (Eigen::VectorXd::Ones(fixedDofs.size()) - fixedDofs).array();
+				mat_u.array() *= (Eigen::VectorXd::Ones(mat_u.size()) - mat_fixed_dof).array();
 				log += fmt::format("\nu (constrained)\n{}", mat_u);
 
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
@@ -1715,10 +1721,7 @@ SCENARIO("Solution of two elements")
 				for (auto vtxh_src : boost::make_iterator_range(mesh.vertices()))
 				{
 					auto const a = static_cast<Tensor::Index>(vtxh_src.idx());
-					auto const vtx = mesh.vertex(vtxh_src);
-					Scalar fixed = 0.0;
-					if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
-						fixed = 1.0;
+					auto const & fixed_dof = attrib.fixed_dof[vtxh_src];
 
 					Node::Force Ta = 0;
 					Tensor::Matrix<3> Kaa = 0;
@@ -1733,7 +1736,7 @@ SCENARIO("Solution of two elements")
 						Ta += cell_T(cell_a, all);
 						Kaa += cell_K(cell_a, all, cell_a, all);
 					}
-					diag(Kaa) += 10e5 * fixed;
+					diag(Kaa) += 10e5 * fixed_dof;
 
 					for (auto heh : boost::make_iterator_range(mesh.outgoing_halfedges(vtxh_src)))
 					{
@@ -1755,7 +1758,7 @@ SCENARIO("Solution of two elements")
 						Ka_u += Kab % u[b];
 					}
 					using Tensor::Func::inv;
-					u[a] = inv(Kaa) % (-Ta - Ka_u) * (1.0 - fixed);
+					u[a] = inv(Kaa) % (-Ta - Ka_u) * (1.0 - fixed_dof);
 					attrib.x[vtxh_src] += u[a];
 					max_norm = std::max(norm(u[a]), max_norm);
 //					log += fmt::format("\nT{} = {}", a, Ta);
@@ -1776,11 +1779,15 @@ SCENARIO("Solution of two elements")
 			{
 				WARN(fmt::format("Converged in {} steps", step));
 				CHECK(step < max_steps);
-				check_equal(attrib.x[Vtxh{0}], "x0", {0.500000, 0.000000, 0.000000});
-				check_equal(attrib.x[Vtxh{1}], "x1", {1.000000, 0.000000, 0.000000});
-				check_equal(attrib.x[Vtxh{2}], "x2", {0.333333, 1.154972, -0.122244});
-				check_equal(attrib.x[Vtxh{3}], "x3", {0.000000, 0.000000, 1.000000});
-				check_equal(attrib.x[Vtxh{4}], "x4", {0.333333, 0.619084, 0.518097});
+				// clang-format off
+				check_equal(mat_x, "x", (VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
+					0.500000, 0.000000, 0.000000,
+					1.000000, 0.000000, 0.000000,
+					0.333333, 1.154972, -0.122244,
+					0.000000, 0.000000, 1.000000,
+					0.333333, 0.619084, 0.518097
+				).finished(), "expected");
+				// clang-format on
 
 				auto const total_volume =
 					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
