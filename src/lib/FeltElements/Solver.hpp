@@ -1,8 +1,33 @@
 #pragma once
-#include "Attributes.hpp"
 
-namespace FeltElements::Solver
+#include <eigen3/Eigen/Core>
+#include <Fastor/Fastor.h>
+#include "Typedefs.hpp"
+
+namespace FeltElements
+{
+class Attributes;
+
+namespace Solver
 {
 void update_elements_stiffness_and_internal_forces(
-	Mesh const& mesh, FeltElements::Attributes& attributes, Scalar const lambda, Scalar const mu);
+	Mesh const& mesh, Attributes& attributes, Scalar lambda, Scalar mu);
+
+namespace LDLT
+{
+#define EIGEN_FASTOR_ALIGN BOOST_PP_CAT(Eigen::Aligned, FASTOR_MEMORY_ALIGNMENT_VALUE)
+template <int rows, int cols>
+using EigenConstTensorMap =
+	Eigen::Map<Eigen::Matrix<Scalar, rows, cols, Eigen::RowMajor> const, EIGEN_FASTOR_ALIGN>;
+using VerticesMatrix = Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
+using EigenMapOvmVertices = Eigen::Map<VerticesMatrix const>;
+using EigenMapTensorVertices = Eigen::Map<
+	VerticesMatrix const,
+	Eigen::Unaligned,
+	Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
+using EigenFixedDOFs = Eigen::VectorXd;
+
+std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar lambda, Scalar mu);
+}
+}
 }

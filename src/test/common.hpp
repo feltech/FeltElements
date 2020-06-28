@@ -1,39 +1,20 @@
 #include <FeltElements/Typedefs.hpp>
+#include <FeltElements/Format.hpp>
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <ostream>
 #include <range/v3/all.hpp>
-#include <unsupported/Eigen/CXX11/Tensor>
+#include <eigen3/Eigen/Core>
 #include <Fastor/Fastor.h>
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 
 namespace
 {
-template <class Tensor, std::size_t idx>
-const Eigen::Index size =
-	Eigen::internal::get<static_cast<int>(idx), typename Tensor::Dimensions::Base>::value;
-
-template <class Tensor, std::size_t... dim>
-constexpr auto dimensions(std::index_sequence<dim...>)
-{
-	return std::array<Eigen::Index, Tensor::NumIndices>{size<Tensor, dim>...};
-}
-
-template <class Tensor>
-constexpr auto dimensions()
-{
-	return dimensions<Tensor>(std::make_index_sequence<Tensor::NumIndices>{});
-}
-
 // std::to_string has non-configurable precision of too many decimal places.
 auto const to_string = [](auto const f) {
 	return fmt::format("{:f}", f);
-};
-
-auto const to_int = [](auto const f) {
-	return int{f};
 };
 
 template <class Tensor, FeltElements::Tensor::Index N>
@@ -41,8 +22,6 @@ using ostream_if = std::enable_if_t<Tensor::dimension_t::value == N, std::ostrea
 
 template <class Matrix>
 using void_if_eigen = std::enable_if_t<!Matrix::IsVectorAtCompileTime, void>;
-template <class Matrix>
-using ostream_if_eigen = std::enable_if_t<!Matrix::IsVectorAtCompileTime, std::ostream &>;
 
 constexpr FeltElements::Scalar epsilon = 0.00001;
 }
@@ -100,26 +79,6 @@ std::ostream & operator<< (std::ostream& os, FeltElements::Tensor::Matrix<dim0,d
 				ranges::views::transform(to_string), ", ");
 	}
 	os << "{\n\t{" << join(is, "},\n\t{") << "}\n}";
-	return os;
-}
-
-template <class Matrix>
-ostream_if_eigen<Matrix> operator<< (std::ostream & os, Matrix value)
-{
-	using namespace FeltElements::Tensor;
-	using boost::algorithm::join;
-
-	std::vector<std::string> is{};
-	is.reserve(static_cast<size_t>(value.rows()));
-	for (Eigen::Index i = 0; i < value.rows(); i++)
-	{
-		using Vec = Eigen::Matrix<typename Matrix::Scalar, Matrix::ColsAtCompileTime, 1>;
-		Vec const & vec = value.row(i);
-		is.push_back(join(
-			ranges::subrange{vec.data(), vec.data() + vec.rows()} |
-			ranges::views::transform(to_string), ", "));
-	}
-	os << join(is, ",\n\t") << "\n";
 	return os;
 }
 

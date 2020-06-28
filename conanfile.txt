@@ -1,11 +1,12 @@
 [requires]
 tetgen/1.5.0@local/tetgen
 
-boost/1.69.0@conan/stable
-Catch2/2.10.2@catchorg/stable
+boost/1.69.0
+catch2/2.11.0
 eigen/3.3.4@conan/stable
-range-v3/0.10.0@ericniebler/stable
-fmt/6.0.0@bincrafters/stable
+range-v3/0.10.0
+fmt/6.2.0
+spdlog/1.6.1
 
 [options]
 boost:header_only=True

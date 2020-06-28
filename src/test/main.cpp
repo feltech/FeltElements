@@ -4,7 +4,16 @@
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_CONSOLE_WIDTH 200
 #include "common.hpp"
-
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+struct MyListener : Catch::TestEventListenerBase {
+	using TestEventListenerBase::TestEventListenerBase; // inherit constructor
+	void testRunStarting(Catch::TestRunInfo const&) override {
+		spdlog::set_level(spdlog::level::debug);
+		spdlog::set_default_logger(spdlog::stderr_color_mt("stderr"));
+	}
+};
+CATCH_REGISTER_LISTENER( MyListener )
 char const * const file_name_one = "resources/one.ovm";
 char const * const file_name_two = "resources/two.ovm";
 
@@ -1499,11 +1508,6 @@ SCENARIO("Solution of a single element")
 	}
 }
 
-#define EIGEN_FASTOR_ALIGN BOOST_PP_CAT(Eigen::Aligned, FASTOR_MEMORY_ALIGNMENT_VALUE)
-template <int rows, int cols>
-using EigenConstTensorMap = Eigen::Map<
-	Eigen::Matrix<Scalar, rows, cols, Eigen::RowMajor> const, EIGEN_FASTOR_ALIGN>;
-
 static auto constexpr const index_of = [](auto const & haystack, auto && needle) {
   auto const & it = std::find(
 	  haystack.cbegin(), haystack.cend(), std::forward<decltype(needle)>(needle));
@@ -1527,13 +1531,6 @@ SCENARIO("Solution of two elements")
 		using Tensor::Func::seq;
 
 		using OvmVtx = Mesh::PointT;
-		using VerticesMatrix = Eigen::Matrix<
-			Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
-		using EigenMapOvmVertices = Eigen::Map<VerticesMatrix const>;
-		using EigenMapTensorVertices = Eigen::Map<
-			VerticesMatrix const, Eigen::Unaligned,
-			Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
-		using EigenFixedDOFs = Eigen::VectorXd;
 
 		auto mesh = load_ovm_mesh(file_name_two);
 		Attributes attrib{mesh};
@@ -1562,127 +1559,31 @@ SCENARIO("Solution of two elements")
 
 		CAPTURE(lambda, mu, material_volume, initial_deformed_volume);
 
-		EigenFixedDOFs const & mat_fixed_dof = ([&attrib, rows, cols]() {
-			using EigenMapVectorFixedDOFs = Eigen::Map<Eigen::VectorXd>;
-			EigenMapTensorVertices const &map{
-				attrib.fixed_dof[Vtxh{0}].data(), rows, cols};
-			  // Copy to remove per-row alignment.
-			EigenFixedDOFs mat =
-				EigenMapVectorFixedDOFs{VerticesMatrix{map}.data(), rows * cols};
-			return mat;
-		})();
-
 		INFO("Mesh material vertices")
-		EigenMapOvmVertices mat_vtxs{mesh.vertex(Vtxh{0}).data(), rows, cols};
+		Solver::LDLT::EigenMapOvmVertices mat_vtxs{
+			mesh.vertex(Vtxh{0}).data(), rows, cols};
 		INFO(mat_vtxs)
 
 		INFO("Mesh spatial vertices")
-		EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
+		Solver::LDLT::EigenMapTensorVertices const & mat_x{
+			attrib.x[Vtxh{0}].data(), rows, cols};
 		INFO(mat_x)
 
 		WHEN("displacement is solved using Eigen LDLT")
 		{
-			std::size_t step;
 			std::size_t constexpr max_steps = 10;
-			std::string log;
 
-			for (step = 0; step < max_steps; step++)
-			{
-				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<", step);
+			size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps, lambda, mu);
 
-				Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
-
-				Eigen::VectorXd mat_T{3 * mesh.n_vertices()};
-				mat_T.setZero();
-				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-				{
-					auto const vtx_idx = (*itvtxh).idx();
-					for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
-					{
-						auto const & cell_vtxhs = attrib.vtxh[*itcellh];
-						auto const & cell_vtx_idx = index_of(cell_vtxhs, *itvtxh);
-						auto const & cell_T = attrib.T[*itcellh];
-
-						mat_T.block<3, 1>(3 * vtx_idx, 0) +=
-						    EigenConstTensorMap<4, 3>{cell_T.data()}.block<1, 3>(
-								static_cast<Eigen::Index>(cell_vtx_idx), 0);
-					}
-				}
-				mat_T.array() *=
-					(Eigen::VectorXd::Ones(mat_fixed_dof.size()) - mat_fixed_dof).array();
-
-				Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
-				mat_K.setZero();
-
-				auto const update_submatrix = [&log, &mat_K, &attrib](
-					auto const vtxh_src, auto const vtxh_dst, auto const cellh)
-				{
-				  auto const & cell_K = attrib.K[cellh];
-				  auto const & cell_vtxhs = attrib.vtxh[cellh];
-				  auto const cell_a = index_of(cell_vtxhs, vtxh_src);
-				  auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
-				  auto const a = vtxh_src.idx();
-				  auto const b = vtxh_dst.idx();
-
-				  Tensor::Matrix<3> const Kab = cell_K(cell_a, all, cell_b, all);
-
-//				  log += fmt::format("\nK_{},{}\n{}", a, b, Kab);
-//				  log += fmt::format("\nK_{},{}\n{} (mapped)", a, b, EigenMap{Kab.data()});
-				  mat_K.block<3, 3>(3 * a, 3 * b) += EigenConstTensorMap<3, 3>{Kab.data()};
-				};
-
-				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-				{
-					for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
-					{
-						update_submatrix(*itvtxh, *itvtxh, *itcellh);
-					}
-				}
-				for (auto itheh = mesh.halfedges_begin(); itheh != mesh.halfedges_end(); itheh++)
-				{
-					auto const & halfedge = mesh.halfedge(*itheh);
-					auto const & vtxh_src = halfedge.from_vertex();
-					auto const & vtxh_dst = halfedge.to_vertex();
-					for (auto itcellh = mesh.hec_iter(*itheh); itcellh.valid(); itcellh++)
-					{
-						update_submatrix(vtxh_src, vtxh_dst, *itcellh);
-					}
-				}
-
-				log += fmt::format("\nT\n{}", mat_T);
-//				log += fmt::format("\nK (unconstrained)\n{}", mat_K);
-				mat_K += 10e5 * mat_fixed_dof.asDiagonal();
-				log += fmt::format("\nK (constrained)\n{}", mat_K);
-
-				REQUIRE(mat_K.determinant() != Approx(0).margin(epsilon));
-
-				Eigen::VectorXd mat_u{3 * mesh.n_vertices()};
-				mat_u.setZero();
-				mat_u = mat_K.ldlt().solve(-mat_T);
-//				log += fmt::format("\nu (unconstrained)\n{}", mat_u);
-				mat_u.array() *= (Eigen::VectorXd::Ones(mat_u.size()) - mat_fixed_dof).array();
-				log += fmt::format("\nu (constrained)\n{}", mat_u);
-
-				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
-				{
-					auto const vtx_idx = (*itvtxh).idx();
-					attrib.x[*itvtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtx_idx, 0).data()};
-				}
-
-				write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
-
-				if (mat_u.lpNorm<Eigen::Infinity>() < epsilon)
-					break;
-			}
-
-			INFO(log)
+			write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
 
 			THEN("solution converges to deformed mesh")
 			{
 				WARN(fmt::format("Converged in {} steps", step));
 				CHECK(step < max_steps);
 				// clang-format off
-				check_equal(mat_x, "x", (VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
+				check_equal(mat_x, "x", (
+					Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
 					0.500000, 0.000000, 0.000000,
 					1.000000, 0.000000, 0.000000,
 					0.333333, 1.154972, -0.122244,
@@ -1780,7 +1681,8 @@ SCENARIO("Solution of two elements")
 				WARN(fmt::format("Converged in {} steps", step));
 				CHECK(step < max_steps);
 				// clang-format off
-				check_equal(mat_x, "x", (VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
+				check_equal(mat_x, "x", (
+					Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
 					0.500000, 0.000000, 0.000000,
 					1.000000, 0.000000, 0.000000,
 					0.333333, 1.154972, -0.122244,

@@ -52,6 +52,7 @@ conan_cmake_run(
 	BASIC_SETUP CMAKE_TARGETS # Run conan_basic_setup
 	PROFILE default PROFILE_AUTO build_type # Use default profile override with Debug/Release
 	BUILD missing  # build packages with no binary available
+	CMAKE_TARGETS  # Generate CMake targets to link to
 )
 conan_load_buildinfo()
 
@@ -76,17 +77,19 @@ set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_
 # Add source files to tests target.
 file(GLOB _src_test LIST_DIRECTORIES false src/test/*.cpp)
 target_sources(tests PRIVATE ${_src_test} ${_src_lib})
-# Add libraries to link.
-conan_target_link_libraries(tests)
 # Link OpenVolumeMesh
 add_dependencies(tests OpenVolumeMeshGit)
 target_link_directories(tests PRIVATE ${OpenVolumeMesh_DIR}/lib)
 # Add sanitizer and coverage build options.
 target_compile_options(
-	tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage -Wno-system-headers)
+	tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage)
 target_link_options(
 	tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage)
-target_link_libraries(tests OpenVolumeMeshd project_warnings)
+# Add libraries to link.
+# Note: this mix of libs requires `compiler.libcxx=libstdc++11` in ~/.conan/profiles/default
+target_link_libraries(
+	tests PRIVATE
+	project_warnings OpenVolumeMeshd CONAN_PKG::tetgen CONAN_PKG::spdlog CONAN_PKG::fmt)
 get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests
 catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")
