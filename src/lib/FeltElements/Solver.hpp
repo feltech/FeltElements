@@ -1,7 +1,9 @@
 #pragma once
 
-#include <eigen3/Eigen/Core>
 #include <Fastor/Fastor.h>
+
+#include <eigen3/Eigen/Core>
+
 #include "Typedefs.hpp"
 
 namespace FeltElements
@@ -28,6 +30,12 @@ using EigenMapTensorVertices = Eigen::Map<
 using EigenFixedDOFs = Eigen::VectorXd;
 
 std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar lambda, Scalar mu);
+}  // namespace LDLT
+
+namespace Gauss
+{
+std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar lambda, Scalar mu);
 }
-}
-}
+
+}  // namespace Solver
+}  // namespace FeltElements

@@ -1491,43 +1491,34 @@ SCENARIO("Solution of a single element")
 	}
 }
 
-static auto constexpr const index_of = [](auto const & haystack, auto && needle) {
-  auto const & it = std::find(
-	  haystack.cbegin(), haystack.cend(), std::forward<decltype(needle)>(needle));
-  return static_cast<FeltElements::Tensor::Index>(std::distance(haystack.cbegin(), it));
-};
-
 SCENARIO("Solution of two elements")
 {
 	GIVEN("two element mesh and material properties")
 	{
 		using namespace FeltElements;
-		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		Scalar mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
-		Scalar const E = 1;	 // Young's modulus: 0.001 - 0.05
-		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		Scalar lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
-		mu = lambda = 4;
-
-		using Tensor::Func::all;
-		using Tensor::Func::last;
-		using Tensor::Func::seq;
-
-		using OvmVtx = Mesh::PointT;
+//		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
+//		Scalar mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
+//		Scalar const E = 1;	 // Young's modulus: 0.001 - 0.05
+//		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+//		Scalar lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		Scalar const lambda = 4;
+		Scalar const mu = 4;
 
 		auto mesh = Test::load_ovm_mesh(file_name_two);
 		Attributes attrib{mesh};
 		Test::write_ovm_mesh(mesh, attrib.x, "two_elem_initial");
 
-		auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
-		Eigen::Index constexpr cols = 3;
-		auto const material_volume =
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
+		auto const total_volume = [&attrib]() {
+			return Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
+				Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
+		};
+
+		auto const material_volume = total_volume();
 
 		// Set boundary condition.
 		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
+			using OvmVtx = Mesh::PointT;
 			OvmVtx const & vtx = mesh.vertex(vtxh);
 
 			if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
@@ -1535,12 +1526,12 @@ SCENARIO("Solution of two elements")
 		}
 		// Set initial condition.
 		attrib.x[Vtxh{0}](0) += 0.5;
-
-		auto const initial_deformed_volume =
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
+		auto const initial_deformed_volume = total_volume();
 
 		CAPTURE(lambda, mu, material_volume, initial_deformed_volume);
+
+		auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
+		Eigen::Index constexpr cols = 3;
 
 		INFO("Mesh material vertices")
 		Solver::LDLT::EigenMapOvmVertices mat_vtxs{
@@ -1552,10 +1543,27 @@ SCENARIO("Solution of two elements")
 			attrib.x[Vtxh{0}].data(), rows, cols};
 		INFO(mat_x)
 
+		auto const check_converges = [&mat_x, &total_volume](
+										auto const max_step, auto const final_step) {
+			WARN(fmt::format("Converged in {} steps", final_step));
+			CHECK(final_step <= max_step);
+			// clang-format off
+			Test::check_equal(mat_x, "x", (
+				Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
+				0.500000, 0.000000, 0.000000,
+				1.000000, 0.000000, 0.000000,
+				0.333333, 1.154972, -0.122244,
+				0.000000, 0.000000, 1.000000,
+				0.333333, 0.619084, 0.518097
+				).finished(), "expected");
+			// clang-format on
+
+			CHECK(total_volume() == Approx(0.1077625528));
+		};
+
 		WHEN("displacement is solved using Eigen LDLT")
 		{
-			std::size_t constexpr max_steps = 10;
-
+			std::size_t constexpr max_steps = 4;
 			size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps, lambda, mu);
 
 			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
@@ -1563,121 +1571,21 @@ SCENARIO("Solution of two elements")
 			THEN("solution converges to deformed mesh")
 			{
 				WARN(fmt::format("Converged in {} steps", step));
-				CHECK(step < max_steps);
-				// clang-format off
-				Test::check_equal(mat_x, "x", (
-					Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
-					0.500000, 0.000000, 0.000000,
-					1.000000, 0.000000, 0.000000,
-					0.333333, 1.154972, -0.122244,
-					0.000000, 0.000000, 1.000000,
-					0.333333, 0.619084, 0.518097
-				).finished(), "expected");
-				// clang-format on
-
-				auto const total_volume =
-					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
-					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
-				CHECK(total_volume == Approx(0.1077625528));
-
+				check_converges(max_steps, step);
 			}
 		} // WHEN("displacement is solved")
 
 		WHEN("displacement is solved Gauss-Seidel style")
 		{
-			std::size_t step;
-			std::size_t constexpr max_steps = 20;
-			std::string log;
+			std::size_t constexpr max_steps = 18;
+			std::size_t step = Solver::Gauss::solve(mesh, attrib, max_steps, lambda, mu);
 
-			for (step = 0; step < max_steps; step++)
-			{
-				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<", step);
-
-				Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
-
-				std::vector<Node::Pos> u{};
-				u.resize(mesh.n_vertices());
-				for (auto & u_a : u)
-					u_a.zeros();
-
-				Scalar max_norm = 0;
-
-				for (auto vtxh_src : boost::make_iterator_range(mesh.vertices()))
-				{
-					auto const a = static_cast<Tensor::Index>(vtxh_src.idx());
-					auto const & fixed_dof = attrib.fixed_dof[vtxh_src];
-
-					Node::Force Ta = 0;
-					Tensor::Matrix<3> Kaa = 0;
-					Node::Force Ka_u = 0;
-					for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh_src)))
-					{
-						auto const & cell_vtxhs = attrib.vtxh[cellh];
-						auto const & cell_a = index_of(cell_vtxhs, vtxh_src);
-						auto const & cell_T = attrib.T[cellh];
-						auto const & cell_K = attrib.K[cellh];
-
-						Ta += cell_T(cell_a, all);
-						Kaa += cell_K(cell_a, all, cell_a, all);
-					}
-					diag(Kaa) += 10e5 * fixed_dof;
-
-					for (auto heh : boost::make_iterator_range(mesh.outgoing_halfedges(vtxh_src)))
-					{
-						Tensor::Multi<Node::dim, Node::dim> Kab = 0;
-						auto const & halfedge = mesh.halfedge(heh);
-						auto const & vtxh_dst = halfedge.to_vertex();
-						auto const b = static_cast<Tensor::Index>(vtxh_dst.idx());
-
-						for (auto cellh : boost::make_iterator_range(mesh.halfedge_cells(heh)))
-						{
-							auto const & cell_K = attrib.K[cellh];
-							auto const & cell_vtxhs = attrib.vtxh[cellh];
-							auto const cell_a = index_of(cell_vtxhs, vtxh_src);
-							auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
-//							log += fmt::format("\nK[{}, {}, {}]{}{} = {}", (*itcellh).idx(), cell_a, cell_b, a, b, cell_Kab);
-							Kab += cell_K(cell_a, all, cell_b, all);
-						}
-//						log += fmt::format("\nK{}{} = {}", a, b, Kab);
-						Ka_u += Kab % u[b];
-					}
-					using Tensor::Func::inv;
-					u[a] = inv(Kaa) % (-Ta - Ka_u) * (1.0 - fixed_dof);
-					attrib.x[vtxh_src] += u[a];
-					max_norm = std::max(norm(u[a]), max_norm);
-//					log += fmt::format("\nT{} = {}", a, Ta);
-//					log += fmt::format("\nK{}{} = {}", a, a, Kaa);
-//					log += fmt::format("\nK{} * u = {}", a, Ka_u);
-					log += fmt::format("\nu[{}] = {}", a, u[a]);
-				}
-
-				Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));
-
-				if (max_norm < Test::epsilon)
-					break;
-			}
-
-			INFO(log)
+			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));
 
 			THEN("solution converges to deformed mesh")
 			{
 				WARN(fmt::format("Converged in {} steps", step));
-				CHECK(step < max_steps);
-				// clang-format off
-				Test::check_equal(mat_x, "x", (
-					Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
-					0.500000, 0.000000, 0.000000,
-					1.000000, 0.000000, 0.000000,
-					0.333333, 1.154972, -0.122244,
-					0.000000, 0.000000, 1.000000,
-					0.333333, 0.619084, 0.518097
-				).finished(), "expected");
-				// clang-format on
-
-				auto const total_volume =
-					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
-					Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
-				CHECK(total_volume == Approx(0.1077625528));
+				check_converges(max_steps, step);
 			}
 		}
 	}

@@ -3,10 +3,11 @@
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_DEBUG
 #endif
 
+#include <spdlog/spdlog.h>
+
 #include "Attributes.hpp"
 #include "Derivatives.hpp"
 #include "Format.hpp"
-#include <spdlog/spdlog.h>
 
 namespace FeltElements::Solver
 {
@@ -34,6 +35,7 @@ void update_elements_stiffness_and_internal_forces(
 		attributes.K[*itcellh] = K;
 	}
 }
+
 namespace LDLT
 {
 std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar lambda, Scalar mu)
@@ -129,4 +131,75 @@ std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar 
 	return step;
 }
 }  // namespace LDLT
+
+namespace Gauss
+{
+std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar lambda, Scalar mu)
+{
+	using Tensor::Func::all;
+
+	std::size_t step;
+	for (step = 0; step < max_steps; step++)
+	{
+		SPDLOG_DEBUG("Gauss iteration {}", step);
+
+		Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
+
+		std::vector<Node::Pos> u{};
+		u.resize(mesh.n_vertices());
+		for (auto& u_a : u) u_a.zeros();
+
+		Scalar max_norm = 0;
+
+		for (auto vtxh_src : boost::make_iterator_range(mesh.vertices()))
+		{
+			auto const a = static_cast<Tensor::Index>(vtxh_src.idx());
+			auto const& fixed_dof = attrib.fixed_dof[vtxh_src];
+
+			Node::Force Ta = 0;
+			Tensor::Matrix<3> Kaa = 0;
+			Node::Force Ka_u = 0;
+			for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh_src)))
+			{
+				auto const& cell_vtxhs = attrib.vtxh[cellh];
+				auto const& cell_a = index_of(cell_vtxhs, vtxh_src);
+				auto const& cell_T = attrib.T[cellh];
+				auto const& cell_K = attrib.K[cellh];
+
+				Ta += cell_T(cell_a, all);
+				Kaa += cell_K(cell_a, all, cell_a, all);
+			}
+			diag(Kaa) += 10e5 * fixed_dof;
+
+			for (auto heh : boost::make_iterator_range(mesh.outgoing_halfedges(vtxh_src)))
+			{
+				Tensor::Multi<Node::dim, Node::dim> Kab = 0;
+				auto const& halfedge = mesh.halfedge(heh);
+				auto const& vtxh_dst = halfedge.to_vertex();
+				auto const b = static_cast<Tensor::Index>(vtxh_dst.idx());
+
+				for (auto cellh : boost::make_iterator_range(mesh.halfedge_cells(heh)))
+				{
+					auto const& cell_K = attrib.K[cellh];
+					auto const& cell_vtxhs = attrib.vtxh[cellh];
+					auto const cell_a = index_of(cell_vtxhs, vtxh_src);
+					auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
+					Kab += cell_K(cell_a, all, cell_b, all);
+				}
+				Ka_u += Kab % u[b];
+			}
+			using Tensor::Func::inv;
+			u[a] = inv(Kaa) % (-Ta - Ka_u) * (1.0 - fixed_dof);
+			attrib.x[vtxh_src] += u[a];
+			max_norm = std::max(norm(u[a]), max_norm);
+			SPDLOG_DEBUG("\nu[{}] = {}", a, u[a]);
+		}
+
+		if (max_norm < epsilon)
+			break;
+	}
+
+	return step;
+}
+}  // namespace Gauss
 }  // namespace FeltElements::Solver
