@@ -1,19 +1,13 @@
-#define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
+#include <FeltElements/Attributes.hpp>
+#include <FeltElements/Derivatives.hpp>
 #include <FeltElements/Solver.hpp>
+#include <catch2/catch.hpp>
+#include <range/v3/view/iota.hpp>
 
-#define CATCH_CONFIG_MAIN
-#define CATCH_CONFIG_CONSOLE_WIDTH 200
-#include "common.hpp"
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-struct MyListener : Catch::TestEventListenerBase {
-	using TestEventListenerBase::TestEventListenerBase; // inherit constructor
-	void testRunStarting(Catch::TestRunInfo const&) override {
-		spdlog::set_level(spdlog::level::debug);
-		spdlog::set_default_logger(spdlog::stderr_color_mt("stderr"));
-	}
-};
-CATCH_REGISTER_LISTENER( MyListener )
+#include "util/Assert.hpp"
+#include "util/Format.hpp"
+#include "util/IO.hpp"
+
 char const * const file_name_one = "resources/one.ovm";
 char const * const file_name_two = "resources/two.ovm";
 
@@ -27,7 +21,7 @@ SCENARIO("Mesh attributes")
 {
 	GIVEN("a two-element mesh")
 	{
-		auto mesh = load_ovm_mesh(file_name_two);
+		auto mesh = Test::load_ovm_mesh(file_name_two);
 
 		WHEN("element nodal force attributes are constructed")
 		{
@@ -84,12 +78,12 @@ SCENARIO("Mesh attributes")
 				THEN("properties are populated")
 				{
 					auto itcellh = mesh.cells_begin();
-					check_equal(
+					Test::check_equal(
 						attrib_dN_by_dX[*itcellh],
 						std::string{"dN_by_dX "} + std::to_string(itcellh),
 						Derivatives::dN_by_dX(attrib_X.for_element(attrib_vtxhs[*itcellh])));
 					itcellh++;
-					check_equal(
+					Test::check_equal(
 						attrib_dN_by_dX[*itcellh],
 						std::string{"dN_by_dX "} + std::to_string(itcellh),
 						Derivatives::dN_by_dX(attrib_X.for_element(attrib_vtxhs[*itcellh])));
@@ -106,7 +100,7 @@ SCENARIO("Mesh attributes")
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
 					Tensor::ConstMap<3> const vtx{mesh.vertex(*itvtxh).data()};
-					check_equal(attrib_x[*itvtxh], "x", vtx, "X");
+					Test::check_equal(attrib_x[*itvtxh], "x", vtx, "X");
 				}
 			}
 
@@ -122,13 +116,13 @@ SCENARIO("Mesh attributes")
 				THEN("positions are expected")
 				{
 					// clang-format off
-					check_equal(x1, "x1", {
+					Test::check_equal(x1, "x1", {
 						{0.000000, 0.000000, 0.000000},
 						{0.000000, 0.000000, 1.000000},
 						{1.000000, 0.000000, 0.000000},
 						{0.000000, 0.500000, 0.500000}
 					});
-					check_equal(x2, "x2", {
+					Test::check_equal(x2, "x2", {
 						{0.000000, 1.000000, 0.000000},
 						{0.000000, 0.000000, 0.000000},
 						{1.000000, 0.000000, 0.000000},
@@ -147,7 +141,7 @@ SCENARIO("Mesh attributes")
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
 					Tensor::ConstMap<3> const vtx{mesh.vertex(*itvtxh).data()};
-					check_equal(
+					Test::check_equal(
 						attrib_x[*itvtxh],
 						"x",
 						vtx,
@@ -167,13 +161,13 @@ SCENARIO("Mesh attributes")
 				THEN("positions are expected")
 				{
 					// clang-format off
-					check_equal(x1, "x1", {
+					Test::check_equal(x1, "x1", {
 						{0.000000, 0.000000, 0.000000},
 						{0.000000, 0.000000, 1.000000},
 						{1.000000, 0.000000, 0.000000},
 						{0.000000, 0.500000, 0.500000}
 					});
-					check_equal(x2, "x2", {
+					Test::check_equal(x2, "x2", {
 						{0.000000, 1.000000, 0.000000},
 						{0.000000, 0.000000, 0.000000},
 						{1.000000, 0.000000, 0.000000},
@@ -194,7 +188,7 @@ SCENARIO("Mesh attributes")
 				{
 					Node::Pos zero;
 					zero.zeros();
-					check_equal(attrib[*itvtxh], "fixed DOFs", zero, "zero");
+					Test::check_equal(attrib[*itvtxh], "fixed DOFs", zero, "zero");
 				}
 			}
 		}
@@ -205,8 +199,7 @@ SCENARIO("Metrics of undeformed mesh")
 {
 	GIVEN("one-element mesh")
 	{
-		FeltElements::Mesh mesh;
-		OpenVolumeMesh::IO::FileManager{}.readFile(file_name_one, mesh);
+		FeltElements::Mesh mesh = Test::load_ovm_mesh(file_name_one);
 
 		WHEN("vertex index mapping is fetched")
 		{
@@ -226,7 +219,7 @@ SCENARIO("Metrics of undeformed mesh")
 				THEN("expected positions are reported")
 				{
 					// clang-format off
-					check_equal(X, "X", {
+					Test::check_equal(X, "X", {
 						{0, 0, 0},
 						{0, 0, 1},
 						{1, 0, 0},
@@ -274,7 +267,7 @@ SCENARIO("Metrics of undeformed mesh")
 						THEN("spatial node positions equal material positions")
 						{
 							// clang-format off
-							check_equal(x, "x", X, "X");
+							Test::check_equal(x, "x", X, "X");
 							// clang-format on
 						}
 					}
@@ -288,7 +281,7 @@ SCENARIO("Metrics of deformed mesh")
 {
 	GIVEN("one-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_one);
+		auto [X, x] = Test::load_tet(file_name_one);
 
 		INFO("Tetrahedron vertices:")
 		INFO(X)
@@ -300,7 +293,7 @@ SCENARIO("Metrics of deformed mesh")
 			THEN("spatial position is updated")
 			{
 				// clang-format off
-				check_equal(x, "x", {
+				Test::check_equal(x, "x", {
 					{0.5, 0.0, 0.0},
 					{0.0, 0.0, 1.0},
 					{1.0, 0.0, 0.0},
@@ -326,7 +319,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 {
 	THEN("derivative of shape wrt local coords is correct")
 	{
-		check_equal(
+		Test::check_equal(
 			Attribute::Cell::MaterialShapeDerivative::dN_by_dL,
 			"dN_by_dL",
 			{
@@ -341,7 +334,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	THEN("derivative of local wrt shape coords is correct")
 	{
-		check_equal(
+		Test::check_equal(
 			Attribute::Cell::MaterialShapeDerivative::dL_by_dN,
 			"dL_by_dN",
 			{
@@ -362,7 +355,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			Attribute::Cell::MaterialShapeDerivative::dL_by_dN,
 			Attribute::Cell::MaterialShapeDerivative::dN_by_dL);
 
-		check_equal(
+		Test::check_equal(
 			identity,
 			"dL_by_dN * dN_by_dL",
 			{
@@ -376,7 +369,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	GIVEN("a one-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_one);
+		auto [X, x] = Test::load_tet(file_name_one);
 		(void)x;
 
 		AND_WHEN("derivative of material wrt local coords is calculated")
@@ -386,7 +379,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			THEN("derivative is correct")
 			{
 				// clang-format off
-				check_equal(dX_by_dL, "dX_by_dL", {
+				Test::check_equal(dX_by_dL, "dX_by_dL", {
 					{0, 1, 0},
 					{0, 0, 1},
 					{1, 0, 0}
@@ -401,7 +394,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dL_by_dX, "dL_by_dX", {
+					Test::check_equal(dL_by_dX, "dL_by_dX", {
 						{0, 0, 1},
 						{1, 0, 0},
 						{0, 1, 0}
@@ -416,7 +409,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					THEN("derivative is correct")
 					{
 						// clang-format off
-						check_equal(dN_by_dX, "dN_by_dX", {
+						Test::check_equal(dN_by_dX, "dN_by_dX", {
 							{-1, -1, -1},
 							{0, 0, 1},
 							{1, 0, 0},
@@ -435,7 +428,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			THEN("matrix is correct")
 			{
 				// clang-format off
-				check_equal(N_to_x, "N_to_x", {
+				Test::check_equal(N_to_x, "N_to_x", {
 					{1, 1, 1, 1},
 					{0, 0, 1, 0},
 					{0, 0, 0, 1},
@@ -451,7 +444,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dN_by_dX, "dN_by_dX", {
+					Test::check_equal(dN_by_dX, "dN_by_dX", {
 						{-1, -1, -1},
 						{0, 0, 1},
 						{1, 0, 0},
@@ -468,7 +461,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dx_by_dN, "dx_by_dN", {
+					Test::check_equal(dx_by_dN, "dx_by_dN", {
 						{0, 0, 1, 0},
 						{0, 0, 0, 1},
 						{0, 1, 0, 0}
@@ -481,7 +474,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	GIVEN("First element of a two-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_two);
+		auto [X, x] = Test::load_tet(file_name_two);
 		(void)x;
 
 		THEN("expected positions are reported")
@@ -496,7 +489,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 			INFO("X:")
 			INFO(X)
-			CHECK(equal(X, expected));
+			CHECK(Test::equal(X, expected));
 		}
 
 		WHEN("derivative of material wrt local coords is calculated")
@@ -506,7 +499,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			THEN("derivative is correct")
 			{
 				// clang-format off
-				check_equal(dX_by_dL, "dX_by_dL", {
+				Test::check_equal(dX_by_dL, "dX_by_dL", {
 					{0.0, 1.0, 0.0},
 					{0.0, 0.0, 0.5},
 					{1.0, 0.0, 0.5}
@@ -521,7 +514,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dL_by_dX, "dL_by_dX", {
+					Test::check_equal(dL_by_dX, "dL_by_dX", {
 						{0, -1, 1},
 						{1, 0, 0},
 						{0, 2, 0}
@@ -536,7 +529,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					Matrix<3> const identity = einsum<Idxs<i, k>, Idxs<k, j>>(
 						dX_by_dL, dL_by_dX);
 					// clang-format off
-					check_equal(identity, "dX_by_dL * dL_by_dX", {
+					Test::check_equal(identity, "dX_by_dL * dL_by_dX", {
 						{1, 0, 0},
 						{0, 1, 0},
 						{0, 0, 1}
@@ -553,7 +546,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			THEN("derivative is correct")
 			{
 				// clang-format off
-				check_equal(dN_by_dX, "dN_by_dX", {
+				Test::check_equal(dN_by_dX, "dN_by_dX", {
 					{-1, -1, -1},
 					{0, -1, 1},
 					{1, 0, 0},
@@ -570,7 +563,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			THEN("matrix is correct")
 			{
 				// clang-format off
-				check_equal(N_to_x, "N_to_x", {
+				Test::check_equal(N_to_x, "N_to_x", {
 					{1.0, 1.0, 1.0, 1.0},
 					{0.0, 0.0, 1.0, 0.0},
 					{0.0, 0.0, 0.0, 0.5},
@@ -586,7 +579,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dN_by_dX, "dN_by_dX", {
+					Test::check_equal(dN_by_dX, "dN_by_dX", {
 						{-1, -1, -1},
 						{0, -1, 1},
 						{1, 0, -0},
@@ -604,7 +597,7 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 {
 	GIVEN("a one-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_one);
+		auto [X, x] = Test::load_tet(file_name_one);
 
 		INFO("Material vertices:")
 		INFO(X)
@@ -622,7 +615,7 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dx_by_dL, "dx_by_dL", {
+					Test::check_equal(dx_by_dL, "dx_by_dL", {
 						{-0.5, 0.5, -0.5},
 						{0.0, 0.0, 1.0},
 						{1.0, 0.0, 0.0}
@@ -637,7 +630,7 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 					THEN("derivative is correct")
 					{
 						// clang-format off
-						check_equal(dL_by_dx, "dL_by_dx", {
+						Test::check_equal(dL_by_dx, "dL_by_dx", {
 							{0, 0, 1},
 							{2, 1, 1},
 							{0, 1, 0}
@@ -654,7 +647,7 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dN_by_dx, "dN_by_dx", {
+					Test::check_equal(dN_by_dx, "dN_by_dx", {
 						{-2, -2, -2},
 						{0, 0, 1},
 						{2, 1, 1},
@@ -672,7 +665,7 @@ SCENARIO("Deformation gradient of undeformed element")
 {
 	GIVEN("first element of two-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_two);
+		auto [X, x] = Test::load_tet(file_name_two);
 
 		INFO("Material vertices:")
 		INFO(X)
@@ -685,7 +678,7 @@ SCENARIO("Deformation gradient of undeformed element")
 			THEN("gradient is identity")
 			{
 				// clang-format off
-				check_equal(dx_by_dX, "dx_by_dX", {
+				Test::check_equal(dx_by_dX, "dx_by_dX", {
 					{1, 0, 0},
 					{0, 1, 0},
 					{0, 0, 1}
@@ -703,7 +696,7 @@ SCENARIO("Deformation gradient of undeformed element")
 			THEN("gradient is identity")
 			{
 				// clang-format off
-				check_equal(dx_by_dX, "dx_by_dX", {
+				Test::check_equal(dx_by_dX, "dx_by_dX", {
 					{1, 0, 0},
 					{0, 1, 0},
 					{0, 0, 1}
@@ -730,7 +723,7 @@ SCENARIO("Deformation gradient of undeformed element")
 				 THEN("gradient is identity")
 				 {
 					 // clang-format off
-					 check_equal(dx_by_dX, "dx_by_dX", {
+					 Test::check_equal(dx_by_dX, "dx_by_dX", {
 						 {1, 0, 0},
 						 {0, 1, 0},
 						 {0, 0, 1}
@@ -746,7 +739,7 @@ SCENARIO("Deformation gradient of deformed element")
 {
 	GIVEN("a one-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_one);
+		auto [X, x] = Test::load_tet(file_name_one);
 
 		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 		INFO("Material vertices:")
@@ -765,7 +758,7 @@ SCENARIO("Deformation gradient of deformed element")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dN_by_dx, "dN_by_dx", {
+					Test::check_equal(dN_by_dx, "dN_by_dx", {
 						{-2, -2, -2},
 						{0, 0, 1},
 						{2, 1, 1},
@@ -781,7 +774,7 @@ SCENARIO("Deformation gradient of deformed element")
 				THEN("deformation gradient is correct")
 				{
 					// clang-format off
-					check_equal(F, "F", {
+					Test::check_equal(F, "F", {
 						{0.5, -0.5, -0.5},
 						{0.0, 1.0, 0.0},
 						{0.0, 0.0, 1.0}
@@ -806,7 +799,7 @@ SCENARIO("Deformation gradient of deformed element")
 					THEN("tensor is correct")
 					{
 						// clang-format off
-						check_equal(b, "b", {
+						Test::check_equal(b, "b", {
 							{0.75, -0.5, -0.5},
 							{-0.5,    1.0,    0.0},
 							{-0.5,    0.0,    1.0}
@@ -820,7 +813,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 	GIVEN("first element of two-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_two);
+		auto [X, x] = Test::load_tet(file_name_two);
 
 		auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 
@@ -838,7 +831,7 @@ SCENARIO("Deformation gradient of deformed element")
 				THEN("derivative is correct")
 				{
 					// clang-format off
-					check_equal(dN_by_dx, "dN_by_dx", {
+					Test::check_equal(dN_by_dx, "dN_by_dx", {
 						{-2, -2, -2},
 						{0, -1, 1},
 						{2, 1, 1},
@@ -855,7 +848,7 @@ SCENARIO("Deformation gradient of deformed element")
 				THEN("deformation gradient is correct")
 				{
 					// clang-format off
-					check_equal(F, "F", {
+					Test::check_equal(F, "F", {
 						{0.5, -0.5, -0.5},
 						{0.0, 1.0, 0.0},
 						{0.0, 0.0, 1.0}
@@ -880,7 +873,7 @@ SCENARIO("Deformation gradient of deformed element")
 					THEN("tensor is correct")
 					{
 						// clang-format off
-						check_equal(b, "b", {
+						Test::check_equal(b, "b", {
 							{0.75, -0.5, -0.5},
 							{-0.5,    1.0,    0.0},
 							{-0.5,    0.0,    1.0}
@@ -898,7 +891,7 @@ SCENARIO("Internal equivalent nodal force")
 {
 	GIVEN("an undeformed one-element mesh")
 	{
-		auto [X, x] = load_tet(file_name_one);
+		auto [X, x] = Test::load_tet(file_name_one);
 
 		INFO("Material vertices:")
 		INFO(X)
@@ -923,7 +916,7 @@ SCENARIO("Internal equivalent nodal force")
 			THEN("stress is zero")
 			{
 				// clang-format off
-				check_equal(sigma, "sigma", {
+				Test::check_equal(sigma, "sigma", {
 					{0, 0, 0},
 					{0, 0, 0},
 					{0, 0, 0}
@@ -940,7 +933,7 @@ SCENARIO("Internal equivalent nodal force")
 				THEN("nodal forces are zero")
 				{
 					// clang-format off
-					check_equal(T, "T", {
+					Test::check_equal(T, "T", {
 						{0, 0, 0},
 						{0, 0, 0},
 						{0, 0, 0},
@@ -968,7 +961,7 @@ SCENARIO("Internal equivalent nodal force")
 				THEN("stress is correct")
 				{
 					// clang-format off
-					check_equal(sigma, "sigma", {
+					Test::check_equal(sigma, "sigma", {
 						{-0.754518, -0.4, -0.4},
 						{-0.4, -0.554518, 0.0},
 						{-0.4, 0.0, -0.554518}
@@ -988,9 +981,9 @@ SCENARIO("Internal equivalent nodal force")
 					THEN("nodal forces are correct")
 					{
 //						Node::Forces const & zero = 0;
-//						check_equal(T, "T", zero, "zero");
+//						Test::check_equal(T, "T", zero, "zero");
 						// clang-format off
-						check_equal(T, "T", {
+						Test::check_equal(T, "T", {
 							{0.259086, 0.159086, 0.159086},
 							{-0.0333333, 0.0, -0.0462098},
 							{-0.19242, -0.112876, -0.112876},
@@ -1022,7 +1015,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 		AND_GIVEN("an undeformed tetrahedron")
 		{
-			auto [X, x] = load_tet(file_name_one);
+			auto [X, x] = Test::load_tet(file_name_one);
 
 			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
@@ -1040,7 +1033,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 				THEN("it has expected values")
 				{
 					// clang-format off
-					check_equal(c, "c",   {
+					Test::check_equal(c, "c",   {
 						{
 							{{1.2, 0.0, 0.0}, {0.0, 0.4, 0.0}, {0.0, 0.0, 0.4}},
 							{{0.0, 0.4, 0.0}, {0.4, 0.0, 0.0}, {0.0, 0.0, 0.0}},
@@ -1064,9 +1057,9 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					THEN("it has expected values")
 					{
 //						Element::Stiffness const & zero = 0;
-//						check_equal(Kc, "Kc", zero, "zero");
+//						Test::check_equal(Kc, "Kc", zero, "zero");
 						// clang-format off
-						check_equal(Kc, "Kc", {
+						Test::check_equal(Kc, "Kc", {
 							{
 								{{0.333333, 0.133333, 0.133333}, {-0.066667, 0.000000, -0.066667}, {-0.200000, -0.066667, -0.066667}, {-0.066667, -0.066667, 0.000000}},
 								{{0.133333, 0.333333, 0.133333}, {0.000000, -0.066667, -0.066667}, {-0.066667, -0.066667, 0.000000}, {-0.066667, -0.200000, -0.066667}},
@@ -1102,7 +1095,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					THEN("stress component is zero")
 					{
 						Element::Stiffness const expected = 0;
-						check_equal(Ks, "Ks", expected, "zero");
+						Test::check_equal(Ks, "Ks", expected, "zero");
 					}
 				}
 			}
@@ -1110,7 +1103,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 		AND_GIVEN("a deformed tetrahedron")
 		{
-			auto [X, x] = load_tet(file_name_one);
+			auto [X, x] = Test::load_tet(file_name_one);
 			x(0, 0) += 0.5;
 
 			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
@@ -1133,7 +1126,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 				THEN("it has expected values")
 				{
 					// clang-format off
-					check_equal(c, "c",   {
+					Test::check_equal(c, "c",   {
 						{
 							{{3.50904, 0.0, 0.0}, {0.0, 0.8, 0.0}, {0.0, 0.0, 0.8}},
 							{{0.0, 1.35452, 0.0}, {1.35452, 0.0, 0.0}, {0.0, 0.0, 0.0}},
@@ -1158,9 +1151,9 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					THEN("it has expected values")
 					{
 //						Element::Stiffness const & check = 0;
-//						check_equal(Kc, "Kc", check, "zero");
+//						Test::check_equal(Kc, "Kc", check, "zero");
 						// clang-format off
-						check_equal(Kc, "Kc", {
+						Test::check_equal(Kc, "Kc", {
 							{
 								{{2.072690, 0.718173, 0.718173}, {-0.225753, 0.000000, -0.133333}, {-1.621184, -0.584839, -0.584839}, {-0.225753, -0.133333, 0.000000}},
 								{{0.718173, 2.072690, 0.718173}, {0.000000, -0.225753, -0.133333}, {-0.492420, -1.262098, -0.359086}, {-0.225753, -0.584839, -0.225753}},
@@ -1192,7 +1185,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 				THEN("stress is correct")
 				{
 					// clang-format off
-					check_equal(sigma, "sigma", {
+					Test::check_equal(sigma, "sigma", {
 						{-0.754518, -0.4, -0.4},
 						{-0.4, -0.554518, 0.0},
 						{-0.4, 0.0, -0.554518}
@@ -1207,9 +1200,9 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					THEN("stress component is correct")
 					{
 //						Element::Stiffness const & check = 0;
-//						check_equal(Ks, "Ks", check, "zero");
+//						Test::check_equal(Ks, "Ks", check, "zero");
 						// clang-format off
-						check_equal(Ks, "Ks", {
+						Test::check_equal(Ks, "Ks", {
 							{
 								{{-1.154518, -0.000000, -0.000000}, {0.159086, 0.000000, 0.000000}, {0.836345, 0.000000, 0.000000}, {0.159086, 0.000000, 0.000000}},
 								{{-0.000000, -1.154518, -0.000000}, {0.000000, 0.159086, 0.000000}, {0.000000, 0.836345, 0.000000}, {0.000000, 0.159086, 0.000000}},
@@ -1254,7 +1247,7 @@ SCENARIO("Solution of a single element")
 		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
 		mu = lambda = 4;
 
-		auto mesh = load_ovm_mesh(file_name_one);
+		auto mesh = Test::load_ovm_mesh(file_name_one);
 		Attributes attrib{mesh};
 		auto const & vtxhs = attrib.vtxh[Cellh{0}];
 		auto const & X = attrib.X.for_element(vtxhs);
@@ -1302,8 +1295,8 @@ SCENARIO("Solution of a single element")
 				auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
 				Element::Stiffness const & K = Kc + Ks;
 
-				check_equal(attrib.T[cellh], "T (attribute)", T, "T (check)");
-				check_equal(attrib.K[cellh], "K (attribute)", K, "K (check)");
+				Test::check_equal(attrib.T[cellh], "T (attribute)", T, "T (check)");
+				Test::check_equal(attrib.K[cellh], "K (attribute)", K, "K (check)");
 			}
 		}
 
@@ -1387,7 +1380,7 @@ SCENARIO("Solution of a single element")
 				CHECK(step < max_steps);
 				CHECK(Derivatives::V(x) == Approx(1.0 / 6));
 				// clang-format off
-				check_equal(x, "x", {
+				Test::check_equal(x, "x", {
 					{0.000000, 0.000000, 0.000000},
 					{0.000000, 0.000000, 1.000000},
 					{1.000000, 0.000000, 0.000000},
@@ -1409,16 +1402,6 @@ SCENARIO("Solution of a single element")
 			for (step = 0; step < max_steps; step++)
 			{
 				log += fmt::format("\n\n>>>>>>>>>>>> Iteration {} <<<<<<<<<<<<\n", step);
-
-				for (auto node_idx : ranges::views::ints(0ul, X.dimension(0)))
-				{
-					using OvmVec = decltype(mesh)::PointT;
-					OvmVec mesh_vtx{x(node_idx, 0), x(node_idx, 1), x(node_idx, 2)};
-					mesh.set_vertex(vtxhs[node_idx], mesh_vtx);
-				}
-				OpenVolumeMesh::IO::FileManager{}.writeFile(
-					fmt::format("artefacts/single_tet_solve.{}.ovm", step), mesh);
-
 				log += fmt::format("\nx\n{}", x);
 
 				Scalar const v = Derivatives::V(x);
@@ -1496,7 +1479,7 @@ SCENARIO("Solution of a single element")
 				CHECK(step < max_steps);
 				CHECK(Derivatives::V(x) == Approx(1.0 / 6));
 				// clang-format off
-				check_equal(x, "x", {
+				Test::check_equal(x, "x", {
 					{0.000000, 0.000000, 0.000000},
 					{0.000000, 0.000000, 1.000000},
 					{1.000000, 0.000000, 0.000000},
@@ -1532,9 +1515,9 @@ SCENARIO("Solution of two elements")
 
 		using OvmVtx = Mesh::PointT;
 
-		auto mesh = load_ovm_mesh(file_name_two);
+		auto mesh = Test::load_ovm_mesh(file_name_two);
 		Attributes attrib{mesh};
-		write_ovm_mesh(mesh, attrib.x, "two_elem_initial");
+		Test::write_ovm_mesh(mesh, attrib.x, "two_elem_initial");
 
 		auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
 		Eigen::Index constexpr cols = 3;
@@ -1575,14 +1558,14 @@ SCENARIO("Solution of two elements")
 
 			size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps, lambda, mu);
 
-			write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
+			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
 
 			THEN("solution converges to deformed mesh")
 			{
 				WARN(fmt::format("Converged in {} steps", step));
 				CHECK(step < max_steps);
 				// clang-format off
-				check_equal(mat_x, "x", (
+				Test::check_equal(mat_x, "x", (
 					Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
 					0.500000, 0.000000, 0.000000,
 					1.000000, 0.000000, 0.000000,
@@ -1668,9 +1651,9 @@ SCENARIO("Solution of two elements")
 					log += fmt::format("\nu[{}] = {}", a, u[a]);
 				}
 
-				write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));
+				Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));
 
-				if (max_norm < epsilon)
+				if (max_norm < Test::epsilon)
 					break;
 			}
 
@@ -1681,7 +1664,7 @@ SCENARIO("Solution of two elements")
 				WARN(fmt::format("Converged in {} steps", step));
 				CHECK(step < max_steps);
 				// clang-format off
-				check_equal(mat_x, "x", (
+				Test::check_equal(mat_x, "x", (
 					Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
 					0.500000, 0.000000, 0.000000,
 					1.000000, 0.000000, 0.000000,

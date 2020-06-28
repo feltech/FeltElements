@@ -1,7 +1,3 @@
-//
-// Created by dave on 04/11/2019.
-//
-
 #include "TetGenIO.hpp"
 
 #include <boost/range/irange.hpp>

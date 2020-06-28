@@ -1,4 +1,5 @@
-#include "common.hpp"
+#include <catch2/catch.hpp>
+#include <FeltElements/Typedefs.hpp>
 #include <FeltElements/TetGenIO.hpp>
 
 SCENARIO("Loading a tetrahedralisation")
@@ -12,11 +13,6 @@ SCENARIO("Loading a tetrahedralisation")
 		  CHECK(mesh.num_corners() == num_corners);
 		};
 
-//	GIVEN("converting from tetgen")
-//	{
-//		OpenVolumeMesh::IO::FileManager{}.writeFile(
-//			fmt::format("{}.ovm", file_name_one), TetGenIO{file_name_one}.to_mesh());
-//	}
 	GIVEN("single tetrahedron mesh is loaded")
 	{
 		auto const & mesh = TetGenIO{"resources/tetgen/one/tet.1"};

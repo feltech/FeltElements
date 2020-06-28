@@ -1,6 +1,5 @@
 #pragma once
 #include <Fastor/Fastor.h>
-
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <boost/range/iterator_range_core.hpp>
 
