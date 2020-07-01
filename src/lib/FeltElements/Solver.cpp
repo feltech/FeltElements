@@ -50,14 +50,19 @@ std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar 
 		return mat;
 	})();
 
+	Eigen::VectorXd mat_T{3 * mesh.n_vertices()};
+	Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
+	Eigen::VectorXd mat_u{3 * mesh.n_vertices()};
+
 	std::size_t step;
 	for (step = 0; step < max_steps; step++)
 	{
 		SPDLOG_DEBUG("LDLT iteration {}", step);
 		Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
 
-		Eigen::VectorXd mat_T{3 * mesh.n_vertices()};
 		mat_T.setZero();
+		mat_K.setZero();
+
 		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 		{
 			auto const vtx_idx = (*itvtxh).idx();
@@ -72,10 +77,7 @@ std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar 
 						static_cast<Eigen::Index>(cell_vtx_idx), 0);
 			}
 		}
-		mat_T.array() *= (Eigen::VectorXd::Ones(mat_fixed_dof.size()) - mat_fixed_dof).array();
-
-		Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
-		mat_K.setZero();
+//		mat_T.array() *= (Eigen::VectorXd::Ones(mat_fixed_dof.size()) - mat_fixed_dof).array();
 
 		auto const update_submatrix =
 			[&mat_K, &attrib](auto const vtxh_src, auto const vtxh_dst, auto const cellh) {
@@ -112,8 +114,6 @@ std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar 
 
 		assert(std::abs(mat_K.determinant()) > 0.00001);
 
-		Eigen::VectorXd mat_u{3 * mesh.n_vertices()};
-		mat_u.setZero();
 		mat_u = mat_K.ldlt().solve(-mat_T);
 		mat_u.array() *= (Eigen::VectorXd::Ones(mat_u.size()) - mat_fixed_dof).array();
 		SPDLOG_DEBUG("u (constrained)\n{}", mat_u);
@@ -188,6 +188,7 @@ std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar 
 				}
 				Ka_u += Kab % u[b];
 			}
+
 			using Tensor::Func::inv;
 			u[a] = inv(Kaa) % (-Ta - Ka_u) * (1.0 - fixed_dof);
 			attrib.x[vtxh_src] += u[a];

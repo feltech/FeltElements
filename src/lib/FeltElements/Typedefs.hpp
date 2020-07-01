@@ -57,6 +57,7 @@ namespace Element
 using Vtxhs = std::array<OpenVolumeMesh::VertexHandle, Node::count>;
 using IsoCoordDerivative = Tensor::Matrix<Node::dim, Node::count>;
 using ShapeDerivative = Tensor::Matrix<Node::count, Node::dim>;
+using ShapeDerivativeDeterminant = Tensor::Multi<Node::count, Node::count, Node::count>;
 using Elasticity = Tensor::Multi<Node::dim, Node::dim, Node::dim, Node::dim>;
 using ShapeCartesianTransform = Tensor::Matrix<4, 4>;
 using CartesianDerivative = Tensor::Matrix<Node::dim, Node::count>;

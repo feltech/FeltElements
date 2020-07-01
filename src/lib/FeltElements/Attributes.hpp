@@ -121,6 +121,7 @@ public:
 	static Node::Positions const X;
 	static Element::IsoCoordDerivative const dL_by_dN;
 	static Element::ShapeDerivative const dN_by_dL;
+	static Element::ShapeDerivativeDeterminant const det_dN_by_dL;
 };
 
 class NodalForces final : private internal::CellBase<NodalForces>

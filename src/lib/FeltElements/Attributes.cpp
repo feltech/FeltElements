@@ -49,6 +49,25 @@ Element::ShapeDerivative const MaterialShapeDerivative::dN_by_dL = // NOLINT(cer
 		{0, 1, 0, 0},
 		{0, 0, 1, 0},
 		{0, 0, 0, 1}}))(Fastor::all, Fastor::fseq<1, 4>());
+
+Element::ShapeDerivativeDeterminant const MaterialShapeDerivative::det_dN_by_dL = ([](){
+	using Tensor::Index;
+	using Tensor::Func::all;
+	using Tensor::Func::det;
+	Element::ShapeDerivativeDeterminant det_dN_by_dL_;
+	for (Index i = 0; i < Node::count; i++)
+		for (Index j = 0; j < Node::count; j++)
+			for (Index k = 0; k < Node::count; k++)
+			{
+				Tensor::Matrix<3> dN_by_dL_ijk;
+				dN_by_dL_ijk(0, all) = dN_by_dL(i, all);
+				dN_by_dL_ijk(1, all) = dN_by_dL(j, all);
+				dN_by_dL_ijk(2, all) = dN_by_dL(k, all);
+				det_dN_by_dL_(i, j, k) = det(dN_by_dL_ijk);
+			}
+	return det_dN_by_dL_;
+}());
+
 // clang-format on
 
 NodalForces::NodalForces(Mesh& mesh) : ThisBase{mesh}

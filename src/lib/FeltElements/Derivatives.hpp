@@ -58,4 +58,5 @@ namespace FeltElements::Derivatives
 [[nodiscard]] Element::ShapeCartesianTransform N_to_x(
 	Node::Positions const& X);
 
+[[nodiscard]] Scalar det_dx_by_dL(Node::Positions const& x);
 }  // namespace FeltElements

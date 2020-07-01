@@ -46,6 +46,34 @@ std::ostream & operator<< (std::ostream& os, FeltElements::Tensor::Multi<dim0,di
 	return os;
 }
 
+template <std::size_t dim0, std::size_t dim1, std::size_t dim2>
+std::ostream & operator<< (std::ostream& os, FeltElements::Tensor::Multi<dim0,dim1,dim2> value)
+{
+
+	using namespace FeltElements::Tensor;
+	using boost::algorithm::join;
+
+	std::array<std::string, value.dimension(0)> is{};
+	std::array<std::string, value.dimension(1)> js{};
+	std::array<std::string, value.dimension(2)> ks{};
+	for (Index i = 0; i < value.dimension(0); i++)
+	{
+		for (Index j = 0; j < value.dimension(1); j++)
+		{
+			using FeltElements::Tensor::Func::all;
+			using Vec = Vector<value.dimension(2)>;
+			Vec const & vec = value(i, j, all);
+
+			js[j] = join(
+				ranges::subrange{vec.data(), vec.data() + Vec::size()} |
+				ranges::views::transform(to_string), ", ");
+		}
+		is[i] = join(js, "},\n\t{");
+	}
+	os << "{\n\t{" << join(is, "}\n}, {\n\t{") << "}\n}\n";
+	return os;
+}
+
 template <std::size_t dim0, std::size_t dim1>
 std::ostream & operator<< (std::ostream& os, FeltElements::Tensor::Matrix<dim0,dim1> value)
 {

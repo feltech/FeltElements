@@ -1,11 +1,11 @@
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
 #include <FeltElements/Solver.hpp>
+#include "util/Format.hpp"
 #include <catch2/catch.hpp>
 #include <range/v3/view/iota.hpp>
 
 #include "util/Assert.hpp"
-#include "util/Format.hpp"
 #include "util/IO.hpp"
 
 char const * const file_name_one = "resources/one.ovm";
@@ -367,12 +367,45 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			});
 	}
 
+	THEN("determinant tensor of derivative of shape w.r.t local coords is correct")
+	{
+		Element::ShapeDerivativeDeterminant zero;
+		zero.zeros();
+		// clang-format off
+		Test::check_equal(
+			Attribute::Cell::MaterialShapeDerivative::det_dN_by_dL,
+			"det_dN_by_dL", {
+				{
+					{0.000000, 0.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, -1.000000, 1.000000},
+					{0.000000, 1.000000, 0.000000, -1.000000},
+					{0.000000, -1.000000, 1.000000, 0.000000}
+				}, {
+					{0.000000, 0.000000, 1.000000, -1.000000},
+					{0.000000, 0.000000, 0.000000, 0.000000},
+					{-1.000000, 0.000000, 0.000000, 1.000000},
+					{1.000000, 0.000000, -1.000000, 0.000000}
+				}, {
+					{0.000000, -1.000000, 0.000000, 1.000000},
+					{1.000000, 0.000000, 0.000000, -1.000000},
+					{0.000000, 0.000000, 0.000000, 0.000000},
+					{-1.000000, 1.000000, 0.000000, 0.000000}
+				}, {
+					{0.000000, 1.000000, -1.000000, 0.000000},
+					{-1.000000, 0.000000, 1.000000, 0.000000},
+					{1.000000, -1.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 0.000000, 0.000000}
+				}
+			});
+			// clang-format on
+	}
+
 	GIVEN("a one-element mesh")
 	{
 		auto [X, x] = Test::load_tet(file_name_one);
 		(void)x;
 
-		AND_WHEN("derivative of material wrt local coords is calculated")
+		WHEN("derivative of material wrt local coords is calculated")
 		{
 			auto const & dX_by_dL = Derivatives::dX_by_dL(X);
 
@@ -421,7 +454,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			}
 		}
 
-		AND_WHEN("transformation from natural to cartesian coordinates is calculated")
+		WHEN("transformation from natural to cartesian coordinates is calculated")
 		{
 			auto const & N_to_x = Derivatives::N_to_x(X);
 
@@ -468,6 +501,16 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					});
 					// clang-format on
 				}
+			}
+		} // WHEN("transformation from natural to cartesian coordinates is calculated")
+
+		WHEN("determinant of derivative of material wrt local coords (Jacobian) is calculated")
+		{
+			Scalar det_dX_by_dL = Derivatives::det_dx_by_dL(X);
+
+			THEN("Jacobian is 1")
+			{
+				CHECK(det_dX_by_dL == 1.0);
 			}
 		}
 	}
@@ -536,6 +579,16 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					});
 					// clang-format on
 				}
+			}
+		} // WHEN("derivative of material wrt local coords is calculated")
+
+		WHEN("determinant of derivative of material wrt local coords (Jacobian) is calculated")
+		{
+			Scalar det_dX_by_dL = Derivatives::det_dx_by_dL(X);
+
+			THEN("Jacobian is 1/2")
+			{
+				CHECK(det_dX_by_dL == 0.5);
 			}
 		}
 
@@ -1445,17 +1498,9 @@ SCENARIO("Solution of a single element")
 					using namespace Tensor;
 					using Func::einsum;
 					auto u_a = u(a, all);
-//					auto const & T_a = T(a, all);
-//					auto const & K_a = K(a, all, all, all);
-//					auto const & K_a_a = K(a, all, a, all);
 					Tensor::Map<3> const & T_a{&T(a, 0)};
 					Tensor::Map<3, 4, 3> const & K_a{&K(a, 0, 0, 0)};
 					Tensor::Matrix<3> const & K_a_a = K(a, all, a, all);
-//					Tensor::Vector<3> const & Ku = einsum<Idxs<i, b, j>, Idxs<b, j>>(K_a, u);
-//					Tensor::Vector<3> const & TKu = T_a - Ku;
-//					Tensor::Matrix<3> const & invKa = inv(K_a_a);
-//					Tensor::Vector<3> delta = invKa % TKu;
-//					u_a += delta;
 					u_a = inv(K_a_a) % (-T_a - einsum<Idxs<i, b, j>, Idxs<b, j>>(K_a, u));
 				}
 

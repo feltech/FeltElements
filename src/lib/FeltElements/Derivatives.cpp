@@ -208,6 +208,44 @@ Element::CartesianDerivative dx_by_dN(
 	return N_to_x(fseq<1, last>{}, all);
 }
 
+Scalar det_dx_by_dL(Node::Positions const& x)
+{
+	using namespace Tensor;
+	using Func::all;
+	using Func::einsum;
+
+	auto const& det_dN_by_dL = Attribute::Cell::MaterialShapeDerivative::det_dN_by_dL;
+
+//	Scalar det_ = 0;
+//	for (Index i = 0; i < Node::count; i++)
+//		for (Index j = 0; j < Node::count; j++)
+//			for (Index k = 0; k < Node::count; k++)
+//				det_ += det_dN_by_dL(i, j, k) * x(i, 0) * x(j, 1) * x(k, 2);
+//
+//	return det_;
+
+//	Element::ShapeDerivativeDeterminant xs = ([&x](){
+//		using Tensor::Index;
+//		using Tensor::Func::all;
+//		Element::ShapeDerivativeDeterminant xs_;
+//		for (Index i = 0; i < Node::count; i++)
+//			for (Index j = 0; j < Node::count; j++)
+//				for (Index k = 0; k < Node::count; k++)
+//					xs_(i, j, k) = x(i, 0) * x(j, 1) * x(k, 2);
+//		return xs_;
+//	}());
+//	Tensor::Vector<1> sum = einsum<Idxs<i, j, k>, Idxs<i, j, k>>(
+//		det_dN_by_dL, xs);
+
+	Tensor::Vector<4> x0 = x(all, 0);
+	Tensor::Vector<4> x1 = x(all, 1);
+	Tensor::Vector<4> x2 = x(all, 2);
+	Tensor::Vector<1> sum = einsum<Idxs<i, j, k>, Idxs<i>, Idxs<j>, Idxs<k>>(
+		det_dN_by_dL, x0, x1, x2);
+
+	return sum(0);
+}
+
 Element::Gradient dL_by_dX(Element::Gradient const & dX_by_dL)
 {
 	return ex::dL_by_dX(dX_by_dL);
