@@ -34,14 +34,14 @@ protected:
 	using Handle = typename ThisTraits::Handle;
 	static constexpr std::string_view prop_name = ThisTraits::prop_name;
 
-	explicit Base(Prop&& prop) : m_prop{prop} {}
+	explicit Base(Prop && prop) : m_prop{prop} {}
 
-	Data& operator[](Handle const& handle)
+	Data & operator[](Handle const & handle)
 	{
 		return m_prop[handle];
 	}
 
-	Data const& operator[](Handle const& handle) const
+	Data const & operator[](Handle const & handle) const
 	{
 		return m_prop[handle];
 	}
@@ -63,7 +63,7 @@ class MeshBase : protected Base<Derived>
 
 protected:
 	using Data = typename ThisBase::Data;
-	explicit MeshBase(Mesh& mesh)
+	explicit MeshBase(Mesh & mesh)
 		: ThisBase{mesh.request_mesh_property<Data>(ThisBase::prop_name.data())}
 	{
 	}
@@ -83,7 +83,7 @@ class VertexBase : protected Base<Derived>
 
 protected:
 	using Data = typename ThisBase::Data;
-	explicit VertexBase(Mesh& mesh)
+	explicit VertexBase(Mesh & mesh)
 		: ThisBase{mesh.request_vertex_property<Data>(ThisBase::prop_name.data())}
 	{
 	}
@@ -95,7 +95,7 @@ class VertexPositionBase : protected VertexBase<Derived>
 	using ThisBase = VertexBase<Derived>;
 
 protected:
-	explicit VertexPositionBase(Mesh& mesh) : ThisBase{mesh}
+	explicit VertexPositionBase(Mesh & mesh) : ThisBase{mesh}
 	{
 		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 		{
@@ -105,7 +105,7 @@ protected:
 		}
 	}
 
-	[[nodiscard]] Node::Positions for_element(Element::Vtxhs const& vtxhs) const
+	[[nodiscard]] Node::Positions for_element(Element::Vtxhs const & vtxhs) const
 	{
 		using Tensor::Func::all;
 		Node::Positions x;
@@ -130,7 +130,7 @@ class CellBase : protected Base<Derived>
 
 protected:
 	using Data = typename ThisBase::Data;
-	explicit CellBase(Mesh& mesh)
+	explicit CellBase(Mesh & mesh)
 		: ThisBase{mesh.request_cell_property<Data>(ThisBase::prop_name.data())}
 	{
 	}

@@ -3,18 +3,18 @@
 //
 #pragma once
 
+#include <tetgen/tetgen.h>
+
+#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <memory>
 #include <string>
-
-#include <tetgen/tetgen.h>
-#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 
 namespace FeltElements
 {
 class TetGenIO
 {
-  public:
-	explicit TetGenIO(std::string&& file_name);
+public:
+	explicit TetGenIO(std::string && file_name);
 	~TetGenIO();
 
 	[[nodiscard]] OpenVolumeMesh::GeometricTetrahedralMeshV3d to_mesh() const;
@@ -28,11 +28,10 @@ class TetGenIO
 
 	[[nodiscard]] std::size_t tet_vertex_idx(std::size_t tet_idx, std::size_t corner_idx) const;
 	[[nodiscard]] std::array<double, 3> vertex(std::size_t vertex_idx) const;
-	[[nodiscard]] static std::size_t point_idx(std::size_t vertex_idx) ;
+	[[nodiscard]] static std::size_t point_idx(std::size_t vertex_idx);
 
-  private:
+private:
 	std::string m_file_name;
 	tetgenio m_io;
 };
-} // namespace FeltElements
-
+}  // namespace FeltElements

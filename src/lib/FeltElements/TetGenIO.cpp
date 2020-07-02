@@ -4,21 +4,21 @@
 
 using namespace FeltElements;
 
-TetGenIO::TetGenIO(std::string&& file_name) : m_file_name{file_name}, m_io{}
+TetGenIO::TetGenIO(std::string && file_name) : m_file_name{file_name}, m_io{}
 {
 	m_io.load_node(const_cast<char *>(m_file_name.c_str()));
 	m_io.load_tet(const_cast<char *>(m_file_name.c_str()));
 	m_io.load_face(const_cast<char *>(m_file_name.c_str()));
 	m_io.numberofpointattributes = 3;
-	m_io.pointattributelist = new REAL[
-		static_cast<unsigned long>(m_io.numberofpointattributes * m_io.numberofpoints)];
+	m_io.pointattributelist =
+		new REAL[static_cast<unsigned long>(m_io.numberofpointattributes * m_io.numberofpoints)];
 	memset(
-		m_io.pointattributelist, 0,
-		static_cast<unsigned long>(
-			m_io.numberofpointattributes * m_io.numberofpoints) * sizeof(REAL));
+		m_io.pointattributelist,
+		0,
+		static_cast<unsigned long>(m_io.numberofpointattributes * m_io.numberofpoints) *
+			sizeof(REAL));
 }
 TetGenIO::~TetGenIO() = default;
-
 
 OpenVolumeMesh::GeometricTetrahedralMeshV3d TetGenIO::to_mesh() const
 {

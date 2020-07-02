@@ -11,6 +11,7 @@ BreakBeforeBraces: Allman
 AlignAfterOpenBracket: AlwaysBreak
 AlignOperands: false
 AllowAllParametersOfDeclarationOnNextLine: true
+DerivePointerAlignment: false
 PointerAlignment: Middle
 BinPackArguments: false
 BinPackParameters: false

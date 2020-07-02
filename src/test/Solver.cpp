@@ -1,11 +1,11 @@
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
 #include <FeltElements/Solver.hpp>
-#include "util/Format.hpp"
 #include <catch2/catch.hpp>
 #include <range/v3/view/iota.hpp>
 
 #include "util/Assert.hpp"
+#include "util/Format.hpp"
 #include "util/IO.hpp"
 
 char const * const file_name_one = "resources/one.ovm";
@@ -183,11 +183,7 @@ SCENARIO("Mesh attributes")
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
 					Tensor::ConstMap<3> const vtx{mesh.vertex(*itvtxh).data()};
-					Test::check_equal(
-						attrib_x[*itvtxh],
-						"x",
-						vtx,
-						"X");
+					Test::check_equal(attrib_x[*itvtxh], "x", vtx, "X");
 				}
 			}
 
@@ -418,12 +414,16 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	THEN("derivative of local/shape wrt shape/local coords are inverses")
 	{
-		enum {i, j, k};
+		enum
+		{
+			i,
+			j,
+			k
+		};
 		using namespace Tensor;
 		using namespace Tensor::Func;
-		Matrix<3> const identity = einsum<Indices<i, k>, Indices<k, j>>(
-			Derivatives::dL_by_dN,
-			Derivatives::dN_by_dL);
+		Matrix<3> const identity =
+			einsum<Indices<i, k>, Indices<k, j>>(Derivatives::dL_by_dN, Derivatives::dN_by_dL);
 
 		Test::check_equal(
 			identity,
@@ -467,7 +467,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					{0.000000, 0.000000, 0.000000, 0.000000}
 				}
 			});
-			// clang-format on
+		// clang-format on
 	}
 
 	GIVEN("a one-element mesh")
@@ -572,7 +572,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					// clang-format on
 				}
 			}
-		} // WHEN("transformation from natural to cartesian coordinates is calculated")
+		}  // WHEN("transformation from natural to cartesian coordinates is calculated")
 
 		WHEN("determinant of derivative of material wrt local coords (Jacobian) is calculated")
 		{
@@ -592,6 +592,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 		THEN("expected positions are reported")
 		{
+			// clang-format off
 			Node::Positions expected{
 			   {0.0, 0.0, 0.0},
 			   {0.0, 0.0, 1.0},
@@ -639,8 +640,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				{
 					using namespace Tensor;
 					using namespace Tensor::Func;
-					Matrix<3> const identity = einsum<Idxs<i, k>, Idxs<k, j>>(
-						dX_by_dL, dL_by_dX);
+					Matrix<3> const identity = einsum<Idxs<i, k>, Idxs<k, j>>(dX_by_dL, dL_by_dX);
 					// clang-format off
 					Test::check_equal(identity, "dX_by_dL * dL_by_dX", {
 						{1, 0, 0},
@@ -650,7 +650,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 					// clang-format on
 				}
 			}
-		} // WHEN("derivative of material wrt local coords is calculated")
+		}  // WHEN("derivative of material wrt local coords is calculated")
 
 		WHEN(
 			"determinant of derivative of material wrt local coords (functional Jacobian)"
@@ -716,7 +716,6 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 		}
 	}
 }
-
 
 SCENARIO("Coordinate derivatives in deformed mesh")
 {
@@ -785,7 +784,6 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 	}
 }
 
-
 SCENARIO("Deformation gradient of undeformed element")
 {
 	GIVEN("first element of two-element mesh")
@@ -842,21 +840,21 @@ SCENARIO("Deformation gradient of undeformed element")
 
 			AND_WHEN("deformation gradient is calculated")
 			{
-				 auto const & dN_by_dX = Derivatives::dN_by_dX(X);
-				 auto const & dx_by_dX = Derivatives::dx_by_dX(x, dN_by_dX);
+				auto const & dN_by_dX = Derivatives::dN_by_dX(X);
+				auto const & dx_by_dX = Derivatives::dx_by_dX(x, dN_by_dX);
 
-				 THEN("gradient is identity")
-				 {
-					 // clang-format off
+				THEN("gradient is identity")
+				{
+					// clang-format off
 					 Test::check_equal(dx_by_dX, "dx_by_dX", {
 						 {1, 0, 0},
 						 {0, 1, 0},
 						 {0, 0, 1}
 					 });
-					 // clang-format on
-				 }
+					// clang-format on
+				}
 			}
-		 }
+		}
 	}
 }
 
@@ -1011,7 +1009,6 @@ SCENARIO("Deformation gradient of deformed element")
 	}
 }
 
-
 SCENARIO("Internal equivalent nodal force")
 {
 	GIVEN("an undeformed one-element mesh")
@@ -1025,8 +1022,8 @@ SCENARIO("Internal equivalent nodal force")
 		//		Tetrahedron::Scalar const lambda = 1;
 		//		Tetrahedron::Scalar const mu = 1;
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
-		double const E = 1;	   // Young's modulus: 0.001 - 0.05
+		double const mu = 0.4;	// Shear modulus: 0.0003 - 0.02
+		double const E = 1;		// Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
 
@@ -1105,8 +1102,6 @@ SCENARIO("Internal equivalent nodal force")
 
 					THEN("nodal forces are correct")
 					{
-//						Node::Forces const & zero = 0;
-//						Test::check_equal(T, "T", zero, "zero");
 						// clang-format off
 						Test::check_equal(T, "T", {
 							{0.259086, 0.159086, 0.159086},
@@ -1129,8 +1124,8 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 		using namespace FeltElements;
 
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double const mu = 0.4; // Shear modulus: 0.0003 - 0.02
-		double const E = 1;	   // Young's modulus: 0.001 - 0.05
+		double const mu = 0.4;	// Shear modulus: 0.0003 - 0.02
+		double const E = 1;		// Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
 
@@ -1181,8 +1176,6 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 					THEN("it has expected values")
 					{
-//						Element::Stiffness const & zero = 0;
-//						Test::check_equal(Kc, "Kc", zero, "zero");
 						// clang-format off
 						Test::check_equal(Kc, "Kc", {
 							{
@@ -1224,7 +1217,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					}
 				}
 			}
-		} // End AND_GIVEN("an undeformed tetrahedron")
+		}  // End AND_GIVEN("an undeformed tetrahedron")
 
 		AND_GIVEN("a deformed tetrahedron")
 		{
@@ -1275,8 +1268,6 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 					THEN("it has expected values")
 					{
-//						Element::Stiffness const & check = 0;
-//						Test::check_equal(Kc, "Kc", check, "zero");
 						// clang-format off
 						Test::check_equal(Kc, "Kc", {
 							{
@@ -1324,8 +1315,6 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 					THEN("stress component is correct")
 					{
-//						Element::Stiffness const & check = 0;
-//						Test::check_equal(Ks, "Ks", check, "zero");
 						// clang-format off
 						Test::check_equal(Ks, "Ks", {
 							{
@@ -1347,12 +1336,11 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 							}
 						});
 						// clang-format on
-
 					}
 				}
 			}
 
-		} // End AND_GIVEN("an undeformed tetrahedron")
+		}  // End AND_GIVEN("an undeformed tetrahedron")
 	}
 }
 
@@ -1366,8 +1354,8 @@ SCENARIO("Solution of a single element")
 		using Tensor::Func::seq;
 
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double  mu = 0.4; // Shear modulus: 0.0003 - 0.02
-		double const E = 1;	   // Young's modulus: 0.001 - 0.05
+		double mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
+		double const E = 1;	 // Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
 		mu = lambda = 4;
@@ -1385,13 +1373,6 @@ SCENARIO("Solution of a single element")
 		INFO("Material vertices:")
 		INFO(X)
 
-		// Construct gravity force tensor.
-//		Scalar constexpr m = 0.1;
-//		Node::Forces G = 0;
-//		G(all, 1) = -9.81 * m;
-//		INFO("G")
-//		INFO(G)
-
 		WHEN("element stiffness and internal force tensor attributes are constructed")
 		{
 			Solver::update_elements_stiffness_and_forces(mesh, attrib, lambda, mu);
@@ -1399,25 +1380,25 @@ SCENARIO("Solution of a single element")
 			THEN("attributes hold correct solutions")
 			{
 				Cellh const cellh{0};
-				auto const &x = attrib.x.for_element(attrib.vtxh[cellh]);
+				auto const & x = attrib.x.for_element(attrib.vtxh[cellh]);
 				Scalar const v = Derivatives::V(x);
-				auto const &dN_by_dX = attrib.dN_by_dX[cellh];
+				auto const & dN_by_dX = attrib.dN_by_dX[cellh];
 
-				auto const &F = Derivatives::dx_by_dX(x, dN_by_dX);
+				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
 				auto const FFt = Derivatives::b(F);
 				Scalar const J = Derivatives::J(F);
 
-				auto const &dx_by_dL = Derivatives::dX_by_dL(x);
-				auto const &dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
+				auto const & dx_by_dL = Derivatives::dX_by_dL(x);
+				auto const & dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
 				auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
 
-				auto const &sigma = Derivatives::sigma(J, FFt, lambda, mu);
+				auto const & sigma = Derivatives::sigma(J, FFt, lambda, mu);
 
-				auto const &c = Derivatives::c(J, lambda, mu);
+				auto const & c = Derivatives::c(J, lambda, mu);
 				Node::Forces const & T = Derivatives::T(dN_by_dx, v, sigma);
 
-				auto const &Kc = Derivatives::Kc(dN_by_dx, v, c);
-				auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
+				auto const & Kc = Derivatives::Kc(dN_by_dx, v, c);
+				auto const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
 				Element::Stiffness const & K = Kc + Ks;
 
 				CHECK(attrib.v[cellh] == v);
@@ -1455,7 +1436,6 @@ SCENARIO("Solution of a single element")
 
 				auto const & c = Derivatives::c(J, lambda, mu);
 				Node::Forces T = Derivatives::T(dN_by_dx, v, sigma);
-//				T -= G;
 				T(seq(0, 3), seq(0, 3)) = 0;
 				log += fmt::format("\nT (constrained)\n{}", T);
 
@@ -1468,10 +1448,7 @@ SCENARIO("Solution of a single element")
 				K(0, 2, 0, 2) = 10e4;
 				K(1, 0, 1, 0) = 10e4;
 				K(1, 1, 1, 1) = 10e4;
-//				K(1, 2, 1, 2) = 10e4;
-//				K(2, 0, 2, 0) = 10e4;
 				K(2, 1, 2, 1) = 10e4;
-//				K(2, 2, 2, 2) = 10e4;
 				log += fmt::format("\nK (constrained)\n{}", K);
 
 				using Displacements = Eigen::Matrix<double, 12, 1>;
@@ -1514,7 +1491,7 @@ SCENARIO("Solution of a single element")
 				});
 				// clang-format on
 			}
-		} // WHEN("displacement is solved")
+		}  // WHEN("displacement is solved")
 
 		WHEN("displacement is solved Gauss-Seidel style")
 		{
@@ -1533,24 +1510,24 @@ SCENARIO("Solution of a single element")
 				Scalar const v = Derivatives::V(x);
 				log += fmt::format("\nv = {}", v);
 
-				auto const &F = Derivatives::dx_by_dX(x, dN_by_dX);
+				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
 				auto const FFt = Derivatives::b(F);
 				Scalar const J = Derivatives::J(F);
 
-				auto const &dx_by_dL = Derivatives::dX_by_dL(x);
-				auto const &dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
+				auto const & dx_by_dL = Derivatives::dX_by_dL(x);
+				auto const & dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
 				auto dN_by_dx = Derivatives::dN_by_dX(dL_by_dx);
 
-				auto const &sigma = Derivatives::sigma(J, FFt, lambda, mu);
+				auto const & sigma = Derivatives::sigma(J, FFt, lambda, mu);
 
-				auto const &c = Derivatives::c(J, lambda, mu);
+				auto const & c = Derivatives::c(J, lambda, mu);
 				Node::Forces T = Derivatives::T(dN_by_dx, v, sigma);
 				//				T -= G;
 				T(seq(0, 3), seq(0, 3)) = 0;
 				log += fmt::format("\nT (constrained)\n{}", T);
 
-				auto const &Kc = Derivatives::Kc(dN_by_dx, v, c);
-				auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
+				auto const & Kc = Derivatives::Kc(dN_by_dx, v, c);
+				auto const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
 				Element::Stiffness K = Kc + Ks;
 				// Boundary condition
 				K(0, 0, 0, 0) = 10e4;
@@ -1614,11 +1591,11 @@ SCENARIO("Solution of two elements")
 	GIVEN("two element mesh and material properties")
 	{
 		using namespace FeltElements;
-//		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-//		Scalar mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
-//		Scalar const E = 1;	 // Young's modulus: 0.001 - 0.05
-//		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-//		Scalar lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		//		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
+		//		Scalar mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
+		//		Scalar const E = 1;	 // Young's modulus: 0.001 - 0.05
+		//		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+		//		Scalar lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
 		Scalar const lambda = 4;
 		Scalar const mu = 4;
 
@@ -1652,17 +1629,15 @@ SCENARIO("Solution of two elements")
 		Eigen::Index constexpr cols = 3;
 
 		INFO("Mesh material vertices")
-		Solver::LDLT::EigenMapOvmVertices mat_vtxs{
-			mesh.vertex(Vtxh{0}).data(), rows, cols};
+		Solver::LDLT::EigenMapOvmVertices mat_vtxs{mesh.vertex(Vtxh{0}).data(), rows, cols};
 		INFO(mat_vtxs)
 
 		INFO("Mesh spatial vertices")
-		Solver::LDLT::EigenMapTensorVertices const & mat_x{
-			attrib.x[Vtxh{0}].data(), rows, cols};
+		Solver::LDLT::EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
 		INFO(mat_x)
 
 		auto const check_converges = [&mat_x, &total_volume](
-										auto const max_step, auto const final_step) {
+										 auto const max_step, auto const final_step) {
 			WARN(fmt::format("Converged in {} steps", final_step));
 			CHECK(final_step <= max_step);
 			// clang-format off
@@ -1691,7 +1666,7 @@ SCENARIO("Solution of two elements")
 				WARN(fmt::format("Converged in {} steps", step));
 				check_converges(max_steps, step);
 			}
-		} // WHEN("displacement is solved")
+		}  // WHEN("displacement is solved")
 
 		WHEN("displacement is solved Gauss-Seidel style")
 		{

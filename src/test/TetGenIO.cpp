@@ -1,17 +1,18 @@
-#include <catch2/catch.hpp>
-#include <FeltElements/Typedefs.hpp>
 #include <FeltElements/TetGenIO.hpp>
+#include <FeltElements/Typedefs.hpp>
+#include <catch2/catch.hpp>
 
 SCENARIO("Loading a tetrahedralisation")
 {
 	using namespace FeltElements;
-	auto expected_counts =
-		[](const TetGenIO & mesh, std::size_t num_points, std::size_t num_simplexes,
-		   std::size_t num_corners) {
-		  CHECK(mesh.num_points() == num_points);
-		  CHECK(mesh.num_simplexes() == num_simplexes);
-		  CHECK(mesh.num_corners() == num_corners);
-		};
+	auto expected_counts = [](const TetGenIO & mesh,
+							  std::size_t num_points,
+							  std::size_t num_simplexes,
+							  std::size_t num_corners) {
+		CHECK(mesh.num_points() == num_points);
+		CHECK(mesh.num_simplexes() == num_simplexes);
+		CHECK(mesh.num_corners() == num_corners);
+	};
 
 	GIVEN("single tetrahedron mesh is loaded")
 	{
@@ -70,7 +71,8 @@ SCENARIO("Loading a tetrahedralisation")
 			THEN("mesh has correct number of elements")
 			{
 				CHECK(ovm.n_cells() == 2);
-				CHECK(ovm.n_faces() == 7); CHECK(ovm.n_vertices() == 5);
+				CHECK(ovm.n_faces() == 7);
+				CHECK(ovm.n_vertices() == 5);
 			}
 			THEN("expected node positions are reported")
 			{

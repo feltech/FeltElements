@@ -1,5 +1,6 @@
 #pragma once
 #include <Fastor/Fastor.h>
+
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <boost/range/iterator_range_core.hpp>
 
@@ -12,14 +13,24 @@ using Scalar = Mesh::PointT::value_type;
 
 namespace Tensor
 {
-enum {i, j, k, l, m, n, a, b};
+enum
+{
+	i,
+	j,
+	k,
+	l,
+	m,
+	n,
+	a,
+	b
+};
 namespace Func = Fastor;
 using Index = Fastor::FASTOR_INDEX;
-template<Index... indices>
+template <Index... indices>
 using Indices = Fastor::Index<indices...>;
-template<Index... indices>
+template <Index... indices>
 using Idxs = Indices<indices...>;
-template<Index... indices>
+template <Index... indices>
 using Order = Fastor::OIndex<indices...>;
 
 template <typename value_type, Index... indices>
@@ -38,7 +49,7 @@ template <Index... indices>
 using Map = BaseMap<Scalar, indices...>;
 template <Index... indices>
 using ConstMap = BaseMap<Scalar const, indices...>;
-}
+}  // namespace Tensor
 
 namespace Node
 {

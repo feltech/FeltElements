@@ -5,10 +5,10 @@ namespace FeltElements::Test
 {
 constexpr Scalar epsilon = 0.00001;
 
-auto equal = [](auto const& a, auto const& b) { return Tensor::Func::all_of(a - b < epsilon); };
+auto equal = [](auto const & a, auto const & b) { return Tensor::Func::all_of(a - b < epsilon); };
 
 template <class Tensor>
-void check_equal(Tensor const& in, std::string_view const desc, Tensor const& expected)
+void check_equal(Tensor const & in, std::string_view const desc, Tensor const & expected)
 {
 	INFO(desc)
 	INFO(in)
@@ -17,9 +17,9 @@ void check_equal(Tensor const& in, std::string_view const desc, Tensor const& ex
 
 template <class In, class Expected>
 void check_equal(
-	In const& in,
+	In const & in,
 	std::string_view const desc_in,
-	Expected const& expected,
+	Expected const & expected,
 	std::string_view const desc_expected)
 {
 	INFO(desc_in)
@@ -36,4 +36,4 @@ void check_equal(
 		CHECK(equal(in, expected));
 	}
 }
-}
+}  // namespace FeltElements::Test

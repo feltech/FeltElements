@@ -92,9 +92,9 @@ class BodyForce final : private internal::VertexPositionBase<BodyForce>
 	using ThisBase = internal::VertexPositionBase<BodyForce>;
 
 public:
-	explicit BodyForce(Mesh& mesh);
-	Data const& operator*() const;
-	Data& operator*();
+	explicit BodyForce(Mesh & mesh);
+	Data const & operator*() const;
+	Data & operator*();
 	using ThisBase::for_element;
 
 private:
@@ -109,7 +109,7 @@ class MaterialPosition final : private internal::VertexPositionBase<MaterialPosi
 	using ThisBase = internal::VertexPositionBase<MaterialPosition>;
 
 public:
-	explicit MaterialPosition(Mesh& mesh);
+	explicit MaterialPosition(Mesh & mesh);
 	using ThisBase::operator[];
 	using ThisBase::for_element;
 };
@@ -119,7 +119,7 @@ class SpatialPosition final : private internal::VertexPositionBase<SpatialPositi
 	using ThisBase = internal::VertexPositionBase<SpatialPosition>;
 
 public:
-	explicit SpatialPosition(Mesh& mesh);
+	explicit SpatialPosition(Mesh & mesh);
 	using ThisBase::operator[];
 	using ThisBase::for_element;
 };
@@ -129,7 +129,7 @@ class FixedDOF final : private internal::VertexBase<FixedDOF>
 	using ThisBase = internal::VertexBase<FixedDOF>;
 
 public:
-	explicit FixedDOF(Mesh& mesh);
+	explicit FixedDOF(Mesh & mesh);
 	using ThisBase::operator[];
 };
 }  // namespace Vertex
@@ -142,7 +142,7 @@ class MaterialVolume final : private internal::CellBase<MaterialVolume>
 
 public:
 	explicit MaterialVolume(
-		Mesh& mesh, Cell::VertexHandles const& vtxh, Vertex::MaterialPosition const& X);
+		Mesh & mesh, Cell::VertexHandles const & vtxh, Vertex::MaterialPosition const & X);
 	using ThisBase::operator[];
 };
 
@@ -151,7 +151,7 @@ class SpatialVolume final : private internal::CellBase<SpatialVolume>
 	using ThisBase = internal::CellBase<SpatialVolume>;
 
 public:
-	explicit SpatialVolume(Mesh& mesh);
+	explicit SpatialVolume(Mesh & mesh);
 	using ThisBase::operator[];
 };
 
@@ -160,7 +160,7 @@ class VertexHandles final : private internal::CellBase<VertexHandles>
 	using ThisBase = internal::CellBase<VertexHandles>;
 
 public:
-	explicit VertexHandles(Mesh& mesh);
+	explicit VertexHandles(Mesh & mesh);
 	using ThisBase::operator[];
 };
 
@@ -170,10 +170,9 @@ class MaterialShapeDerivative final : private internal::CellBase<MaterialShapeDe
 
 public:
 	explicit MaterialShapeDerivative(
-		Mesh& mesh, VertexHandles const& vtxhs, Vertex::MaterialPosition const& X);
+		Mesh & mesh, VertexHandles const & vtxhs, Vertex::MaterialPosition const & X);
 	using ThisBase::operator[];
 	static Node::Positions const X;
-
 };
 
 class NodalForces final : private internal::CellBase<NodalForces>
@@ -181,7 +180,7 @@ class NodalForces final : private internal::CellBase<NodalForces>
 	using ThisBase = internal::CellBase<NodalForces>;
 
 public:
-	explicit NodalForces(Mesh& mesh);
+	explicit NodalForces(Mesh & mesh);
 	using ThisBase::operator[];
 };
 
@@ -190,7 +189,7 @@ class Stiffness final : private internal::CellBase<Stiffness>
 	using ThisBase = internal::CellBase<Stiffness>;
 
 public:
-	explicit Stiffness(Mesh& mesh);
+	explicit Stiffness(Mesh & mesh);
 	using ThisBase::operator[];
 };
 }  // namespace Cell
@@ -198,7 +197,7 @@ public:
 
 struct Attributes final
 {
-	explicit Attributes(Mesh& mesh);
+	explicit Attributes(Mesh & mesh);
 	Attribute::Global::BodyForce f;
 	Attribute::Vertex::SpatialPosition x;
 	Attribute::Vertex::MaterialPosition const X;

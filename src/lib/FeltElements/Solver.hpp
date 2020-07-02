@@ -13,7 +13,7 @@ class Attributes;
 namespace Solver
 {
 void update_elements_stiffness_and_forces(
-	Mesh const& mesh, Attributes& attributes, Scalar lambda, Scalar mu);
+	Mesh const & mesh, Attributes & attributes, Scalar lambda, Scalar mu);
 
 namespace LDLT
 {
@@ -29,12 +29,14 @@ using EigenMapTensorVertices = Eigen::Map<
 	Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
 using EigenFixedDOFs = Eigen::VectorXd;
 
-std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar lambda, Scalar mu);
+std::size_t solve(
+	Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scalar lambda, Scalar mu);
 }  // namespace LDLT
 
 namespace Gauss
 {
-std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar lambda, Scalar mu);
+std::size_t solve(
+	Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scalar lambda, Scalar mu);
 }
 
 }  // namespace Solver
