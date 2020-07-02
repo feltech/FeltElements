@@ -50,6 +50,26 @@ protected:
 };
 
 template <typename TData>
+struct MeshTraits : public BaseTraits<TData>
+{
+	using Handle = OpenVolumeMesh::MeshHandle;
+	using Prop = OpenVolumeMesh::MeshPropertyT<TData>;
+};
+
+template <class Derived>
+class MeshBase : protected Base<Derived>
+{
+	using ThisBase = Base<Derived>;
+
+protected:
+	using Data = typename ThisBase::Data;
+	explicit MeshBase(Mesh& mesh)
+		: ThisBase{mesh.request_mesh_property<Data>(ThisBase::prop_name.data())}
+	{
+	}
+};
+
+template <typename TData>
 struct VertexTraits : public BaseTraits<TData>
 {
 	using Handle = OpenVolumeMesh::VertexHandle;

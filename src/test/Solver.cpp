@@ -23,6 +23,17 @@ SCENARIO("Mesh attributes")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_two);
 
+		WHEN("body force attribute is constructed")
+		{
+			Attribute::Global::BodyForce const attrib_body_force{mesh};
+
+			THEN("it is zero initialised")
+			{
+				Node::Force const & F = *attrib_body_force;
+				CHECK(Tensor::Func::all_of(F == 0));
+			}
+		}
+
 		WHEN("element nodal force attributes are constructed")
 		{
 			Attribute::Cell::NodalForces const attrib_forces{mesh};
@@ -129,6 +140,37 @@ SCENARIO("Mesh attributes")
 						{0.000000, 0.500000, 0.500000}
 					});
 					// clang-format on
+				}
+
+				AND_WHEN("element material volume attribute is constructed")
+				{
+					Attribute::Cell::MaterialVolume const attrib_material_volume{
+						mesh, attrib_vtxhs, attrib_x};
+
+					THEN("it is initialised to volume")
+					{
+						itcellh = mesh.cells_begin();
+						Scalar V = attrib_material_volume[*itcellh];
+						CHECK(V == 1.0 / 12.0);
+						itcellh++;
+						V = attrib_material_volume[*itcellh];
+						CHECK(V == 1.0 / 12.0);
+					}
+				}
+
+				AND_WHEN("element spatial volume attribute is constructed")
+				{
+					Attribute::Cell::SpatialVolume const attrib_spatial_volume{mesh};
+
+					THEN("it is initialised to zero")
+					{
+						itcellh = mesh.cells_begin();
+						Scalar V = attrib_spatial_volume[*itcellh];
+						CHECK(V == 0);
+						itcellh++;
+						V = attrib_spatial_volume[*itcellh];
+						CHECK(V == 0);
+					}
 				}
 			}
 		}
@@ -281,7 +323,13 @@ SCENARIO("Metrics of deformed mesh")
 {
 	GIVEN("one-element mesh")
 	{
-		auto [X, x] = Test::load_tet(file_name_one);
+		Mesh mesh = Test::load_ovm_mesh(file_name_one);
+		Attributes attrib{mesh};
+
+		Cellh cellh{0};
+		auto const & vtxh0 = attrib.vtxh[cellh];
+		auto const & X = attrib.X.for_element(vtxh0);
+		auto x = attrib.x.for_element(vtxh0);
 
 		INFO("Tetrahedron vertices:")
 		INFO(X)
@@ -311,6 +359,28 @@ SCENARIO("Metrics of deformed mesh")
 					CHECK(v == 1.0 / 12.0);
 				}
 			}
+
+			AND_WHEN("spatial volume is calculated from material volume")
+			{
+				auto const & V = attrib.V[cellh];
+
+				Scalar v = Derivatives::v(V, x);
+
+				THEN("volume is correct")
+				{
+					CHECK(v == 1.0 / 12.0);
+				}
+
+				AND_WHEN("another node is deformed")
+				{
+					x(1, 2) += 0.1;
+
+					THEN("spatial volume calculated from material volume equals naive calculation")
+					{
+						CHECK(Derivatives::V(x) == Derivatives::v(V, x));
+					}
+				}
+			}
 		}
 	}
 }
@@ -320,7 +390,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	THEN("derivative of shape wrt local coords is correct")
 	{
 		Test::check_equal(
-			Attribute::Cell::MaterialShapeDerivative::dN_by_dL,
+			Derivatives::dN_by_dL,
 			"dN_by_dL",
 			{
 				// clang-format off
@@ -335,7 +405,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	THEN("derivative of local wrt shape coords is correct")
 	{
 		Test::check_equal(
-			Attribute::Cell::MaterialShapeDerivative::dL_by_dN,
+			Derivatives::dL_by_dN,
 			"dL_by_dN",
 			{
 				// clang-format off
@@ -352,8 +422,8 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 		using namespace Tensor;
 		using namespace Tensor::Func;
 		Matrix<3> const identity = einsum<Indices<i, k>, Indices<k, j>>(
-			Attribute::Cell::MaterialShapeDerivative::dL_by_dN,
-			Attribute::Cell::MaterialShapeDerivative::dN_by_dL);
+			Derivatives::dL_by_dN,
+			Derivatives::dN_by_dL);
 
 		Test::check_equal(
 			identity,
@@ -373,7 +443,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 		zero.zeros();
 		// clang-format off
 		Test::check_equal(
-			Attribute::Cell::MaterialShapeDerivative::det_dN_by_dL,
+			Derivatives::det_dN_by_dL,
 			"det_dN_by_dL", {
 				{
 					{0.000000, 0.000000, 0.000000, 0.000000},
@@ -582,7 +652,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			}
 		} // WHEN("derivative of material wrt local coords is calculated")
 
-		WHEN("determinant of derivative of material wrt local coords (Jacobian) is calculated")
+		WHEN(
+			"determinant of derivative of material wrt local coords (functional Jacobian)"
+			" is calculated")
 		{
 			Scalar det_dX_by_dL = Derivatives::det_dx_by_dL(X);
 
@@ -1322,7 +1394,7 @@ SCENARIO("Solution of a single element")
 
 		WHEN("element stiffness and internal force tensor attributes are constructed")
 		{
-			Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
+			Solver::update_elements_stiffness_and_forces(mesh, attrib, lambda, mu);
 
 			THEN("attributes hold correct solutions")
 			{
@@ -1348,6 +1420,7 @@ SCENARIO("Solution of a single element")
 				auto const &Ks = Derivatives::Ks(dN_by_dx, v, sigma);
 				Element::Stiffness const & K = Kc + Ks;
 
+				CHECK(attrib.v[cellh] == v);
 				Test::check_equal(attrib.T[cellh], "T (attribute)", T, "T (check)");
 				Test::check_equal(attrib.K[cellh], "K (attribute)", K, "K (check)");
 			}

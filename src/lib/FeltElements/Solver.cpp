@@ -22,17 +22,21 @@ auto constexpr const index_of = [](auto const& haystack, auto&& needle) {
 constexpr Scalar epsilon = 0.00001;
 }  // namespace
 
-void update_elements_stiffness_and_internal_forces(
-	Mesh const& mesh, FeltElements::Attributes& attributes, Scalar const lambda, Scalar const mu)
+void update_elements_stiffness_and_forces(
+	Mesh const& mesh, FeltElements::Attributes& attributes, Scalar lambda, Scalar mu)
 {
-	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
+	for (auto cellh : boost::make_iterator_range(mesh.cells()))
 	{
-		auto const& cellh = *itcellh;
 		auto const& cell_vtxhs = attributes.vtxh[cellh];
-		auto [K, T] = Derivatives::KT(
-			attributes.x.for_element(cell_vtxhs), attributes.dN_by_dX[cellh], lambda, mu);
-		attributes.T[*itcellh] = T;
-		attributes.K[*itcellh] = K;
+		auto [K, T, v] = Derivatives::KTv(
+			attributes.x.for_element(cell_vtxhs),
+			attributes.dN_by_dX[cellh],
+			attributes.V[cellh],
+			lambda,
+			mu);
+		attributes.v[cellh] = v;
+		attributes.T[cellh] = T;
+		attributes.K[cellh] = K;
 	}
 }
 
@@ -58,7 +62,7 @@ std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar 
 	for (step = 0; step < max_steps; step++)
 	{
 		SPDLOG_DEBUG("LDLT iteration {}", step);
-		Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
+		Solver::update_elements_stiffness_and_forces(mesh, attrib, lambda, mu);
 
 		mat_T.setZero();
 		mat_K.setZero();
@@ -143,7 +147,7 @@ std::size_t solve(Mesh& mesh, Attributes& attrib, std::size_t max_steps, Scalar 
 	{
 		SPDLOG_DEBUG("Gauss iteration {}", step);
 
-		Solver::update_elements_stiffness_and_internal_forces(mesh, attrib, lambda, mu);
+		Solver::update_elements_stiffness_and_forces(mesh, attrib, lambda, mu);
 
 		std::vector<Node::Pos> u{};
 		u.resize(mesh.n_vertices());

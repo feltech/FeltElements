@@ -64,6 +64,6 @@ using CartesianDerivative = Tensor::Matrix<Node::dim, Node::count>;
 using Gradient = Tensor::Matrix<Node::dim, Node::dim>;
 using Stress = Gradient;
 using Stiffness = Tensor::Multi<Node::count, Node::dim, Node::count, Node::dim>;
-using StiffnessAndForces = std::tuple<Stiffness, Node::Forces>;
+using StiffnessForcesVolume = std::tuple<Stiffness, Node::Forces, Scalar>;
 }  // namespace Element
 }  // namespace FeltElements

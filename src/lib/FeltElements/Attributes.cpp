@@ -1,9 +1,29 @@
 #include "Attributes.hpp"
 
+#include <boost/range.hpp>
+
 namespace FeltElements
 {
 namespace Attribute
 {
+namespace Global
+{
+BodyForce::BodyForce(Mesh& mesh) : ThisBase(mesh)
+{
+	(*(*this)).zeros();
+}
+
+BodyForce::Data const& BodyForce::operator*() const
+{
+	return (*this)[Handle{0}];
+}
+
+BodyForce::Data& BodyForce::operator*()
+{
+	return (*this)[Handle{0}];
+}
+}  // namespace Global
+
 namespace Vertex
 {
 MaterialPosition::MaterialPosition(Mesh& mesh) : ThisBase(mesh) {}
@@ -18,12 +38,25 @@ FixedDOF::FixedDOF(Mesh& mesh) : ThisBase(mesh)
 
 namespace Cell
 {
+MaterialVolume::MaterialVolume(
+	Mesh& mesh, Cell::VertexHandles const& vtxh, Vertex::MaterialPosition const& X)
+	: ThisBase{mesh}
+{
+	for (auto cellh : boost::make_iterator_range(mesh.cells()))
+		(*this)[cellh] = Derivatives::V(X.for_element(vtxh[cellh]));
+}
+
+SpatialVolume::SpatialVolume(Mesh& mesh) : ThisBase{mesh}
+{
+	for (auto cellh : boost::make_iterator_range(mesh.cells())) (*this)[cellh] = 0;
+}
+
 VertexHandles::VertexHandles(Mesh& mesh) : ThisBase{mesh}
 {
-	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
+	for (auto cellh : boost::make_iterator_range(mesh.cells()))
 	{
-		auto const& vtxhs = mesh.get_cell_vertices(*itcellh);
-		std::copy_n(vtxhs.begin(), vtxhs.size(), (*this)[*itcellh].begin());
+		auto const& vtxhs = mesh.get_cell_vertices(cellh);
+		std::copy_n(vtxhs.begin(), vtxhs.size(), (*this)[cellh].begin());
 	}
 }
 
@@ -35,40 +68,6 @@ MaterialShapeDerivative::MaterialShapeDerivative(
 	{ (*this)[*itcellh] = Derivatives::dN_by_dX(X.for_element(vtxhs[*itcellh])); }
 }
 
-// clang-format off
-Element::IsoCoordDerivative const MaterialShapeDerivative::dL_by_dN = // NOLINT(cert-err58-cpp)
-	Tensor::Matrix<4, 4>{
-		{1, 1, 1, 1},
-		{0, 1, 0, 0},
-		{0, 0, 1, 0},
-		{0, 0, 0, 1}}(Fastor::fseq<1, 4>(), Fastor::all);
-
-Element::ShapeDerivative const MaterialShapeDerivative::dN_by_dL = // NOLINT(cert-err58-cpp)
-	Fastor::evaluate(Fastor::inv(Tensor::Matrix<4, 4>{
-		{1, 1, 1, 1},
-		{0, 1, 0, 0},
-		{0, 0, 1, 0},
-		{0, 0, 0, 1}}))(Fastor::all, Fastor::fseq<1, 4>());
-
-Element::ShapeDerivativeDeterminant const MaterialShapeDerivative::det_dN_by_dL = ([](){
-	using Tensor::Index;
-	using Tensor::Func::all;
-	using Tensor::Func::det;
-	Element::ShapeDerivativeDeterminant det_dN_by_dL_;
-	for (Index i = 0; i < Node::count; i++)
-		for (Index j = 0; j < Node::count; j++)
-			for (Index k = 0; k < Node::count; k++)
-			{
-				Tensor::Matrix<3> dN_by_dL_ijk;
-				dN_by_dL_ijk(0, all) = dN_by_dL(i, all);
-				dN_by_dL_ijk(1, all) = dN_by_dL(j, all);
-				dN_by_dL_ijk(2, all) = dN_by_dL(k, all);
-				det_dN_by_dL_(i, j, k) = det(dN_by_dL_ijk);
-			}
-	return det_dN_by_dL_;
-}());
-
-// clang-format on
 
 NodalForces::NodalForces(Mesh& mesh) : ThisBase{mesh}
 {
@@ -85,8 +84,16 @@ Stiffness::Stiffness(Mesh& mesh) : ThisBase(mesh)
 }  // namespace Attribute
 
 Attributes::Attributes(Mesh& mesh)
-	: x{mesh}, X{mesh}, fixed_dof(mesh),
-	  vtxh{mesh}, dN_by_dX{mesh, vtxh, X}, T{mesh}, K{mesh}
+	: f{mesh},
+	  x{mesh},
+	  X{mesh},
+	  fixed_dof(mesh),
+	  vtxh{mesh},
+	  V{mesh, vtxh, X},
+	  v{mesh},
+	  dN_by_dX{mesh, vtxh, X},
+	  T{mesh},
+	  K{mesh}
 {
 }
 }  // namespace FeltElements
