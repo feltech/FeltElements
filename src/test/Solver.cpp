@@ -25,12 +25,25 @@ SCENARIO("Mesh attributes")
 
 		WHEN("body force attribute is constructed")
 		{
-			Attribute::Global::BodyForce const attrib_body_force{mesh};
+			Attribute::Body::Force const attrib_body_force{mesh};
 
 			THEN("it is zero initialised")
 			{
 				Node::Force const & F = *attrib_body_force;
 				CHECK(Tensor::Func::all_of(F == 0));
+			}
+		}
+
+		WHEN("material properties attribute is constructed")
+		{
+			Attribute::Body::Properties const attrib_material_properties{mesh};
+
+			THEN("it is zero initialised")
+			{
+				Attribute::MaterialProperties const & M = *attrib_material_properties;
+				CHECK(M.rho == 0);
+				CHECK(M.lambda == 0);
+				CHECK(M.mu == 0);
 			}
 		}
 
@@ -1362,6 +1375,8 @@ SCENARIO("Solution of a single element")
 
 		auto mesh = Test::load_ovm_mesh(file_name_one);
 		Attributes attrib{mesh};
+		(*attrib.material).lambda = lambda;
+		(*attrib.material).mu = mu;
 		auto const & vtxhs = attrib.vtxh[Cellh{0}];
 		auto const & X = attrib.X.for_element(vtxhs);
 		// Push top-most node to the right slightly.
@@ -1375,7 +1390,7 @@ SCENARIO("Solution of a single element")
 
 		WHEN("element stiffness and internal force tensor attributes are constructed")
 		{
-			Solver::update_elements_stiffness_and_forces(mesh, attrib, lambda, mu);
+			Solver::update_elements_stiffness_and_forces(mesh, attrib);
 
 			THEN("attributes hold correct solutions")
 			{
@@ -1596,11 +1611,12 @@ SCENARIO("Solution of two elements")
 		//		Scalar const E = 1;	 // Young's modulus: 0.001 - 0.05
 		//		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		//		Scalar lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
-		Scalar const lambda = 4;
-		Scalar const mu = 4;
 
 		auto mesh = Test::load_ovm_mesh(file_name_two);
 		Attributes attrib{mesh};
+		attrib.material->rho = 1;
+		attrib.material->lambda = 4;
+		attrib.material->mu = 4;
 		Test::write_ovm_mesh(mesh, attrib.x, "two_elem_initial");
 
 		auto const total_volume = [&attrib]() {
@@ -1623,7 +1639,12 @@ SCENARIO("Solution of two elements")
 		attrib.x[Vtxh{0}](0) += 0.5;
 		auto const initial_deformed_volume = total_volume();
 
-		CAPTURE(lambda, mu, material_volume, initial_deformed_volume);
+		CAPTURE(
+			attrib.material->rho,
+			attrib.material->lambda,
+			attrib.material->mu,
+			material_volume,
+			initial_deformed_volume);
 
 		auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
 		Eigen::Index constexpr cols = 3;
@@ -1657,7 +1678,7 @@ SCENARIO("Solution of two elements")
 		WHEN("displacement is solved using Eigen LDLT")
 		{
 			std::size_t constexpr max_steps = 4;
-			size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps, lambda, mu);
+			size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps);
 
 			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
 
@@ -1671,7 +1692,7 @@ SCENARIO("Solution of two elements")
 		WHEN("displacement is solved Gauss-Seidel style")
 		{
 			std::size_t constexpr max_steps = 18;
-			std::size_t step = Solver::Gauss::solve(mesh, attrib, max_steps, lambda, mu);
+			std::size_t step = Solver::Gauss::solve(mesh, attrib, max_steps);
 
 			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));
 

@@ -60,12 +60,33 @@ template <class Derived>
 class MeshBase : protected Base<Derived>
 {
 	using ThisBase = Base<Derived>;
+	using Handle = typename ThisBase::Handle;
 
 protected:
 	using Data = typename ThisBase::Data;
 	explicit MeshBase(Mesh & mesh)
 		: ThisBase{mesh.request_mesh_property<Data>(ThisBase::prop_name.data())}
 	{
+	}
+
+	Data const & operator*() const
+	{
+		return (*this)[Handle{0}];
+	}
+
+	Data & operator*()
+	{
+		return (*this)[Handle{0}];
+	}
+
+	Data const * operator->() const
+	{
+		return &(*this)[Handle{0}];
+	}
+
+	Data * operator->()
+	{
+		return &(*this)[Handle{0}];
 	}
 };
 

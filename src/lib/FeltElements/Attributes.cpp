@@ -6,23 +6,17 @@ namespace FeltElements
 {
 namespace Attribute
 {
-namespace Global
+namespace Body
 {
-BodyForce::BodyForce(Mesh & mesh) : ThisBase(mesh)
+Properties::Properties(Mesh &mesh) : ThisBase(mesh)
+{
+	(*(*this)) = MaterialProperties{0, 0, 0};
+}
+Force::Force(Mesh & mesh) : ThisBase(mesh)
 {
 	(*(*this)).zeros();
 }
-
-BodyForce::Data const & BodyForce::operator*() const
-{
-	return (*this)[Handle{0}];
-}
-
-BodyForce::Data & BodyForce::operator*()
-{
-	return (*this)[Handle{0}];
-}
-}  // namespace Global
+}  // namespace Body
 
 namespace Vertex
 {
@@ -83,7 +77,8 @@ Stiffness::Stiffness(Mesh & mesh) : ThisBase(mesh)
 }  // namespace Attribute
 
 Attributes::Attributes(Mesh & mesh)
-	: f{mesh},
+	: material{mesh},
+	  f{mesh},
 	  x{mesh},
 	  X{mesh},
 	  fixed_dof(mesh),

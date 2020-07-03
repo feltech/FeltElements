@@ -6,13 +6,23 @@ namespace FeltElements
 {
 namespace Attribute
 {
+struct MaterialProperties
+{
+	/// Density.
+	Scalar rho;
+	/// Lame's first parameter.
+	Scalar lambda;
+	/// Lame's second parameter.
+	Scalar mu;
+};
 /*
  * Forward declarations
  */
-namespace Global
+namespace Body
 {
-class BodyForce;
-}
+class Properties;
+class Force;
+}  // namespace Body
 namespace Vertex
 {
 class MaterialPosition;
@@ -32,7 +42,12 @@ class Stiffness;
 namespace internal
 {
 template <>
-struct Traits<Global::BodyForce> : public VertexTraits<Node::Force>
+struct Traits<Body::Properties> : public MeshTraits<MaterialProperties>
+{
+	static constexpr std::string_view prop_name = "material_properties";
+};
+template <>
+struct Traits<Body::Force> : public MeshTraits<Node::Force>
 {
 	static constexpr std::string_view prop_name = "body_force";
 };
@@ -85,22 +100,28 @@ struct Traits<Cell::MaterialShapeDerivative> : public CellTraits<Element::ShapeD
 };
 }  // namespace internal
 
-namespace Global
+namespace Body
 {
-class BodyForce final : private internal::VertexPositionBase<BodyForce>
+class Properties final : private internal::MeshBase<Properties>
 {
-	using ThisBase = internal::VertexPositionBase<BodyForce>;
+	using ThisBase = internal::MeshBase<Properties>;
 
 public:
-	explicit BodyForce(Mesh & mesh);
-	Data const & operator*() const;
-	Data & operator*();
-	using ThisBase::for_element;
-
-private:
-	using ThisBase::operator[];
+	explicit Properties(Mesh & mesh);
+	using ThisBase::operator*;
+	using ThisBase::operator->;
 };
-}  // namespace Global
+
+class Force final : private internal::MeshBase<Force>
+{
+	using ThisBase = internal::MeshBase<Force>;
+
+public:
+	explicit Force(Mesh & mesh);
+	using ThisBase::operator*;
+	using ThisBase::operator->;
+};
+}  // namespace Body
 
 namespace Vertex
 {
@@ -198,7 +219,8 @@ public:
 struct Attributes final
 {
 	explicit Attributes(Mesh & mesh);
-	Attribute::Global::BodyForce f;
+	Attribute::Body::Properties material;
+	Attribute::Body::Force f;
 	Attribute::Vertex::SpatialPosition x;
 	Attribute::Vertex::MaterialPosition const X;
 	Attribute::Vertex::FixedDOF fixed_dof;

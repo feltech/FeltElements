@@ -22,8 +22,7 @@ auto constexpr const index_of = [](auto const & haystack, auto && needle) {
 constexpr Scalar epsilon = 0.00001;
 }  // namespace
 
-void update_elements_stiffness_and_forces(
-	Mesh const & mesh, FeltElements::Attributes & attributes, Scalar lambda, Scalar mu)
+void update_elements_stiffness_and_forces(Mesh const & mesh, FeltElements::Attributes & attributes)
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells()))
 	{
@@ -32,8 +31,8 @@ void update_elements_stiffness_and_forces(
 			attributes.x.for_element(cell_vtxhs),
 			attributes.dN_by_dX[cellh],
 			attributes.V[cellh],
-			lambda,
-			mu);
+			(*attributes.material).lambda,
+			(*attributes.material).mu);
 		attributes.v[cellh] = v;
 		attributes.T[cellh] = T;
 		attributes.K[cellh] = K;
@@ -42,7 +41,7 @@ void update_elements_stiffness_and_forces(
 
 namespace LDLT
 {
-std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scalar lambda, Scalar mu)
+std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 {
 	EigenFixedDOFs const & mat_fixed_dof = ([&attrib,
 											 rows = static_cast<Eigen::Index>(mesh.n_vertices()),
@@ -62,7 +61,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scala
 	for (step = 0; step < max_steps; step++)
 	{
 		SPDLOG_DEBUG("LDLT iteration {}", step);
-		Solver::update_elements_stiffness_and_forces(mesh, attrib, lambda, mu);
+		Solver::update_elements_stiffness_and_forces(mesh, attrib);
 
 		mat_T.setZero();
 		mat_K.setZero();
@@ -81,7 +80,6 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scala
 						static_cast<Eigen::Index>(cell_vtx_idx), 0);
 			}
 		}
-//		mat_T.array() *= (Eigen::VectorXd::Ones(mat_fixed_dof.size()) - mat_fixed_dof).array();
 
 		auto const update_submatrix =
 			[&mat_K, &attrib](auto const vtxh_src, auto const vtxh_dst, auto const cellh) {
@@ -101,7 +99,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scala
 		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 		{
 			for (auto itcellh = mesh.vc_iter(*itvtxh); itcellh.valid(); itcellh++)
-			{ update_submatrix(*itvtxh, *itvtxh, *itcellh); }
+				update_submatrix(*itvtxh, *itvtxh, *itcellh);
 		}
 		for (auto itheh = mesh.halfedges_begin(); itheh != mesh.halfedges_end(); itheh++)
 		{
@@ -109,7 +107,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scala
 			auto const & vtxh_src = halfedge.from_vertex();
 			auto const & vtxh_dst = halfedge.to_vertex();
 			for (auto itcellh = mesh.hec_iter(*itheh); itcellh.valid(); itcellh++)
-			{ update_submatrix(vtxh_src, vtxh_dst, *itcellh); }
+				update_submatrix(vtxh_src, vtxh_dst, *itcellh);
 		}
 
 		SPDLOG_DEBUG("T\n{}", mat_T);
@@ -138,7 +136,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scala
 
 namespace Gauss
 {
-std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scalar lambda, Scalar mu)
+std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 {
 	using Tensor::Func::all;
 
@@ -147,7 +145,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps, Scala
 	{
 		SPDLOG_DEBUG("Gauss iteration {}", step);
 
-		Solver::update_elements_stiffness_and_forces(mesh, attrib, lambda, mu);
+		Solver::update_elements_stiffness_and_forces(mesh, attrib);
 
 		std::vector<Node::Pos> u{};
 		u.resize(mesh.n_vertices());
