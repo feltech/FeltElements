@@ -1,3 +1,4 @@
+#include "util/Format.hpp"
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
 #include <FeltElements/Solver.hpp>
@@ -5,7 +6,6 @@
 #include <range/v3/view/iota.hpp>
 
 #include "util/Assert.hpp"
-#include "util/Format.hpp"
 #include "util/IO.hpp"
 
 char const * const file_name_one = "resources/one.ovm";
@@ -1614,9 +1614,10 @@ SCENARIO("Solution of two elements")
 
 		auto mesh = Test::load_ovm_mesh(file_name_two);
 		Attributes attrib{mesh};
-		attrib.material->rho = 1;
+		attrib.material->rho = 4;
 		attrib.material->lambda = 4;
 		attrib.material->mu = 4;
+		*attrib.f = Node::Force{0.0, -9.81, 0.0};
 		Test::write_ovm_mesh(mesh, attrib.x, "two_elem_initial");
 
 		auto const total_volume = [&attrib]() {
@@ -1660,24 +1661,24 @@ SCENARIO("Solution of two elements")
 		auto const check_converges = [&mat_x, &total_volume](
 										 auto const max_step, auto const final_step) {
 			WARN(fmt::format("Converged in {} steps", final_step));
-			CHECK(final_step <= max_step);
+			CHECK(final_step < max_step);
 			// clang-format off
 			Test::check_equal(mat_x, "x", (
 				Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
-				0.500000, 0.000000, 0.000000,
-				1.000000, 0.000000, 0.000000,
-				0.333333, 1.154972, -0.122244,
-				0.000000, 0.000000, 1.000000,
-				0.333333, 0.619084, 0.518097
+					0.5,             0,               0,
+					1,               0,               0,
+					0.333333333333,  0.627935241331, -0.460080182332,
+					0,               0,               1,
+					0.333333333333,  0.493114858533,  0.412891883689
 				).finished(), "expected");
 			// clang-format on
 
-			CHECK(total_volume() == Approx(0.1077625528));
+			CHECK(total_volume() == Approx(0.0816044878));
 		};
 
 		WHEN("displacement is solved using Eigen LDLT")
 		{
-			std::size_t constexpr max_steps = 4;
+			std::size_t constexpr max_steps = 13;
 			size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps);
 
 			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
@@ -1691,7 +1692,7 @@ SCENARIO("Solution of two elements")
 
 		WHEN("displacement is solved Gauss-Seidel style")
 		{
-			std::size_t constexpr max_steps = 18;
+			std::size_t constexpr max_steps = 63;
 			std::size_t step = Solver::Gauss::solve(mesh, attrib, max_steps);
 
 			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));

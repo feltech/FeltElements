@@ -1,6 +1,6 @@
 #pragma once
 #ifndef EIGEN_DEFAULT_IO_FORMAT
-#define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(3, 0, ", ", ",\n", "", "", "", "")
+#define EIGEN_DEFAULT_IO_FORMAT Eigen::IOFormat(12, 0, ", ", ",\n", "", "", "", "")
 #endif
 #include <fmt/format.h>
 #include <fmt/ostream.h>
