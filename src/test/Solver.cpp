@@ -1,4 +1,3 @@
-#include "util/Format.hpp"
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
 #include <FeltElements/Solver.hpp>
@@ -6,6 +5,7 @@
 #include <range/v3/view/iota.hpp>
 
 #include "util/Assert.hpp"
+#include "util/Format.hpp"
 #include "util/IO.hpp"
 
 char const * const file_name_one = "resources/one.ovm";
@@ -411,6 +411,20 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			});
 	}
 
+	THEN("derivative of surface shape wrt local coords is correct")
+	{
+		Test::check_equal(
+			Derivatives::dN_by_dS,
+			"dN_by_dS",
+			{
+				// clang-format off
+				{-1, -1},
+				{1, 0},
+				{0, 1},
+				// clang-format on
+			});
+	}
+
 	THEN("derivative of local wrt shape coords is correct")
 	{
 		Test::check_equal(
@@ -586,6 +600,34 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 				}
 			}
 		}  // WHEN("transformation from natural to cartesian coordinates is calculated")
+
+		WHEN("derivative of surface material wrt local coords is calculated")
+		{
+			using Tensor::Func::all;
+			using Tensor::Func::fseq;
+			using Tensor::Func::last;
+
+			Node::SurfacePositions const & Xs = X(fseq<1, last>(), all);
+			auto const & dX_by_dS = Derivatives::dX_by_dS(Xs);
+
+			THEN("derivative is correct")
+			{
+				// clang-format off
+				Test::check_equal(Xs, "Xs", {
+					{0, 0, 1},
+					{1, 0, 0},
+					{0, 1, 0}
+				});
+				// clang-format on
+				// clang-format off
+				Test::check_equal(dX_by_dS, "dX_by_dS", {
+					{1.000000, 0.000000},
+					{0.000000, 1.000000},
+					{-1.000000, -1.000000}
+				});
+				// clang-format on
+			}
+		}
 
 		WHEN("determinant of derivative of material wrt local coords (Jacobian) is calculated")
 		{

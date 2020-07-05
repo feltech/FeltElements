@@ -59,6 +59,7 @@ static constexpr Tensor::Index dim = 3;
 using Pos = Tensor::Vector<dim>;
 using PosMap = Tensor::Map<dim>;
 using Positions = Fastor::Tensor<Scalar, count, dim>;
+using SurfacePositions = Fastor::Tensor<Scalar, count - 1, dim>;
 using Force = Tensor::Vector<dim>;
 using Forces = Fastor::Tensor<Scalar, count, dim>;
 }  // namespace Node
@@ -68,11 +69,13 @@ namespace Element
 using Vtxhs = std::array<OpenVolumeMesh::VertexHandle, Node::count>;
 using IsoCoordDerivative = Tensor::Matrix<Node::dim, Node::count>;
 using ShapeDerivative = Tensor::Matrix<Node::count, Node::dim>;
+using SurfaceShapeDerivative = Tensor::Matrix<Node::count - 1, Node::dim - 1>;
 using ShapeDerivativeDeterminant = Tensor::Multi<Node::count, Node::count, Node::count>;
 using Elasticity = Tensor::Multi<Node::dim, Node::dim, Node::dim, Node::dim>;
 using ShapeCartesianTransform = Tensor::Matrix<4, 4>;
 using CartesianDerivative = Tensor::Matrix<Node::dim, Node::count>;
 using Gradient = Tensor::Matrix<Node::dim, Node::dim>;
+using SurfaceGradient = Tensor::Matrix<Node::dim, Node::dim - 1>;
 using Stress = Gradient;
 using Stiffness = Tensor::Multi<Node::count, Node::dim, Node::count, Node::dim>;
 using StiffnessForcesVolume = std::tuple<Stiffness, Node::Forces, Scalar>;

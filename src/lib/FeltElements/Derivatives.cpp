@@ -50,6 +50,10 @@ auto const dX_by_dL = [](auto const & X) {
 
 auto const dL_by_dX = [](auto const & dX_by_dL_) { return Func::inv(dX_by_dL_); };
 
+auto const dX_by_dS = [](auto const & X) {
+  return Func::einsum<Idxs<k, i>, Idxs<k, j>>(X, Derivatives::dN_by_dS);
+};
+
 auto const dN_by_dX = [](auto const & dL_by_dX_) {
 	// dN/dX^T = dX/dL^(-T) * dN/dL^T => dN/dX = dN/dL * dX/dL^(-1) = dN/dL * dL/dX
 	return Func::einsum<Idxs<i, k>, Idxs<k, j>>(Derivatives::dN_by_dL, dL_by_dX_);
@@ -199,6 +203,11 @@ Element::Gradient dX_by_dL(Node::Positions const & X)
 	return ex::dX_by_dL(X);
 }
 
+Element::SurfaceGradient dX_by_dS(Node::SurfacePositions const & X)
+{
+	return ex::dX_by_dS(X);
+}
+
 Element::ShapeDerivative dN_by_dX(Element::ShapeCartesianTransform const & N_to_x)
 {
 	using namespace Tensor::Func;
@@ -286,6 +295,13 @@ Element::ShapeDerivative const dN_by_dL = // NOLINT(cert-err58-cpp)
 		{0, 1, 0, 0},
 		{0, 0, 1, 0},
 		{0, 0, 0, 1}}))(Fastor::all, Fastor::fseq<1, 4>());
+
+Element::SurfaceShapeDerivative const dN_by_dS = // NOLINT(cert-err58-cpp)
+	Fastor::evaluate(Fastor::inv(Tensor::Matrix<3, 3>{
+		{1, 1, 1},
+		{0, 1, 0},
+		{0, 0, 1},
+		}))(Fastor::all, Fastor::fseq<1, 3>());
 
 Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([](){ // NOLINT(cert-err58-cpp)
   using Tensor::Index;

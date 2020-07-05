@@ -43,6 +43,8 @@ namespace FeltElements::Derivatives
 [[nodiscard]] Element::CartesianDerivative dx_by_dN(
 	Element::ShapeCartesianTransform const & N_to_x);
 
+[[nodiscard]] Element::SurfaceGradient dX_by_dS(Node::SurfacePositions const & X);
+
 [[nodiscard]] Element::ShapeDerivative dN_by_dX(Element::Gradient const & dL_by_dx);
 [[nodiscard]] Element::ShapeDerivative dN_by_dX(Element::ShapeCartesianTransform const & N_to_x);
 [[nodiscard]] Element::ShapeDerivative dN_by_dX(Node::Positions const & X);
@@ -53,5 +55,6 @@ namespace FeltElements::Derivatives
 
 extern Element::IsoCoordDerivative const dL_by_dN;
 extern Element::ShapeDerivative const dN_by_dL;
+extern Element::SurfaceShapeDerivative const dN_by_dS;
 extern Element::ShapeDerivativeDeterminant const det_dN_by_dL;
 }  // namespace FeltElements::Derivatives
