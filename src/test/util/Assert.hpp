@@ -5,7 +5,11 @@ namespace FeltElements::Test
 {
 constexpr Scalar epsilon = 0.00005;
 
-auto equal = [](auto const & a, auto const & b) { return Tensor::Func::all_of(a - b < epsilon); };
+auto equal = [](auto const & a, auto const & b) {
+	using Tensor::Func::all_of;
+	using Tensor::Func::abs;
+	return all_of(abs(a - b) < epsilon);
+};
 
 template <class Tensor>
 void check_equal(Tensor const & in, std::string_view const desc, Tensor const & expected)

@@ -1,11 +1,13 @@
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
 #include <FeltElements/Solver.hpp>
+// clang-format off
+#include "util/Format.hpp"
 #include <catch2/catch.hpp>
+// clang-format on
 #include <range/v3/view/iota.hpp>
 
 #include "util/Assert.hpp"
-#include "util/Format.hpp"
 #include "util/IO.hpp"
 
 char const * const file_name_one = "resources/one.ovm";
@@ -601,31 +603,113 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			}
 		}  // WHEN("transformation from natural to cartesian coordinates is calculated")
 
+		// TODO: check normals calculated from halffaces vs. winding order
 		WHEN("derivative of surface material wrt local coords is calculated")
 		{
 			using Tensor::Func::all;
 			using Tensor::Func::fseq;
 			using Tensor::Func::last;
 
-			Node::SurfacePositions const & Xs = X(fseq<1, last>(), all);
-			auto const & dX_by_dS = Derivatives::dX_by_dS(Xs);
+			INFO("X")
+			INFO(X)
+
+			Node::SurfacePositions const & Xs1 = X(fseq<1, last>(), all);
+
+			Node::SurfacePositions Xs2;
+			Xs2(0, all) = X(0, all);
+			Xs2(fseq<1, last>(), all) = X(fseq<2, last>(), all);
+
+			Node::SurfacePositions Xs3;
+			Xs3(fseq<0, 2>(), all) = X(fseq<0, 2>(), all);
+			Xs3(fseq<2, last>(), all) = X(fseq<3, last>(), all);
+
+			Node::SurfacePositions Xs4;
+			Xs4 = X(fseq<0, 3>(), all);
+
+			auto const & dX1_by_dS = Derivatives::dX_by_dS(Xs1);
+			auto const & dX2_by_dS = Derivatives::dX_by_dS(Xs2);
+			auto const & dX3_by_dS = Derivatives::dX_by_dS(Xs3);
+			auto const & dX4_by_dS = Derivatives::dX_by_dS(Xs4);
 
 			THEN("derivative is correct")
 			{
 				// clang-format off
-				Test::check_equal(Xs, "Xs", {
-					{0, 0, 1},
-					{1, 0, 0},
-					{0, 1, 0}
+				Test::check_equal(Xs1, "Xs1", {
+					{0.000000, 0.000000, 1.000000},
+					{1.000000, 0.000000, 0.000000},
+					{0.000000, 1.000000, 0.000000}
 				});
-				// clang-format on
-				// clang-format off
-				Test::check_equal(dX_by_dS, "dX_by_dS", {
+				Test::check_equal(Xs2, "Xs2", {
+					{0.000000, 0.000000, 0.000000},
+					{1.000000, 0.000000, 0.000000},
+					{0.000000, 1.000000, 0.000000}
+				});
+				Test::check_equal(Xs3, "Xs3", {
+					{0.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 1.000000},
+					{0.000000, 1.000000, 0.000000}
+				});
+				Test::check_equal(Xs4, "Xs4", {
+					{0.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 1.000000},
+					{1.000000, 0.000000, 0.000000}
+				});
+				Test::check_equal(dX1_by_dS, "dX1_by_dS", {
 					{1.000000, 0.000000},
 					{0.000000, 1.000000},
 					{-1.000000, -1.000000}
 				});
+				Test::check_equal(dX2_by_dS, "dX2_by_dS", {
+					{1.000000, 0.000000},
+					{0.000000, 1.000000},
+					{0.000000, 0.000000}
+				});
+				Test::check_equal(dX3_by_dS, "dX3_by_dS", {
+					{0.000000, 0.000000},
+					{0.000000, 1.000000},
+					{1.000000, 0.000000}
+				});
+				Test::check_equal(dX4_by_dS, "dX4_by_dS", {
+					{0.000000, 1.000000},
+					{0.000000, 0.000000},
+					{1.000000, 0.000000}
+				});
 				// clang-format on
+			}
+
+			AND_WHEN("normal is calculated from tangent vectors")
+			{
+				using Tensor::Func::cross;
+				using Tensor::Func::norm;
+
+				Tensor::Vector<3> dX1_by_dS1 = dX1_by_dS(all, 0);
+				Tensor::Vector<3> dX1_by_dS2 = dX1_by_dS(all, 1);
+				Tensor::Vector<3> na1 = cross(dX1_by_dS1, dX1_by_dS2);
+				Tensor::Vector<3> n1 = na1 / norm(na1);
+
+				Tensor::Vector<3> dX2_by_dS1 = dX2_by_dS(all, 0);
+				Tensor::Vector<3> dX2_by_dS2 = dX2_by_dS(all, 1);
+				Tensor::Vector<3> na2 = cross(dX2_by_dS1, dX2_by_dS2);
+				Tensor::Vector<3> n2 = na2 / norm(na2);
+
+				Tensor::Vector<3> dX3_by_dS1 = dX3_by_dS(all, 0);
+				Tensor::Vector<3> dX3_by_dS2 = dX3_by_dS(all, 1);
+				Tensor::Vector<3> na3 = cross(dX3_by_dS1, dX3_by_dS2);
+				Tensor::Vector<3> n3 = na3 / norm(na3);
+
+				Tensor::Vector<3> dX4_by_dS1 = dX4_by_dS(all, 0);
+				Tensor::Vector<3> dX4_by_dS2 = dX4_by_dS(all, 1);
+				Tensor::Vector<3> na4 = cross(dX4_by_dS1, dX4_by_dS2);
+				Tensor::Vector<3> n4 = na4 / norm(na4);
+
+				THEN("normal is pointing away from volume")
+				{
+					Test::check_equal(
+						n1, "n1", {1.0 / sqrt(3.0), 1.0 / sqrt(3.0), 1.0 / sqrt(3.0)});
+					Test::check_equal(n2, "n2", {0.0, 0.0, 1.0});
+					Test::check_equal(n3, "n3", {-1.0, 0.0, 0.0});
+					Test::check_equal(n4, "n4", {0.0, 1.0, 0.0});
+				}
 			}
 		}
 
