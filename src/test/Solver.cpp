@@ -478,6 +478,38 @@ SCENARIO("Metrics of deformed mesh")
 
 SCENARIO("Coordinate derivatives in undeformed mesh")
 {
+
+	THEN("Levi-Civita alternating tensor is correct")
+	{
+		CHECK(Derivatives::levi_civita(0, 0, 0) == 0);
+		CHECK(Derivatives::levi_civita(0, 0, 1) == 0);
+		CHECK(Derivatives::levi_civita(0, 0, 2) == 0);
+		CHECK(Derivatives::levi_civita(0, 1, 0) == 0);
+		CHECK(Derivatives::levi_civita(0, 1, 1) == 0);
+		CHECK(Derivatives::levi_civita(0, 1, 2) == 1);
+		CHECK(Derivatives::levi_civita(0, 2, 0) == 0);
+		CHECK(Derivatives::levi_civita(0, 2, 1) == -1);
+		CHECK(Derivatives::levi_civita(0, 2, 2) == 0);
+		CHECK(Derivatives::levi_civita(1, 0, 0) == 0);
+		CHECK(Derivatives::levi_civita(1, 0, 1) == 0);
+		CHECK(Derivatives::levi_civita(1, 0, 2) == -1);
+		CHECK(Derivatives::levi_civita(1, 1, 0) == 0);
+		CHECK(Derivatives::levi_civita(1, 1, 1) == 0);
+		CHECK(Derivatives::levi_civita(1, 1, 2) == 0);
+		CHECK(Derivatives::levi_civita(1, 2, 0) == 1);
+		CHECK(Derivatives::levi_civita(1, 2, 1) == 0);
+		CHECK(Derivatives::levi_civita(1, 2, 2) == 0);
+		CHECK(Derivatives::levi_civita(2, 0, 0) == 0);
+		CHECK(Derivatives::levi_civita(2, 0, 1) == 1);
+		CHECK(Derivatives::levi_civita(2, 0, 2) == 0);
+		CHECK(Derivatives::levi_civita(2, 1, 0) == -1);
+		CHECK(Derivatives::levi_civita(2, 1, 1) == 0);
+		CHECK(Derivatives::levi_civita(2, 1, 2) == 0);
+		CHECK(Derivatives::levi_civita(2, 2, 0) == 0);
+		CHECK(Derivatives::levi_civita(2, 2, 1) == 0);
+		CHECK(Derivatives::levi_civita(2, 2, 2) == 0);
+	}
+
 	THEN("derivative of shape wrt local coords is correct")
 	{
 		Test::check_equal(

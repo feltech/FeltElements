@@ -6,6 +6,9 @@ namespace
 {
 using namespace FeltElements;
 
+template <typename T> int sgn(T val) {
+	return (T(0) < val) - (val < T(0));
+}
 auto constexpr delta = [](auto const i, auto const j) { return i == j; };
 
 Element::Elasticity const c_lambda = ([]() {  // NOLINT(cert-err58-cpp)
@@ -302,6 +305,7 @@ Element::SurfaceShapeDerivative const dN_by_dS = // NOLINT(cert-err58-cpp)
 		{0, 1, 0},
 		{0, 0, 1},
 		}))(Fastor::all, Fastor::fseq<1, 3>());
+// clang-format on
 
 Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([](){ // NOLINT(cert-err58-cpp)
   using Tensor::Index;
@@ -320,6 +324,15 @@ Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([](){ // NOLINT(cert-e
 		  }
   return det_dN_by_dL_;
 }());
-// clang-format on
 
+Tensor::Multi<Node::dim, Node::dim, Node::dim> const levi_civita = ([]() { // NOLINT(cert-err58-cpp)
+  using LeviCivita = Tensor::Multi<Node::dim, Node::dim, Node::dim>;
+  LeviCivita E;
+  int constexpr const count = static_cast<int>(Node::dim);
+  for (int i = 0; i < count; i++)
+	  for (int j = 0; j < count; j++)
+		  for (int k = 0; k < count; k++)
+			  E(i, j, k) = sgn(j - i) * sgn(k - i) * sgn(k - j);
+  return E;
+}());
 }  // namespace FeltElements::Derivatives

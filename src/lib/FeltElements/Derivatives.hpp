@@ -57,4 +57,5 @@ extern Element::IsoCoordDerivative const dL_by_dN;
 extern Element::ShapeDerivative const dN_by_dL;
 extern Element::SurfaceShapeDerivative const dN_by_dS;
 extern Element::ShapeDerivativeDeterminant const det_dN_by_dL;
+extern Tensor::Multi<3, 3, 3> const levi_civita;
 }  // namespace FeltElements::Derivatives
