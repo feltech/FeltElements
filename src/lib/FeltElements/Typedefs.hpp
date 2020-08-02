@@ -81,4 +81,9 @@ using Stress = Gradient;
 using Stiffness = Tensor::Multi<Node::count, Node::dim, Node::count, Node::dim>;
 using StiffnessForcesVolume = std::tuple<Stiffness, Node::Forces, Scalar>;
 }  // namespace Element
+
+namespace SurfaceElement
+{
+using Vtxhs = std::array<OpenVolumeMesh::VertexHandle, Node::count - 1>;
+}
 }  // namespace FeltElements

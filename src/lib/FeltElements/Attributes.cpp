@@ -19,8 +19,15 @@ Force::Force(Mesh & mesh) : ThisBase(mesh)
 Surface::Surface(Mesh & mesh) : ThisBase(mesh)
 {
 	for (auto halffaceh : boost::make_iterator_range(mesh.halffaces()))
-		if (mesh.is_boundary(halffaceh))
-			(*this)->push_back(halffaceh);
+	{
+		if (!mesh.is_boundary(halffaceh))
+			continue;
+		SurfaceElement::Vtxhs vtxhs;
+		Tensor::Index vtx_idx = 0;
+		for (auto halfedgeh : boost::make_iterator_range(mesh.halfface_halfedges(halffaceh)))
+			vtxhs[vtx_idx++] = mesh.halfedge(halfedgeh).from_vertex();
+		(*this)->push_back(vtxhs);
+	}
 }
 }  // namespace Body
 

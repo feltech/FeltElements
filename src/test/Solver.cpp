@@ -42,8 +42,6 @@ SCENARIO("Mesh attributes")
 
 			THEN("it is initialised to the surface halffaces of the mesh")
 			{
-				std::vector<OpenVolumeMesh::HalfFaceHandle> const & surface_elements =
-					*attrib_surface;
 
 				using Tensor::Func::all;
 				using Tensor::Func::all_of;
@@ -53,24 +51,18 @@ SCENARIO("Mesh attributes")
 
 				std::vector<Triangle> result;
 
-				for (Halffaceh const & halffaceh : surface_elements)
+				for (auto & vtxhs : *attrib_surface)
 				{
-					Triangle triangle;
-					Tensor::Vector<3> vtxs[3];
-					std::size_t vtx_idx = 0;
-					for (OpenVolumeMesh::HalfEdgeHandle halfedgeh :
-						 boost::make_iterator_range(mesh.halfface_halfedges(halffaceh)))
-					{
-						auto const & halfedge = mesh.halfedge(halfedgeh);
-						auto const & vtx = mesh.vertex(halfedge.from_vertex());
-						vtxs[vtx_idx++] = Tensor::ConstMap<3>(vtx.data());
-					}
-					Tensor::Vector<3> normal = cross(vtxs[1] - vtxs[0], vtxs[2] - vtxs[1]);
+					Triangle triangle = 0;
+					Tensor::Vector<3> vtx0 = Tensor::ConstMap<3>{mesh.vertex(vtxhs[0]).data()};
+					Tensor::Vector<3> vtx1 = Tensor::ConstMap<3>{mesh.vertex(vtxhs[1]).data()};
+					Tensor::Vector<3> vtx2 = Tensor::ConstMap<3>{mesh.vertex(vtxhs[2]).data()};
+					Tensor::Vector<3> normal = cross(vtx1 - vtx0, vtx2 - vtx0);
 					normal /= norm(normal);
 
-					triangle(0, all) = vtxs[0];
-					triangle(1, all) = vtxs[1];
-					triangle(2, all) = vtxs[2];
+					triangle(0, all) = vtx0;
+					triangle(1, all) = vtx1;
+					triangle(2, all) = vtx2;
 					triangle(3, all) = normal;
 					result.push_back(triangle);
 				}
@@ -1605,10 +1597,10 @@ SCENARIO("Solution of a single element")
 		using Tensor::Func::seq;
 
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
-		double const E = 1;	 // Young's modulus: 0.001 - 0.05
+		double mu;// = 0.4;	 // Shear modulus: 0.0003 - 0.02
+//		double const E = 1;	 // Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		double lambda;// = (mu * (E - 2 * mu)) / (3 * mu - E);
 		mu = lambda = 4;
 
 		auto mesh = Test::load_ovm_mesh(file_name_one);
@@ -1796,7 +1788,7 @@ SCENARIO("Solution of a single element")
 
 				Node::Positions u = 0;
 
-				for (Tensor::Index a = 0; a < u.dimension(0); a++)
+				for (Tensor::Index a = 0; a < Node::Positions::dimension(0); a++)
 				{
 					using namespace Tensor;
 					using Func::einsum;

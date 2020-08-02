@@ -53,9 +53,9 @@ struct Traits<Body::Force> : public MeshTraits<Node::Force>
 	static constexpr std::string_view prop_name = "body_force";
 };
 template <>
-struct Traits<Body::Surface> : public MeshTraits<std::vector<Halffaceh>>
+struct Traits<Body::Surface> : public MeshTraits<std::vector<SurfaceElement::Vtxhs>>
 {
-	static constexpr std::string_view prop_name = "surface_halffaces";
+	static constexpr std::string_view prop_name = "surface_vertices";
 };
 template <>
 struct Traits<Vertex::MaterialPosition> : public VertexTraits<Node::Pos>
