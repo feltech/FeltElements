@@ -36,6 +36,86 @@ SCENARIO("Mesh attributes")
 			}
 		}
 
+		WHEN("surface elements attribute is constructed")
+		{
+			Attribute::Body::Surface const attrib_surface{mesh};
+
+			THEN("it is initialised to the surface halffaces of the mesh")
+			{
+				std::vector<OpenVolumeMesh::HalfFaceHandle> const & surface_elements =
+					*attrib_surface;
+
+				using Tensor::Func::all;
+				using Tensor::Func::all_of;
+				using Tensor::Func::cross;
+				using Tensor::Func::norm;
+				using Triangle = Tensor::Matrix<4, 3>;
+
+				std::vector<Triangle> result;
+
+				for (Halffaceh const & halffaceh : surface_elements)
+				{
+					Triangle triangle;
+					Tensor::Vector<3> vtxs[3];
+					std::size_t vtx_idx = 0;
+					for (OpenVolumeMesh::HalfEdgeHandle halfedgeh :
+						 boost::make_iterator_range(mesh.halfface_halfedges(halffaceh)))
+					{
+						auto const & halfedge = mesh.halfedge(halfedgeh);
+						auto const & vtx = mesh.vertex(halfedge.from_vertex());
+						vtxs[vtx_idx++] = Tensor::ConstMap<3>(vtx.data());
+					}
+					Tensor::Vector<3> normal = cross(vtxs[1] - vtxs[0], vtxs[2] - vtxs[1]);
+					normal /= norm(normal);
+
+					triangle(0, all) = vtxs[0];
+					triangle(1, all) = vtxs[1];
+					triangle(2, all) = vtxs[2];
+					triangle(3, all) = normal;
+					result.push_back(triangle);
+				}
+
+				// clang-format off
+				std::vector<Triangle> expected{{
+					{0.000000, 0.000000, 0.000000},
+					{1.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 1.000000},
+					{0.000000, -1.000000, 0.000000}
+				}, {
+					{0.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 1.000000},
+					{0.000000, 0.500000, 0.500000},
+					{-1.000000, 0.000000, 0.000000}
+				}, {
+					{0.000000, 0.000000, 1.000000},
+					{1.000000, 0.000000, 0.000000},
+					{0.000000, 0.500000, 0.500000},
+					{0.577350, 0.577350, 0.577350}
+				}, {
+					{0.000000, 1.000000, 0.000000},
+					{1.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, -1.000000}
+				}, {
+					{0.000000, 1.000000, 0.000000},
+					{0.000000, 0.500000, 0.500000},
+					{1.000000, 0.000000, 0.000000},
+					{0.577350, 0.577350, 0.577350}
+				}, {
+					{0.000000, 1.000000, 0.000000},
+					{0.000000, 0.000000, 0.000000},
+					{0.000000, 0.500000, 0.500000},
+					{-1.000000, 0.000000, 0.000000}
+				}};
+				// clang-format on
+
+				CHECK(result.size() == expected.size());
+
+				for (std::size_t tri_idx = 0; tri_idx < result.size(); tri_idx++)
+					Test::check_equal(result[tri_idx], "result", expected[tri_idx], "expected");
+			}
+		}
+
 		WHEN("material properties attribute is constructed")
 		{
 			Attribute::Body::Properties const attrib_material_properties{mesh};

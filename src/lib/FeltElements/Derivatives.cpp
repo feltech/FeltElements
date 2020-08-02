@@ -82,13 +82,13 @@ auto const c = [](Scalar J, Scalar lambda, Scalar mu) {
 };
 
 auto const Kc = [](auto const & dN_by_dx, auto const & c_) {
-	// Kc = v * dN_a/dx_k * c_ikjl * dN_b/dx_l
+	// Kc_ij = v * dN_a/dx_k * c_ikjl * dN_b/dx_l
 	return Func::einsum<Idxs<a, k>, Idxs<i, k, j, l>, Idxs<b, l>, Order<a, i, b, j>>(
 		dN_by_dx, c_, dN_by_dx);
 };
 
 auto const Ks = [](auto const & dN_by_dx, auto const & s) {
-	// Ks = v * dN_a/dx_k * sigma_kl * dN_b/dx_l * delta_ij
+	// Ks_ij = v * dN_a/dx_k * sigma_kl * dN_b/dx_l * delta_ij
 	return Func::einsum<Idxs<a, k>, Idxs<k, l>, Idxs<b, l>, Idxs<i, j>, Order<a, i, b, j>>(
 		dN_by_dx, s, dN_by_dx, I);
 };

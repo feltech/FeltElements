@@ -22,6 +22,7 @@ namespace Body
 {
 class Properties;
 class Force;
+class Surface;
 }  // namespace Body
 namespace Vertex
 {
@@ -50,6 +51,11 @@ template <>
 struct Traits<Body::Force> : public MeshTraits<Node::Force>
 {
 	static constexpr std::string_view prop_name = "body_force";
+};
+template <>
+struct Traits<Body::Surface> : public MeshTraits<std::vector<Halffaceh>>
+{
+	static constexpr std::string_view prop_name = "surface_halffaces";
 };
 template <>
 struct Traits<Vertex::MaterialPosition> : public VertexTraits<Node::Pos>
@@ -118,6 +124,16 @@ class Force final : private internal::MeshBase<Force>
 
 public:
 	explicit Force(Mesh & mesh);
+	using ThisBase::operator*;
+	using ThisBase::operator->;
+};
+
+class Surface final : private internal::MeshBase<Surface>
+{
+	using ThisBase = internal::MeshBase<Surface>;
+
+public:
+	explicit Surface(Mesh & mesh);
 	using ThisBase::operator*;
 	using ThisBase::operator->;
 };

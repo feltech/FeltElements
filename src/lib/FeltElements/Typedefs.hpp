@@ -9,6 +9,7 @@ namespace FeltElements
 using Mesh = OpenVolumeMesh::GeometricTetrahedralMeshV3d;
 using Vtxh = OpenVolumeMesh::VertexHandle;
 using Cellh = OpenVolumeMesh::CellHandle;
+using Halffaceh = OpenVolumeMesh::HalfFaceHandle;
 using Scalar = Mesh::PointT::value_type;
 
 namespace Tensor

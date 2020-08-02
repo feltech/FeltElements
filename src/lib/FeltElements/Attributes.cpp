@@ -16,6 +16,12 @@ Force::Force(Mesh & mesh) : ThisBase(mesh)
 {
 	(*(*this)).zeros();
 }
+Surface::Surface(Mesh & mesh) : ThisBase(mesh)
+{
+	for (auto halffaceh : boost::make_iterator_range(mesh.halffaces()))
+		if (mesh.is_boundary(halffaceh))
+			(*this)->push_back(halffaceh);
+}
 }  // namespace Body
 
 namespace Vertex
