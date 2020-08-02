@@ -36,7 +36,7 @@ Element::Elasticity const c_mu = ([]() {  // NOLINT(cert-err58-cpp)
 }());
 
 // TODO: constexpr - requries simd_vector_type to satisfy literal type requirements
-Tensor::Matrix<3> const I = ([]() {
+Tensor::Matrix<3> const I = ([]() { // NOLINT(cert-err58-cpp)
 	Tensor::Matrix<3> mat{};
 	mat.eye2();
 	return mat;
@@ -47,50 +47,52 @@ namespace FeltElements::ex
 {
 using namespace Tensor;
 
-auto const dX_by_dL = [](auto const & X) {
+auto const constexpr dX_by_dL = [](auto const & X) {
 	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(X, Derivatives::dN_by_dL);
 };
 
-auto const dL_by_dX = [](auto const & dX_by_dL_) { return Func::inv(dX_by_dL_); };
+auto const constexpr dL_by_dX = [](auto const & dX_by_dL_) { return Func::inv(dX_by_dL_); };
 
-auto const dX_by_dS = [](auto const & X) {
+auto const constexpr dX_by_dS = [](auto const & X) {
   return Func::einsum<Idxs<k, i>, Idxs<k, j>>(X, Derivatives::dN_by_dS);
 };
 
-auto const dN_by_dX = [](auto const & dL_by_dX_) {
+auto const constexpr dN_by_dX = [](auto const & dL_by_dX_) {
 	// dN/dX^T = dX/dL^(-T) * dN/dL^T => dN/dX = dN/dL * dX/dL^(-1) = dN/dL * dL/dX
 	return Func::einsum<Idxs<i, k>, Idxs<k, j>>(Derivatives::dN_by_dL, dL_by_dX_);
 };
 
-auto const dx_by_dX = [](auto const & x, auto const & dN_by_dX_) {
+auto const constexpr dx_by_dX = [](auto const & x, auto const & dN_by_dX_) {
 	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(x, dN_by_dX_);
 };
 
-auto const finger = [](auto const & F) { return Func::einsum<Idxs<i, k>, Idxs<j, k>>(F, F); };
+auto const constexpr finger = [](auto const & F) {
+	return Func::einsum<Idxs<i, k>, Idxs<j, k>>(F, F);
+};
 
-auto const sigma = [](Scalar const J, auto const & b, Scalar const lambda, Scalar const mu) {
+auto const constexpr sigma = [](Scalar const J, auto const & b, Scalar const lambda, Scalar const mu) {
 	return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
 };
 
-auto const T = [](auto const & dN_by_dx, Scalar const v, auto const & sigma_) {
+auto const constexpr T = [](auto const & dN_by_dx, Scalar const v, auto const & sigma_) {
 	// T = v * sigma * dN/dx^T
 	return v * Func::einsum<Idxs<a, k>, Idxs<i, k>>(dN_by_dx, sigma_);
 };
 
-auto const c = [](Scalar J, Scalar lambda, Scalar mu) {
+auto const constexpr c = [](Scalar J, Scalar lambda, Scalar mu) {
 	Scalar const lambda_prime = lambda / J;
 	Scalar const mu_prime = (mu - lambda * std::log(J)) / J;
 
 	return lambda_prime * c_lambda + mu_prime * c_mu;
 };
 
-auto const Kc = [](auto const & dN_by_dx, auto const & c_) {
+auto const constexpr Kc = [](auto const & dN_by_dx, auto const & c_) {
 	// Kc_ij = v * dN_a/dx_k * c_ikjl * dN_b/dx_l
 	return Func::einsum<Idxs<a, k>, Idxs<i, k, j, l>, Idxs<b, l>, Order<a, i, b, j>>(
 		dN_by_dx, c_, dN_by_dx);
 };
 
-auto const Ks = [](auto const & dN_by_dx, auto const & s) {
+auto const constexpr Ks = [](auto const & dN_by_dx, auto const & s) {
 	// Ks_ij = v * dN_a/dx_k * sigma_kl * dN_b/dx_l * delta_ij
 	return Func::einsum<Idxs<a, k>, Idxs<k, l>, Idxs<b, l>, Idxs<i, j>, Order<a, i, b, j>>(
 		dN_by_dx, s, dN_by_dx, I);
