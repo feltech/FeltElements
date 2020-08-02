@@ -8,8 +8,9 @@ namespace FeltElements
 {
 using Mesh = OpenVolumeMesh::GeometricTetrahedralMeshV3d;
 using Vtxh = OpenVolumeMesh::VertexHandle;
+template <std::size_t dim>
+using Vtxhs = std::array<Vtxh, dim>;
 using Cellh = OpenVolumeMesh::CellHandle;
-using Halffaceh = OpenVolumeMesh::HalfFaceHandle;
 using Scalar = Mesh::PointT::value_type;
 
 namespace Tensor
@@ -67,7 +68,7 @@ using Forces = Fastor::Tensor<Scalar, count, dim>;
 
 namespace Element
 {
-using Vtxhs = std::array<OpenVolumeMesh::VertexHandle, Node::count>;
+using Vtxhs = FeltElements::Vtxhs<Node::count>;
 using IsoCoordDerivative = Tensor::Matrix<Node::dim, Node::count>;
 using ShapeDerivative = Tensor::Matrix<Node::count, Node::dim>;
 using SurfaceShapeDerivative = Tensor::Matrix<Node::count - 1, Node::dim - 1>;
@@ -84,6 +85,6 @@ using StiffnessForcesVolume = std::tuple<Stiffness, Node::Forces, Scalar>;
 
 namespace SurfaceElement
 {
-using Vtxhs = std::array<OpenVolumeMesh::VertexHandle, Node::count - 1>;
+using Vtxhs = FeltElements::Vtxhs<Node::count - 1>;
 }
 }  // namespace FeltElements

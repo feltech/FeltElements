@@ -126,11 +126,13 @@ protected:
 		}
 	}
 
-	[[nodiscard]] Node::Positions for_element(Element::Vtxhs const & vtxhs) const
+	template <std::size_t count>
+	[[nodiscard]] Tensor::Matrix<count, Node::dim> for_element(Vtxhs<count> const & vtxhs) const
 	{
 		using Tensor::Func::all;
-		Node::Positions x;
-		for (Tensor::Index node_idx = 0; node_idx < Node::Positions::dimension(0); node_idx++)
+		using Positions = Tensor::Matrix<count, Node::dim>;
+		Positions x;
+		for (Tensor::Index node_idx = 0; node_idx < Positions::dimension(0); node_idx++)
 			x(node_idx, all) = ThisBase::m_prop[vtxhs[node_idx]];
 
 		return x;
