@@ -6,7 +6,9 @@ namespace
 {
 using namespace FeltElements;
 
-template <typename T> int sgn(T val) {
+template <typename T>
+int sgn(T val)
+{
 	return (T(0) < val) - (val < T(0));
 }
 auto constexpr delta = [](auto const i, auto const j) { return i == j; };
@@ -36,7 +38,7 @@ Element::Elasticity const c_mu = ([]() {  // NOLINT(cert-err58-cpp)
 }());
 
 // TODO: constexpr - requries simd_vector_type to satisfy literal type requirements
-Tensor::Matrix<3> const I = ([]() { // NOLINT(cert-err58-cpp)
+Tensor::Matrix<3> const I = ([]() {	 // NOLINT(cert-err58-cpp)
 	Tensor::Matrix<3> mat{};
 	mat.eye2();
 	return mat;
@@ -54,7 +56,7 @@ auto const constexpr dX_by_dL = [](auto const & X) {
 auto const constexpr dL_by_dX = [](auto const & dX_by_dL_) { return Func::inv(dX_by_dL_); };
 
 auto const constexpr dX_by_dS = [](auto const & X) {
-  return Func::einsum<Idxs<k, i>, Idxs<k, j>>(X, Derivatives::dN_by_dS);
+	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(X, Derivatives::dN_by_dS);
 };
 
 auto const constexpr dN_by_dX = [](auto const & dL_by_dX_) {
@@ -70,8 +72,18 @@ auto const constexpr finger = [](auto const & F) {
 	return Func::einsum<Idxs<i, k>, Idxs<j, k>>(F, F);
 };
 
-auto const constexpr sigma = [](Scalar const J, auto const & b, Scalar const lambda, Scalar const mu) {
-	return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
+auto const constexpr sigma =
+	[](Scalar const J, auto const & b, Scalar const lambda, Scalar const mu) {
+		return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
+	};
+
+auto const constexpr t = [](Scalar const p, auto const & dX_by_dS_) {
+	using Tensor::Func::all;
+	using Tensor::Func::fix;
+	using Tensor::Func::fix;
+	Node::Force const & dX1_by_dS = dX_by_dS_(all, fix<0>);
+	Node::Force const & dX2_by_dS = dX_by_dS_(all, fix<1>);
+	return (1.0 / 2.0) * p * cross(dX1_by_dS, dX2_by_dS);
 };
 
 auto const constexpr T = [](auto const & dN_by_dx, Scalar const v, auto const & sigma_) {
@@ -102,7 +114,7 @@ auto const constexpr Ks = [](auto const & dN_by_dx, auto const & s) {
 namespace FeltElements::Derivatives
 {
 Element::StiffnessForcesVolume KTv(
-	Node::Positions const & x,
+	Element::Positions const & x,
 	Element::ShapeDerivative const & dN_by_dX,
 	Scalar const V,
 	Scalar const lambda,
@@ -125,7 +137,7 @@ Element::StiffnessForcesVolume KTv(
 	auto const & Ks = ex::Ks(dN_by_dx, sigma);
 
 	Element::Stiffness K = v * (Kc + Ks);
-	Node::Forces T = ex::T(dN_by_dx, v, sigma);
+	Element::Forces T = ex::T(dN_by_dx, v, sigma);
 
 	return Element::StiffnessForcesVolume(K, T, v);
 }
@@ -147,7 +159,12 @@ Element::Elasticity c(Scalar J, Scalar lambda, Scalar mu)
 	return ex::c(J, lambda, mu);
 }
 
-Node::Forces T(
+Node::Force t(Scalar const p, Element::SurfaceGradient const & dX_by_dS)
+{
+	return ex::t(p, dX_by_dS);
+}
+
+Element::Forces T(
 	Element::ShapeDerivative const & dN_by_dx, Scalar const v, Element::Stress const & sigma)
 {
 	return ex::T(dN_by_dx, v, sigma);
@@ -169,7 +186,7 @@ Element::Gradient b(Element::Gradient const & F)
 	return ex::finger(F);
 }
 
-Element::Gradient dx_by_dX(Node::Positions const & x, Element::ShapeDerivative const & dN_by_dX)
+Element::Gradient dx_by_dX(Element::Positions const & x, Element::ShapeDerivative const & dN_by_dX)
 {
 	return ex::dx_by_dX(x, dN_by_dX);
 }
@@ -185,7 +202,7 @@ Element::ShapeDerivative dN_by_dX(Element::Gradient const & dL_by_dx)
 	return ex::dN_by_dX(dL_by_dx);
 }
 
-Element::ShapeDerivative dN_by_dX(Node::Positions const & X)
+Element::ShapeDerivative dN_by_dX(Element::Positions const & X)
 {
 	auto const & dX_by_dL = ex::dX_by_dL(X);
 	auto const & dL_by_dX = ex::dL_by_dX(dX_by_dL);
@@ -203,12 +220,12 @@ Element::Gradient dL_by_dX(Element::Gradient const & dX_by_dL)
 	return ex::dL_by_dX(dX_by_dL);
 }
 
-Element::Gradient dX_by_dL(Node::Positions const & X)
+Element::Gradient dX_by_dL(Element::Positions const & X)
 {
 	return ex::dX_by_dL(X);
 }
 
-Element::SurfaceGradient dX_by_dS(Node::SurfacePositions const & X)
+Element::SurfaceGradient dX_by_dS(SurfaceElement::Positions const & X)
 {
 	return ex::dX_by_dS(X);
 }
@@ -221,7 +238,7 @@ Element::ShapeDerivative dN_by_dX(Element::ShapeCartesianTransform const & N_to_
 	return evaluate(inv(N_to_x))(all, fseq<1, last>{});
 }
 
-Element::ShapeCartesianTransform N_to_x(Node::Positions const & X)
+Element::ShapeCartesianTransform N_to_x(Element::Positions const & X)
 {
 	Element::ShapeCartesianTransform mat;
 	mat(Fastor::ffirst, Fastor::all) = 1.0;
@@ -229,7 +246,7 @@ Element::ShapeCartesianTransform N_to_x(Node::Positions const & X)
 	return mat;
 }
 
-Scalar V(Node::Positions const & x)
+Scalar V(Element::Positions const & x)
 {
 	using namespace Tensor::Func;
 	auto const & start_3x3 = x(fseq<0, 3>{}, all);
@@ -243,12 +260,12 @@ Scalar V(Node::Positions const & x)
 	return std::abs(Fastor::det(delta) / 6.0);
 }
 
-Scalar v(Scalar const V, Node::Positions const & x)
+Scalar v(Scalar const V, Element::Positions const & x)
 {
 	return V * det_dx_by_dL(x);
 }
 
-Scalar det_dx_by_dL(Node::Positions const & x)
+Scalar det_dx_by_dL(Element::Positions const & x)
 {
 	using namespace Tensor;
 	using Func::all;
@@ -256,9 +273,9 @@ Scalar det_dx_by_dL(Node::Positions const & x)
 	using Func::fix;
 
 	//	Scalar det_ = 0;
-	//	for (Index i = 0; i < Node::count; i++)
-	//		for (Index j = 0; j < Node::count; j++)
-	//			for (Index k = 0; k < Node::count; k++)
+	//	for (Index i = 0; i < Element::count; i++)
+	//		for (Index j = 0; j < Element::count; j++)
+	//			for (Index k = 0; k < Element::count; k++)
 	//				det_ += det_dN_by_dL(i, j, k) * x(i, 0) * x(j, 1) * x(k, 2);
 	//
 	//	return det_;
@@ -267,9 +284,9 @@ Scalar det_dx_by_dL(Node::Positions const & x)
 	//		using Tensor::Index;
 	//		using Tensor::Func::all;
 	//		Element::ShapeDerivativeDeterminant xs_;
-	//		for (Index i = 0; i < Node::count; i++)
-	//			for (Index j = 0; j < Node::count; j++)
-	//				for (Index k = 0; k < Node::count; k++)
+	//		for (Index i = 0; i < Element::count; i++)
+	//			for (Index j = 0; j < Element::count; j++)
+	//				for (Index k = 0; k < Element::count; k++)
 	//					xs_(i, j, k) = x(i, 0) * x(j, 1) * x(k, 2);
 	//		return xs_;
 	//	}());
@@ -309,32 +326,32 @@ Element::SurfaceShapeDerivative const dN_by_dS = // NOLINT(cert-err58-cpp)
 		}))(Fastor::all, Fastor::fseq<1, 3>());
 // clang-format on
 
-Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([](){ // NOLINT(cert-err58-cpp)
-  using Tensor::Index;
-  using Tensor::Func::all;
-  using Tensor::Func::det;
-  Element::ShapeDerivativeDeterminant det_dN_by_dL_;
-  for (Index i = 0; i < Node::count; i++)
-	  for (Index j = 0; j < Node::count; j++)
-		  for (Index k = 0; k < Node::count; k++)
-		  {
-			  Tensor::Matrix<3> dN_by_dL_ijk;
-			  dN_by_dL_ijk(0, all) = dN_by_dL(i, all);
-			  dN_by_dL_ijk(1, all) = dN_by_dL(j, all);
-			  dN_by_dL_ijk(2, all) = dN_by_dL(k, all);
-			  det_dN_by_dL_(i, j, k) = det(dN_by_dL_ijk);
-		  }
-  return det_dN_by_dL_;
+Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([]() {  // NOLINT(cert-err58-cpp)
+	using Tensor::Index;
+	using Tensor::Func::all;
+	using Tensor::Func::det;
+	Element::ShapeDerivativeDeterminant det_dN_by_dL_;
+	for (Index i = 0; i < Element::count; i++)
+		for (Index j = 0; j < Element::count; j++)
+			for (Index k = 0; k < Element::count; k++)
+			{
+				Tensor::Matrix<3> dN_by_dL_ijk;
+				dN_by_dL_ijk(0, all) = dN_by_dL(i, all);
+				dN_by_dL_ijk(1, all) = dN_by_dL(j, all);
+				dN_by_dL_ijk(2, all) = dN_by_dL(k, all);
+				det_dN_by_dL_(i, j, k) = det(dN_by_dL_ijk);
+			}
+	return det_dN_by_dL_;
 }());
 
-Tensor::Multi<Node::dim, Node::dim, Node::dim> const levi_civita = ([]() { // NOLINT(cert-err58-cpp)
-  using LeviCivita = Tensor::Multi<Node::dim, Node::dim, Node::dim>;
-  LeviCivita E;
-  int constexpr const count = static_cast<int>(Node::dim);
-  for (int i = 0; i < count; i++)
-	  for (int j = 0; j < count; j++)
-		  for (int k = 0; k < count; k++)
-			  E(i, j, k) = sgn(j - i) * sgn(k - i) * sgn(k - j);
-  return E;
-}());
+Tensor::Multi<Node::dim, Node::dim, Node::dim> const levi_civita =
+	([]() {	 // NOLINT(cert-err58-cpp)
+		using LeviCivita = Tensor::Multi<Node::dim, Node::dim, Node::dim>;
+		LeviCivita E;
+		int constexpr const count = static_cast<int>(Node::dim);
+		for (int i = 0; i < count; i++)
+			for (int j = 0; j < count; j++)
+				for (int k = 0; k < count; k++) E(i, j, k) = sgn(j - i) * sgn(k - i) * sgn(k - j);
+		return E;
+	}());
 }  // namespace FeltElements::Derivatives

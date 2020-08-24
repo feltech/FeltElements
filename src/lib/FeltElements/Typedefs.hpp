@@ -55,36 +55,37 @@ using ConstMap = BaseMap<Scalar const, indices...>;
 
 namespace Node
 {
-static constexpr Tensor::Index count = 4;
 static constexpr Tensor::Index dim = 3;
 
 using Pos = Tensor::Vector<dim>;
-using PosMap = Tensor::Map<dim>;
-using Positions = Fastor::Tensor<Scalar, count, dim>;
-using SurfacePositions = Fastor::Tensor<Scalar, count - 1, dim>;
 using Force = Tensor::Vector<dim>;
-using Forces = Fastor::Tensor<Scalar, count, dim>;
 }  // namespace Node
 
 namespace Element
 {
-using Vtxhs = FeltElements::Vtxhs<Node::count>;
-using IsoCoordDerivative = Tensor::Matrix<Node::dim, Node::count>;
-using ShapeDerivative = Tensor::Matrix<Node::count, Node::dim>;
-using SurfaceShapeDerivative = Tensor::Matrix<Node::count - 1, Node::dim - 1>;
-using ShapeDerivativeDeterminant = Tensor::Multi<Node::count, Node::count, Node::count>;
+static constexpr Tensor::Index count = 4;
+
+using Vtxhs = FeltElements::Vtxhs<count>;
+using IsoCoordDerivative = Tensor::Matrix<Node::dim, count>;
+using ShapeDerivative = Tensor::Matrix<count, Node::dim>;
+using SurfaceShapeDerivative = Tensor::Matrix<count - 1, Node::dim - 1>;
+using ShapeDerivativeDeterminant = Tensor::Multi<count, count, count>;
 using Elasticity = Tensor::Multi<Node::dim, Node::dim, Node::dim, Node::dim>;
 using ShapeCartesianTransform = Tensor::Matrix<4, 4>;
-using CartesianDerivative = Tensor::Matrix<Node::dim, Node::count>;
+using CartesianDerivative = Tensor::Matrix<Node::dim, count>;
 using Gradient = Tensor::Matrix<Node::dim, Node::dim>;
 using SurfaceGradient = Tensor::Matrix<Node::dim, Node::dim - 1>;
 using Stress = Gradient;
-using Stiffness = Tensor::Multi<Node::count, Node::dim, Node::count, Node::dim>;
-using StiffnessForcesVolume = std::tuple<Stiffness, Node::Forces, Scalar>;
+using Stiffness = Tensor::Multi<count, Node::dim, count, Node::dim>;
+using Positions = Fastor::Tensor<Scalar, count, Node::dim>;
+using Forces = Fastor::Tensor<Scalar, count, Node::dim>;
+using StiffnessForcesVolume = std::tuple<Stiffness, Forces, Scalar>;
 }  // namespace Element
 
 namespace SurfaceElement
 {
-using Vtxhs = FeltElements::Vtxhs<Node::count - 1>;
+static constexpr Tensor::Index count = Element::count - 1;
+using Vtxhs = FeltElements::Vtxhs<count>;
+using Positions = Fastor::Tensor<Scalar, count, Node::dim>;
 }
 }  // namespace FeltElements

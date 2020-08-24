@@ -15,7 +15,7 @@ Mesh load_ovm_mesh(std::string_view const & file_name)
 	return mesh;
 }
 
-std::tuple<Node::Positions, Node::Positions> load_tet(std::string_view const & file_name)
+std::tuple<Element::Positions, Element::Positions> load_tet(std::string_view const & file_name)
 {
 	using namespace FeltElements;
 	FeltElements::Mesh mesh = load_ovm_mesh(file_name);

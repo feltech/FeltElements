@@ -36,7 +36,6 @@ SCENARIO("Mesh attributes")
 			}
 		}
 
-
 		WHEN("material properties attribute is constructed")
 		{
 			Attribute::Body::Properties const attrib_material_properties{mesh};
@@ -57,7 +56,7 @@ SCENARIO("Mesh attributes")
 			THEN("properties are default initialised")
 			{
 				auto itcellh = mesh.cells_begin();
-				Node::Forces T = attrib_forces[*itcellh];
+				Element::Forces T = attrib_forces[*itcellh];
 				CHECK(Tensor::Func::all_of(T == 0));
 				itcellh++;
 				T = attrib_forces[*itcellh];
@@ -136,9 +135,9 @@ SCENARIO("Mesh attributes")
 				Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
 
 				auto itcellh = mesh.cells_begin();
-				Node::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				Element::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
 				itcellh++;
-				Node::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				Element::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
 
 				THEN("positions are expected")
 				{
@@ -208,9 +207,9 @@ SCENARIO("Mesh attributes")
 				Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
 
 				auto itcellh = mesh.cells_begin();
-				Node::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				Element::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
 				itcellh++;
-				Node::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				Element::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
 
 				THEN("positions are expected")
 				{
@@ -247,10 +246,10 @@ SCENARIO("Mesh attributes")
 				{
 					using Tensor::Func::all;
 					using Tensor::Func::cross;
-					using Tensor::Func::norm;
 					using Tensor::Func::fseq;
+					using Tensor::Func::norm;
 
-					Node::SurfacePositions const & x = attrib_X.for_element(vtxhs);
+					SurfaceElement::Positions const & x = attrib_X.for_element(vtxhs);
 					Triangle triangle = 0;
 					Tensor::Vector<3> const vtx0 = x(0, all);
 					Tensor::Vector<3> const vtx1 = x(1, all);
@@ -340,7 +339,7 @@ SCENARIO("Metrics of undeformed mesh")
 			AND_WHEN("material node position tensor is constructed")
 			{
 				Attribute::Vertex::MaterialPosition const attrib_X{mesh};
-				Node::Positions const X = attrib_X.for_element(vtxhs);
+				Element::Positions const X = attrib_X.for_element(vtxhs);
 
 				THEN("expected positions are reported")
 				{
@@ -471,7 +470,6 @@ SCENARIO("Metrics of deformed mesh")
 
 SCENARIO("Coordinate derivatives in undeformed mesh")
 {
-
 	THEN("Levi-Civita alternating tensor is correct")
 	{
 		CHECK(Derivatives::levi_civita(0, 0, 0) == 0);
@@ -606,8 +604,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	GIVEN("a one-element mesh")
 	{
-		auto [X, x] = Test::load_tet(file_name_one);
-		(void)x;
+		auto mesh = Test::load_ovm_mesh(file_name_one);
+		Attributes const attrib{mesh};
+		auto const & X = attrib.X.for_element(attrib.vtxh[Cellh{0}]);
 
 		WHEN("derivative of material wrt local coords is calculated")
 		{
@@ -715,21 +714,14 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			using Tensor::Func::fseq;
 			using Tensor::Func::last;
 
-			INFO("X")
-			INFO(X)
-
-			Node::SurfacePositions const & Xs1 = X(fseq<1, last>(), all);
-
-			Node::SurfacePositions Xs2;
-			Xs2(0, all) = X(0, all);
-			Xs2(fseq<1, last>(), all) = X(fseq<2, last>(), all);
-
-			Node::SurfacePositions Xs3;
-			Xs3(fseq<0, 2>(), all) = X(fseq<0, 2>(), all);
-			Xs3(fseq<2, last>(), all) = X(fseq<3, last>(), all);
-
-			Node::SurfacePositions Xs4;
-			Xs4 = X(fseq<0, 3>(), all);
+			SurfaceElement::Positions const & Xs1 =
+				attrib.X.for_element(attrib.surface_vtxh->at(0));
+			SurfaceElement::Positions const & Xs2 =
+				attrib.X.for_element(attrib.surface_vtxh->at(1));
+			SurfaceElement::Positions const & Xs3 =
+				attrib.X.for_element(attrib.surface_vtxh->at(2));
+			SurfaceElement::Positions const & Xs4 =
+				attrib.X.for_element(attrib.surface_vtxh->at(3));
 
 			auto const & dX1_by_dS = Derivatives::dX_by_dS(Xs1);
 			auto const & dX2_by_dS = Derivatives::dX_by_dS(Xs2);
@@ -738,45 +730,46 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 			THEN("derivative is correct")
 			{
+				CHECK(attrib.surface_vtxh->size() == 4);
 				// clang-format off
 				Test::check_equal(Xs1, "Xs1", {
-					{0.000000, 0.000000, 1.000000},
+					{0.000000, 0.000000, 0.000000},
 					{1.000000, 0.000000, 0.000000},
-					{0.000000, 1.000000, 0.000000}
+					{0.000000, 0.000000, 1.000000}
 				});
 				Test::check_equal(Xs2, "Xs2", {
-					{0.000000, 0.000000, 0.000000},
+					{0.000000, 0.000000, 1.000000},
 					{1.000000, 0.000000, 0.000000},
 					{0.000000, 1.000000, 0.000000}
 				});
 				Test::check_equal(Xs3, "Xs3", {
 					{0.000000, 0.000000, 0.000000},
-					{0.000000, 0.000000, 1.000000},
-					{0.000000, 1.000000, 0.000000}
+					{0.000000, 1.000000, 0.000000},
+					{1.000000, 0.000000, 0.000000}
 				});
 				Test::check_equal(Xs4, "Xs4", {
 					{0.000000, 0.000000, 0.000000},
 					{0.000000, 0.000000, 1.000000},
-					{1.000000, 0.000000, 0.000000}
+					{0.000000, 1.000000, 0.000000}
 				});
 				Test::check_equal(dX1_by_dS, "dX1_by_dS", {
 					{1.000000, 0.000000},
-					{0.000000, 1.000000},
-					{-1.000000, -1.000000}
+					{0.000000, 0.000000},
+					{0.000000, 1.000000}
 				});
 				Test::check_equal(dX2_by_dS, "dX2_by_dS", {
 					{1.000000, 0.000000},
 					{0.000000, 1.000000},
-					{0.000000, 0.000000}
+					{-1.000000, -1.000000}
 				});
 				Test::check_equal(dX3_by_dS, "dX3_by_dS", {
-					{0.000000, 0.000000},
 					{0.000000, 1.000000},
-					{1.000000, 0.000000}
+					{1.000000, 0.000000},
+					{0.000000, 0.000000}
 				});
 				Test::check_equal(dX4_by_dS, "dX4_by_dS", {
-					{0.000000, 1.000000},
 					{0.000000, 0.000000},
+					{0.000000, 1.000000},
 					{1.000000, 0.000000}
 				});
 				// clang-format on
@@ -809,11 +802,50 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 				THEN("normal is pointing away from volume")
 				{
+					Test::check_equal(n1, "n1", {0.0, -1.0, 0.0});
 					Test::check_equal(
-						n1, "n1", {1.0 / sqrt(3.0), 1.0 / sqrt(3.0), 1.0 / sqrt(3.0)});
-					Test::check_equal(n2, "n2", {0.0, 0.0, 1.0});
-					Test::check_equal(n3, "n3", {-1.0, 0.0, 0.0});
-					Test::check_equal(n4, "n4", {0.0, 1.0, 0.0});
+						n2, "n2", {1.0 / sqrt(3.0), 1.0 / sqrt(3.0), 1.0 / sqrt(3.0)});
+					Test::check_equal(n3, "n3", {0.0, 0.0, -1.0});
+					Test::check_equal(n4, "n4", {-1.0, 0.0, 0.0});
+				}
+			}
+
+			AND_WHEN("n*da is calculated using Levi Cevita tensor")
+			{
+				using Tensor::Idxs;
+				using Tensor::Func::all;
+				using Tensor::Func::einsum;
+				using Tensor::Func::fix;
+				enum
+				{
+					i,
+					j,
+					k
+				};
+
+				Tensor::Vector<3> n1da = einsum<Idxs<i, j, k>, Idxs<j>, Idxs<k>>(
+					Derivatives::levi_civita,
+					Tensor::Vector<3>{dX1_by_dS(all, fix<0>)},
+					Tensor::Vector<3>{dX1_by_dS(all, fix<1>)});
+				Tensor::Vector<3> n2da = einsum<Idxs<i, j, k>, Idxs<j>, Idxs<k>>(
+					Derivatives::levi_civita,
+					Tensor::Vector<3>{dX2_by_dS(all, fix<0>)},
+					Tensor::Vector<3>{dX2_by_dS(all, fix<1>)});
+				Tensor::Vector<3> n3da = einsum<Idxs<i, j, k>, Idxs<j>, Idxs<k>>(
+					Derivatives::levi_civita,
+					Tensor::Vector<3>{dX3_by_dS(all, fix<0>)},
+					Tensor::Vector<3>{dX3_by_dS(all, fix<1>)});
+				Tensor::Vector<3> n4da = einsum<Idxs<i, j, k>, Idxs<j>, Idxs<k>>(
+					Derivatives::levi_civita,
+					Tensor::Vector<3>{dX4_by_dS(all, fix<0>)},
+					Tensor::Vector<3>{dX4_by_dS(all, fix<1>)});
+
+				THEN("n*da is correct")
+				{
+					Test::check_equal(n1da, "n1da", {0.0, -1.0, 0.0});
+					Test::check_equal(n2da, "n2da", {1.0, 1.0, 1.0});
+					Test::check_equal(n3da, "n3da", {0.0, 0.0, -1.0});
+					Test::check_equal(n4da, "n4da", {-1.0, 0.0, 0.0});
 				}
 			}
 		}
@@ -837,7 +869,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 		THEN("expected positions are reported")
 		{
 			// clang-format off
-			Node::Positions expected{
+			Element::Positions expected{
 			   {0.0, 0.0, 0.0},
 			   {0.0, 0.0, 1.0},
 			   {1.0, 0.0, 0.0},
@@ -1257,7 +1289,11 @@ SCENARIO("Internal equivalent nodal force")
 {
 	GIVEN("an undeformed one-element mesh")
 	{
-		auto [X, x] = Test::load_tet(file_name_one);
+		auto mesh = Test::load_ovm_mesh(file_name_one);
+		auto attrib = Attributes{mesh};
+		auto const & vtxhs = attrib.vtxh[Cellh{0}];
+		auto const & X = attrib.X.for_element(vtxhs);
+		auto x = attrib.x.for_element(vtxhs);
 
 		INFO("Material vertices:")
 		INFO(X)
@@ -1307,6 +1343,18 @@ SCENARIO("Internal equivalent nodal force")
 					});
 					// clang-format on
 				}
+			}
+		}
+
+		WHEN("uniform pressure traction force is calculated")
+		{
+			Scalar constexpr p = 10.0;
+			Node::Force t = Derivatives::t(
+				p, Derivatives::dX_by_dS(attrib.x.for_element(attrib.surface_vtxh->at(0))));
+
+			THEN("pressure component is as expected")
+			{
+				Test::check_equal(t, "t", {0.0, -5.0, 0.0});
 			}
 		}
 
@@ -1588,6 +1636,25 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 	}
 }
 
+// SCENARIO("Enclosed normal pressure")
+//{
+//	GIVEN("a one-element mesh")
+//	{
+//		auto mesh = Test::load_ovm_mesh(file_name_one);
+//		Attributes attrib{mesh};
+//
+//		WHEN("a face's external pressure component of the stiffness matrix is calculated")
+//		{
+//			Scalar const constexpr p = 1;
+//			auto const & vtxhs = attrib.surface_vtxh->at(0);
+//			auto const & dx_by_dS = Derivatives::dX_by_dS(attrib.x.for_element(vtxhs));
+//			Element::Stiffness Kp = Derivatives::Kp();
+//		}
+//
+//	}
+//
+//}
+
 SCENARIO("Solution of a single element")
 {
 	GIVEN("single element mesh and material properties")
@@ -1598,10 +1665,10 @@ SCENARIO("Solution of a single element")
 		using Tensor::Func::seq;
 
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double mu;// = 0.4;	 // Shear modulus: 0.0003 - 0.02
-//		double const E = 1;	 // Young's modulus: 0.001 - 0.05
+		double mu;	// = 0.4;	 // Shear modulus: 0.0003 - 0.02
+					//		double const E = 1;	 // Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		double lambda;// = (mu * (E - 2 * mu)) / (3 * mu - E);
+		double lambda;	// = (mu * (E - 2 * mu)) / (3 * mu - E);
 		mu = lambda = 4;
 
 		auto mesh = Test::load_ovm_mesh(file_name_one);
@@ -1641,7 +1708,7 @@ SCENARIO("Solution of a single element")
 				auto const & sigma = Derivatives::sigma(J, FFt, lambda, mu);
 
 				auto const & c = Derivatives::c(J, lambda, mu);
-				Node::Forces const & T = Derivatives::T(dN_by_dx, v, sigma);
+				Element::Forces const & T = Derivatives::T(dN_by_dx, v, sigma);
 
 				auto const & Kc = Derivatives::Kc(dN_by_dx, v, c);
 				auto const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
@@ -1681,7 +1748,7 @@ SCENARIO("Solution of a single element")
 				auto const & sigma = Derivatives::sigma(J, FFt, lambda, mu);
 
 				auto const & c = Derivatives::c(J, lambda, mu);
-				Node::Forces T = Derivatives::T(dN_by_dx, v, sigma);
+				Element::Forces T = Derivatives::T(dN_by_dx, v, sigma);
 				T(seq(0, 3), seq(0, 3)) = 0;
 				log += fmt::format("\nT (constrained)\n{}", T);
 
@@ -1767,7 +1834,7 @@ SCENARIO("Solution of a single element")
 				auto const & sigma = Derivatives::sigma(J, FFt, lambda, mu);
 
 				auto const & c = Derivatives::c(J, lambda, mu);
-				Node::Forces T = Derivatives::T(dN_by_dx, v, sigma);
+				Element::Forces T = Derivatives::T(dN_by_dx, v, sigma);
 				//				T -= G;
 				T(seq(0, 3), seq(0, 3)) = 0;
 				log += fmt::format("\nT (constrained)\n{}", T);
@@ -1787,9 +1854,9 @@ SCENARIO("Solution of a single element")
 				//				K(2, 2, 2, 2) = 10e4;
 				log += fmt::format("\nK (constrained)\n{}", K);
 
-				Node::Positions u = 0;
+				Element::Positions u = 0;
 
-				for (Tensor::Index a = 0; a < Node::Positions::dimension(0); a++)
+				for (Tensor::Index a = 0; a < Element::Positions::dimension(0); a++)
 				{
 					using namespace Tensor;
 					using Func::einsum;

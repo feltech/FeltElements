@@ -92,6 +92,7 @@ Stiffness::Stiffness(Mesh & mesh) : ThisBase(mesh)
 Attributes::Attributes(Mesh & mesh)
 	: material{mesh},
 	  f{mesh},
+	  surface_vtxh{mesh},
 	  x{mesh},
 	  X{mesh},
 	  fixed_dof(mesh),

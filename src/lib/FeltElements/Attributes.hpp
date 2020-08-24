@@ -88,7 +88,7 @@ struct Traits<Cell::VertexHandles> : public CellTraits<Element::Vtxhs>
 	static constexpr std::string_view prop_name = "vertices";
 };
 template <>
-struct Traits<Cell::NodalForces> : public CellTraits<Node::Forces>
+struct Traits<Cell::NodalForces> : public CellTraits<Element::Forces>
 {
 	static constexpr std::string_view prop_name = "nodal_forces";
 };
@@ -209,7 +209,7 @@ public:
 	explicit MaterialShapeDerivative(
 		Mesh & mesh, VertexHandles const & vtxhs, Vertex::MaterialPosition const & X);
 	using ThisBase::operator[];
-	static Node::Positions const X;
+	static Element::Positions const X;
 };
 
 class NodalForces final : private internal::CellBase<NodalForces>
@@ -237,6 +237,7 @@ struct Attributes final
 	explicit Attributes(Mesh & mesh);
 	Attribute::Body::Properties material;
 	Attribute::Body::Force f;
+	Attribute::Body::Surface surface_vtxh;
 	Attribute::Vertex::SpatialPosition x;
 	Attribute::Vertex::MaterialPosition const X;
 	Attribute::Vertex::FixedDOF fixed_dof;

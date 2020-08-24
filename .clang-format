@@ -9,7 +9,7 @@ AccessModifierOffset: -4
 ConstructorInitializerIndentWidth: 4
 BreakBeforeBraces: Allman
 AlignAfterOpenBracket: AlwaysBreak
-AlignOperands: false
+AlignOperands: DontAlign
 AllowAllParametersOfDeclarationOnNextLine: true
 DerivePointerAlignment: false
 PointerAlignment: Middle
