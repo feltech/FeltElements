@@ -11,9 +11,8 @@
 template <class Matrix>
 using ostream_if_eigen = std::enable_if_t<!Matrix::IsVectorAtCompileTime, std::ostream &>;
 template <class Matrix>
-ostream_if_eigen<Matrix> operator<<(std::ostream & os, Matrix value)
+ostream_if_eigen<Matrix> operator<<(std::ostream & os, Matrix const& value)
 {
-	using namespace FeltElements::Tensor;
 	using boost::algorithm::join;
 	// std::to_string has non-configurable precision of too many decimal places.
 	auto const constexpr to_string = [](auto const f) { return fmt::format("{:f}", f); };

@@ -13,13 +13,13 @@ namespace FeltElements::Solver
 {
 namespace
 {
-auto constexpr const index_of = [](auto const & haystack, auto && needle) {
+constexpr auto const index_of = [](auto const & haystack, auto && needle) {
 	auto const & it =
 		std::find(haystack.cbegin(), haystack.cend(), std::forward<decltype(needle)>(needle));
 	return static_cast<FeltElements::Tensor::Index>(std::distance(haystack.cbegin(), it));
 };
 
-constexpr Scalar penalty = 10e5;
+constexpr Scalar penalty = 10e10;  // TODO: Brittle - depends on scaling.
 }  // namespace
 
 void update_elements_stiffness_and_forces(Mesh const & mesh, FeltElements::Attributes & attributes)
@@ -30,7 +30,6 @@ void update_elements_stiffness_and_forces(Mesh const & mesh, FeltElements::Attri
 		auto [K, T, v] = Derivatives::KTv(
 			attributes.x.for_element(cell_vtxhs),
 			attributes.dN_by_dX[cellh],
-			attributes.V[cellh],
 			(*attributes.material).lambda,
 			(*attributes.material).mu);
 		attributes.v[cellh] = v;
@@ -48,15 +47,16 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 	EigenFixedDOFs const & mat_fixed_dof = ([&attrib,
 											 rows = static_cast<Eigen::Index>(mesh.n_vertices()),
 											 cols = static_cast<Eigen::Index>(Node::dim)]() {
-		using EigenMapVectorFixedDOFs = Eigen::Map<Eigen::VectorXd>;
 		EigenMapTensorVertices const & map{attrib.fixed_dof[Vtxh{0}].data(), rows, cols};
 		// Copy to remove per-row alignment.
-		EigenFixedDOFs mat = EigenMapVectorFixedDOFs{VerticesMatrix{map}.data(), rows * cols};
-		return mat;
+		EigenFixedDOFs vec = Eigen::Map<EigenFixedDOFs>{VerticesMatrix{map}.data(), rows * cols};
+		return vec;
 	})();
 
 	Scalar const rho = attrib.material->rho;
-	Eigen::Vector3d const & F = 1.0 / 4.0 * rho * EigenConstTensorMap<1, 3>{(*attrib.f).data()};
+	Node::Force const & F_by_m = attrib.material->F_by_m;
+	// Force per unit *material* volume - density will change, push-forward per-element below.
+	Eigen::Vector3d const & F_by_V = rho * EigenConstTensorMap<1, 3>{F_by_m.data()};
 
 	Eigen::VectorXd mat_R{3 * mesh.n_vertices()};
 	Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
@@ -79,12 +79,19 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 				auto const & cell_vtxhs = attrib.vtxh[cellh];
 				auto const & cell_vtx_idx = index_of(cell_vtxhs, vtxh);
 				auto const & cell_T = attrib.T[cellh];
+				auto const V = attrib.V[cellh];
+				auto const v = attrib.v[cellh];
 
+				// Internal forces for node `a`.
 				auto const & Ta = EigenConstTensorMap<4, 3>{cell_T.data()}.block<1, 3>(
 					static_cast<Eigen::Index>(cell_vtx_idx), 0);
 
-				auto const & Fa = attrib.v[cellh] * F.transpose();
+				// External forces for node `a`.
+				auto const J = v / V;
+				auto const & F_by_v = F_by_V / J;
+				auto const & Fa = 1.0 / 4.0 * v * F_by_v.transpose();
 
+				// Update global residual with difference between internal and external forces.
 				mat_R.block<3, 1>(3 * vtx_idx, 0) += Ta - Fa;
 			}
 		}
@@ -123,16 +130,16 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 		mat_K += penalty * mat_fixed_dof.asDiagonal();
 		SPDLOG_DEBUG("K (constrained)\n{}", mat_K);
 
-		//		assert(std::abs(mat_K.determinant()) > 0.00001);
+		assert(std::abs(mat_K.determinant()) > 0.00001);
 
 		mat_u = mat_K.ldlt().solve(-mat_R);
 		mat_u.array() *= (Eigen::VectorXd::Ones(mat_u.size()) - mat_fixed_dof).array();
 		SPDLOG_DEBUG("u (constrained)\n{}", mat_u);
 
-		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+		for (auto const & vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
-			auto const vtx_idx = (*itvtxh).idx();
-			attrib.x[*itvtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtx_idx, 0).data()};
+			attrib.x[vtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtxh.idx(), 0).data()};
+//			SPDLOG_DEBUG("({}, {}, {})\n", attrib.x[vtxh](0), attrib.x[vtxh](1), attrib.x[vtxh](2));
 		}
 
 		if (mat_u.lpNorm<Eigen::Infinity>() < epsilon)
@@ -151,7 +158,8 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 	using Tensor::Func::all;
 
 	Scalar const rho = attrib.material->rho;
-	Node::Force const & F = 1.0 / 4.0 * rho * (*attrib.f);
+	Node::Force const & F_by_m = attrib.material->F_by_m;
+	Node::Force const & F_by_V = rho * F_by_m;
 
 	std::vector<Node::Pos> u{};
 	u.resize(mesh.n_vertices());
@@ -181,8 +189,14 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 				auto const & cell_a = index_of(cell_vtxhs, vtxh_src);
 				auto const & cell_T = attrib.T[cellh];
 				auto const & cell_K = attrib.K[cellh];
+				auto const V = attrib.V[cellh];
+				auto const v = attrib.v[cellh];
 
-				auto const & Fa = attrib.v[cellh] * F;
+				// External forces for node `a`.
+				auto const J = v / V;
+				auto const & F_by_v = F_by_V / J;
+				using Tensor::Func::transpose;
+				auto const & Fa = 1.0 / 4.0 * v * F_by_v;
 
 				Ra += cell_T(cell_a, all) - Fa;
 				Kaa += cell_K(cell_a, all, cell_a, all);

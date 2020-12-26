@@ -8,28 +8,31 @@ namespace Attribute
 {
 namespace Body
 {
-Properties::Properties(Mesh &mesh) : ThisBase(mesh)
+Properties::Properties(Mesh & mesh) : ThisBase(mesh)
 {
-	(*(*this)) = MaterialProperties{0, 0, 0};
+	(*(*this)) = MaterialProperties{0, 0, 0, 0, {0, 0, 0}};
 }
-Force::Force(Mesh & mesh) : ThisBase(mesh)
-{
-	(*(*this)).zeros();
-}
+
 Surface::Surface(Mesh & mesh) : ThisBase(mesh)
 {
-	for (auto halffaceh : boost::make_iterator_range(mesh.halffaces()))
+	for (auto ithfh = mesh.bhf_iter(); ithfh.valid(); ithfh++)
 	{
-		if (!mesh.is_boundary(halffaceh))
-			continue;
 		SurfaceElement::Vtxhs vtxhs;
 		Tensor::Index vtx_idx = 0;
-		for (auto halfedgeh : boost::make_iterator_range(mesh.halfface_halfedges(halffaceh)))
+		for (auto halfedgeh : boost::make_iterator_range(mesh.halfface_halfedges(*ithfh)))
 			vtxhs[vtx_idx++] = mesh.halfedge(halfedgeh).from_vertex();
 		(*this)->push_back(vtxhs);
 	}
 }
 }  // namespace Body
+
+namespace Surface
+{
+Traction::Traction(Mesh & mesh) : ThisBase{mesh}
+{
+	for (auto hfh : boost::make_iterator_range(mesh.halffaces())) (*this)[hfh] = 0;
+}
+}  // namespace Surface
 
 namespace Vertex
 {
@@ -68,11 +71,11 @@ VertexHandles::VertexHandles(Mesh & mesh) : ThisBase{mesh}
 }
 
 MaterialShapeDerivative::MaterialShapeDerivative(
-	Mesh & mesh, VertexHandles const & vtxhs, Vertex::MaterialPosition const & X)
+	Mesh & mesh, VertexHandles const & vtxhs, Vertex::MaterialPosition const & X_)
 	: ThisBase{mesh}
 {
 	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
-	{ (*this)[*itcellh] = Derivatives::dN_by_dX(X.for_element(vtxhs[*itcellh])); }
+	{ (*this)[*itcellh] = Derivatives::dN_by_dX(X_.for_element(vtxhs[*itcellh])); }
 }
 
 NodalForces::NodalForces(Mesh & mesh) : ThisBase{mesh}
@@ -91,7 +94,6 @@ Stiffness::Stiffness(Mesh & mesh) : ThisBase(mesh)
 
 Attributes::Attributes(Mesh & mesh)
 	: material{mesh},
-	  f{mesh},
 	  surface_vtxh{mesh},
 	  x{mesh},
 	  X{mesh},

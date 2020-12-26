@@ -8,6 +8,7 @@ namespace FeltElements
 {
 using Mesh = OpenVolumeMesh::GeometricTetrahedralMeshV3d;
 using Vtxh = OpenVolumeMesh::VertexHandle;
+using Vtx = Mesh::PointT;
 template <std::size_t dim>
 using Vtxhs = std::array<Vtxh, dim>;
 using Cellh = OpenVolumeMesh::CellHandle;

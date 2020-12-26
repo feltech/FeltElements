@@ -11,9 +11,8 @@ namespace FeltElements::Derivatives
 [[nodiscard]] Element::StiffnessForcesVolume KTv(
 	Element::Positions const & x,
 	Element::ShapeDerivative const & dN_by_dX,
-	Scalar const V,
-	Scalar const lambda,
-	Scalar const mu);
+	Scalar lambda,
+	Scalar mu);
 
 [[nodiscard]] Element::Stiffness Kc(
 	Element::ShapeDerivative const & dN_by_dx, Scalar v, Element::Elasticity const & c);
@@ -27,7 +26,7 @@ namespace FeltElements::Derivatives
 [[nodiscard]] Element::Stress sigma(
 	Scalar J, Element::Gradient const & b, Scalar lambda, Scalar mu);
 
-[[nodiscard]] Scalar J(Element::Gradient const & F);
+[[nodiscard]] Scalar det_dx_by_dX(Element::Gradient const & F);
 [[nodiscard]] Element::Gradient b(Element::Gradient const & F);
 
 [[nodiscard]] Element::Gradient dx_by_dX(
@@ -36,7 +35,7 @@ namespace FeltElements::Derivatives
 	Element::Gradient const & dx_by_dL, Element::Gradient const & dL_by_dX);
 
 [[nodiscard]] Scalar V(Element::Positions const & x);
-[[nodiscard]] Scalar v(Scalar V, Element::Positions const & x);
+[[nodiscard]] Scalar v(Element::Positions const & x);
 
 [[nodiscard]] Element::Gradient dX_by_dL(Element::Positions const & X);
 [[nodiscard]] Element::Gradient dL_by_dX(Element::Gradient const & dX_by_dL);

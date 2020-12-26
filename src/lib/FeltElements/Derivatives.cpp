@@ -49,62 +49,61 @@ namespace FeltElements::ex
 {
 using namespace Tensor;
 
-auto const constexpr dX_by_dL = [](auto const & X) {
+constexpr auto dX_by_dL = [](auto const & X) {
 	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(X, Derivatives::dN_by_dL);
 };
 
-auto const constexpr dL_by_dX = [](auto const & dX_by_dL_) { return Func::inv(dX_by_dL_); };
+constexpr auto dL_by_dX = [](auto const & dX_by_dL_) { return Func::inv(dX_by_dL_); };
 
-auto const constexpr dX_by_dS = [](auto const & X) {
+constexpr auto dX_by_dS = [](auto const & X) {
 	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(X, Derivatives::dN_by_dS);
 };
 
-auto const constexpr dN_by_dX = [](auto const & dL_by_dX_) {
+constexpr auto dN_by_dX = [](auto const & dL_by_dX_) {
 	// dN/dX^T = dX/dL^(-T) * dN/dL^T => dN/dX = dN/dL * dX/dL^(-1) = dN/dL * dL/dX
 	return Func::einsum<Idxs<i, k>, Idxs<k, j>>(Derivatives::dN_by_dL, dL_by_dX_);
 };
 
-auto const constexpr dx_by_dX = [](auto const & x, auto const & dN_by_dX_) {
+constexpr auto dx_by_dX = [](auto const & x, auto const & dN_by_dX_) {
 	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(x, dN_by_dX_);
 };
 
-auto const constexpr finger = [](auto const & F) {
+constexpr auto finger = [](auto const & F) {
 	return Func::einsum<Idxs<i, k>, Idxs<j, k>>(F, F);
 };
 
-auto const constexpr sigma =
+constexpr auto sigma =
 	[](Scalar const J, auto const & b, Scalar const lambda, Scalar const mu) {
 		return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
 	};
 
-auto const constexpr t = [](Scalar const p, auto const & dX_by_dS_) {
+constexpr auto t = [](Scalar const p, auto const & dX_by_dS_) {
 	using Tensor::Func::all;
-	using Tensor::Func::fix;
 	using Tensor::Func::fix;
 	Node::Force const & dX1_by_dS = dX_by_dS_(all, fix<0>);
 	Node::Force const & dX2_by_dS = dX_by_dS_(all, fix<1>);
 	return (1.0 / 2.0) * p * cross(dX1_by_dS, dX2_by_dS);
 };
 
-auto const constexpr T = [](auto const & dN_by_dx, Scalar const v, auto const & sigma_) {
+constexpr auto T = [](auto const & dN_by_dx, auto const & sigma_) {
 	// T = v * sigma * dN/dx^T
-	return v * Func::einsum<Idxs<a, k>, Idxs<i, k>>(dN_by_dx, sigma_);
+	return Func::einsum<Idxs<a, k>, Idxs<i, k>>(dN_by_dx, sigma_);
 };
 
-auto const constexpr c = [](Scalar J, Scalar lambda, Scalar mu) {
+constexpr auto c = [](Scalar J, Scalar lambda, Scalar mu) {
 	Scalar const lambda_prime = lambda / J;
 	Scalar const mu_prime = (mu - lambda * std::log(J)) / J;
 
 	return lambda_prime * c_lambda + mu_prime * c_mu;
 };
 
-auto const constexpr Kc = [](auto const & dN_by_dx, auto const & c_) {
+constexpr auto Kc = [](auto const & dN_by_dx, auto const & c_) {
 	// Kc_ij = v * dN_a/dx_k * c_ikjl * dN_b/dx_l
 	return Func::einsum<Idxs<a, k>, Idxs<i, k, j, l>, Idxs<b, l>, Order<a, i, b, j>>(
 		dN_by_dx, c_, dN_by_dx);
 };
 
-auto const constexpr Ks = [](auto const & dN_by_dx, auto const & s) {
+constexpr auto Ks = [](auto const & dN_by_dx, auto const & s) {
 	// Ks_ij = v * dN_a/dx_k * sigma_kl * dN_b/dx_l * delta_ij
 	return Func::einsum<Idxs<a, k>, Idxs<k, l>, Idxs<b, l>, Idxs<i, j>, Order<a, i, b, j>>(
 		dN_by_dx, s, dN_by_dx, I);
@@ -116,15 +115,13 @@ namespace FeltElements::Derivatives
 Element::StiffnessForcesVolume KTv(
 	Element::Positions const & x,
 	Element::ShapeDerivative const & dN_by_dX,
-	Scalar const V,
 	Scalar const lambda,
 	Scalar const mu)
 {
-	Scalar const v = Derivatives::v(V, x);
-
 	Element::Gradient const F = ex::dx_by_dX(x, dN_by_dX);
 	auto const b = ex::finger(F);
-	Scalar const J = Derivatives::J(F);
+	Scalar const J = Derivatives::det_dx_by_dX(F);
+	Scalar const v = Derivatives::v(x); // TODO: but also v = J*V
 
 	auto const & dx_by_dL = ex::dX_by_dL(x);
 	auto const & dL_by_dx = ex::dL_by_dX(dx_by_dL);
@@ -137,7 +134,9 @@ Element::StiffnessForcesVolume KTv(
 	auto const & Ks = ex::Ks(dN_by_dx, sigma);
 
 	Element::Stiffness K = v * (Kc + Ks);
-	Element::Forces T = ex::T(dN_by_dx, v, sigma);
+	Element::Forces T = v * ex::T(dN_by_dx, sigma);
+
+	assert(Tensor::Func::all_of(T == T));  // Assert no NaNs
 
 	return Element::StiffnessForcesVolume(K, T, v);
 }
@@ -167,7 +166,7 @@ Node::Force t(Scalar const p, Element::SurfaceGradient const & dX_by_dS)
 Element::Forces T(
 	Element::ShapeDerivative const & dN_by_dx, Scalar const v, Element::Stress const & sigma)
 {
-	return ex::T(dN_by_dx, v, sigma);
+	return v * ex::T(dN_by_dx, sigma);
 }
 
 Element::Stress sigma(
@@ -176,7 +175,7 @@ Element::Stress sigma(
 	return ex::sigma(J, b, lambda, mu);
 }
 
-Scalar J(Element::Gradient const & dx_by_dX)
+Scalar det_dx_by_dX(Element::Gradient const & dx_by_dX)
 {
 	return Fastor::det(dx_by_dX);
 }
@@ -260,9 +259,11 @@ Scalar V(Element::Positions const & x)
 	return std::abs(Fastor::det(delta) / 6.0);
 }
 
-Scalar v(Scalar const V, Element::Positions const & x)
+Scalar v(Element::Positions const & x)
 {
-	return V * det_dx_by_dL(x);
+	// Volume in local coords (constant)
+	constexpr Scalar v_wrt_L = 1.0 / 6.0;
+	return v_wrt_L * det_dx_by_dL(x);
 }
 
 Scalar det_dx_by_dL(Element::Positions const & x)
@@ -344,8 +345,8 @@ Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([]() {  // NOLINT(cert
 	return det_dN_by_dL_;
 }());
 
-Tensor::Multi<Node::dim, Node::dim, Node::dim> const levi_civita =
-	([]() {	 // NOLINT(cert-err58-cpp)
+Tensor::Multi<Node::dim, Node::dim, Node::dim> const levi_civita = // NOLINT(cert-err58-cpp)
+	([]() {
 		using LeviCivita = Tensor::Multi<Node::dim, Node::dim, Node::dim>;
 		LeviCivita E;
 		int constexpr const count = static_cast<int>(Node::dim);

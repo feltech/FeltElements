@@ -25,17 +25,6 @@ SCENARIO("Mesh attributes")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_two);
 
-		WHEN("body force attribute is constructed")
-		{
-			Attribute::Body::Force const attrib_body_force{mesh};
-
-			THEN("it is zero initialised")
-			{
-				Node::Force const & F = *attrib_body_force;
-				CHECK(Tensor::Func::all_of(F == 0));
-			}
-		}
-
 		WHEN("material properties attribute is constructed")
 		{
 			Attribute::Body::Properties const attrib_material_properties{mesh};
@@ -46,6 +35,24 @@ SCENARIO("Mesh attributes")
 				CHECK(M.rho == 0);
 				CHECK(M.lambda == 0);
 				CHECK(M.mu == 0);
+				CHECK(M.p == 0);
+				using Tensor::Func::all_of;
+				CHECK(all_of(M.F_by_m == 0));
+			}
+		}
+
+		WHEN("surface traction attribute is constructed")
+		{
+			Attribute::Surface::Traction attrib_traction{mesh};
+
+			THEN("attributes are initialised to zero")
+			{
+				for (auto halffaceh : boost::make_iterator_range(mesh.halffaces()))
+				{
+					Node::Force zero;
+					zero.zeros();
+					Test::check_equal(attrib_traction[halffaceh], "traction", zero, "zero");
+				}
 			}
 		}
 
@@ -353,13 +360,23 @@ SCENARIO("Metrics of undeformed mesh")
 					// clang-format on
 				}
 
-				AND_WHEN("material volume is calculated")
+				AND_WHEN("material volume is calculated directly")
 				{
 					Scalar V = Derivatives::V(X);
 
 					THEN("volume is correct")
 					{
 						CHECK(V == 1.0 / 6.0);
+					}
+
+					AND_WHEN("material volume is calculated from local coord transform")
+					{
+						Scalar v = Derivatives::v(X);
+
+						THEN("volume is correct")
+						{
+							CHECK(v == 1.0 / 6.0);
+						}
 					}
 				}
 
@@ -397,6 +414,28 @@ SCENARIO("Metrics of undeformed mesh")
 						}
 					}
 				}
+			}
+		}
+	}
+
+	GIVEN("two-element mesh")
+	{
+		FeltElements::Mesh mesh = Test::load_ovm_mesh(file_name_two);
+
+		AND_WHEN("material volume is calculated directly and by local transform")
+		{
+			Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
+			Attribute::Vertex::MaterialPosition const attrib_X{mesh};
+
+			auto const & vtxhs = attrib_vtxhs[Cellh{0}];
+			Element::Positions const X = attrib_X.for_element(vtxhs);
+
+			Scalar V = Derivatives::V(X);
+			Scalar v = Derivatives::v(X);
+
+			THEN("volumes agree")
+			{
+				CHECK(V == v);
 			}
 		}
 	}
@@ -443,11 +482,11 @@ SCENARIO("Metrics of deformed mesh")
 				}
 			}
 
-			AND_WHEN("spatial volume is calculated from material volume")
+			AND_WHEN("spatial volume is calculated from local transform")
 			{
 				auto const & V = attrib.V[cellh];
 
-				Scalar v = Derivatives::v(V, x);
+				Scalar v = Derivatives::v(x);
 
 				THEN("volume is correct")
 				{
@@ -458,9 +497,11 @@ SCENARIO("Metrics of deformed mesh")
 				{
 					x(1, 2) += 0.1;
 
-					THEN("spatial volume calculated from material volume equals naive calculation")
+					THEN("spatial volume calculated from local transform equals naive calculation")
 					{
-						CHECK(Derivatives::V(x) == Derivatives::v(V, x));
+						CHECK(Derivatives::V(x) == Derivatives::v(x));
+						auto const& dx_by_dX = Derivatives::dx_by_dX(x, attrib.dN_by_dX[cellh]);
+						CHECK(Derivatives::v(x) == V * Derivatives::det_dx_by_dX(dx_by_dX));
 					}
 				}
 			}
@@ -1183,7 +1224,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 				AND_WHEN("Jacobian of deformation gradient is calculated")
 				{
-					double const J = Derivatives::J(F);
+					Scalar const J = Derivatives::det_dx_by_dX(F);
 
 					THEN("value is correct")
 					{
@@ -1257,7 +1298,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 				AND_WHEN("Jacobian of deformation gradient is calculated")
 				{
-					double const J = Derivatives::J(F);
+					double const J = Derivatives::det_dx_by_dX(F);
 
 					THEN("value is correct")
 					{
@@ -1310,7 +1351,7 @@ SCENARIO("Internal equivalent nodal force")
 		WHEN("neo-hookean stress is calculated")
 		{
 			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
-			auto const J = Derivatives::J(F);
+			auto const J = Derivatives::det_dx_by_dX(F);
 			auto const & b = Derivatives::b(F);
 
 			auto const & sigma = Derivatives::sigma(J, b, lambda, mu);
@@ -1367,7 +1408,7 @@ SCENARIO("Internal equivalent nodal force")
 			AND_WHEN("neo-hookean stress is calculated")
 			{
 				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
-				auto const J = Derivatives::J(F);
+				auto const J = Derivatives::det_dx_by_dX(F);
 				auto const & b = Derivatives::b(F);
 
 				auto const & sigma = Derivatives::sigma(J, b, lambda, mu);
@@ -1431,7 +1472,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
-			auto const J = Derivatives::J(F);
+			auto const J = Derivatives::det_dx_by_dX(F);
 			auto const & dN_by_dx = Derivatives::dN_by_dX(x);
 			auto const v = Derivatives::V(x);
 
@@ -1518,7 +1559,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
-			auto const J = Derivatives::J(F);
+			auto const J = Derivatives::det_dx_by_dX(F);
 			auto const & dN_by_dx = Derivatives::dN_by_dX(x);
 			auto const v = Derivatives::V(x);
 
@@ -1699,7 +1740,7 @@ SCENARIO("Solution of a single element")
 
 				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
 				auto const FFt = Derivatives::b(F);
-				Scalar const J = Derivatives::J(F);
+				Scalar const J = Derivatives::det_dx_by_dX(F);
 
 				auto const & dx_by_dL = Derivatives::dX_by_dL(x);
 				auto const & dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
@@ -1739,7 +1780,7 @@ SCENARIO("Solution of a single element")
 
 				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
 				auto const FFt = Derivatives::b(F);
-				Scalar const J = Derivatives::J(F);
+				Scalar const J = Derivatives::det_dx_by_dX(F);
 
 				auto const & dx_by_dL = Derivatives::dX_by_dL(x);
 				auto const & dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
@@ -1825,7 +1866,7 @@ SCENARIO("Solution of a single element")
 
 				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
 				auto const FFt = Derivatives::b(F);
-				Scalar const J = Derivatives::J(F);
+				Scalar const J = Derivatives::det_dx_by_dX(F);
 
 				auto const & dx_by_dL = Derivatives::dX_by_dL(x);
 				auto const & dL_by_dx = Derivatives::dL_by_dX(dx_by_dL);
@@ -1860,11 +1901,10 @@ SCENARIO("Solution of a single element")
 				{
 					using namespace Tensor;
 					using Func::einsum;
-					auto u_a = u(a, all);
 					Tensor::Map<3> const & T_a{&T(a, 0)};
 					Tensor::Map<3, 4, 3> const & K_a{&K(a, 0, 0, 0)};
 					Tensor::Matrix<3> const & K_a_a = K(a, all, a, all);
-					u_a = inv(K_a_a) % (-T_a - einsum<Idxs<i, b, j>, Idxs<b, j>>(K_a, u));
+					u(a, all) = inv(K_a_a) % (-T_a - einsum<Idxs<i, b, j>, Idxs<b, j>>(K_a, u));
 				}
 
 				// Boundary condition.
@@ -1899,107 +1939,125 @@ SCENARIO("Solution of a single element")
 	}
 }
 
+void check_solvers(
+	std::string_view const & file_name_prefix,
+	Mesh & mesh,
+	Attributes & attrib,
+	std::size_t const max_ldlt_steps,
+	std::size_t const max_guass_steps,
+	Scalar const expected_volume,
+	std::vector<Scalar> const & expected_positions)
+{
+	auto const total_volume = [&attrib]() {
+		return Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
+			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
+	};
+
+	auto const material_volume = total_volume();
+	Test::write_ovm_mesh(mesh, attrib.x, fmt::format("{}_initial_deformed", file_name_prefix));
+
+	CAPTURE(attrib.material->rho, attrib.material->lambda, attrib.material->mu, material_volume);
+
+	auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
+	Eigen::Index constexpr cols = 3;
+
+	INFO("Mesh material vertices")
+	Solver::LDLT::EigenMapOvmVertices mat_vtxs{mesh.vertex(Vtxh{0}).data(), rows, cols};
+	INFO(mat_vtxs)
+
+	INFO("Mesh initial spatial vertices")
+	Solver::LDLT::EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
+	INFO(mat_x)
+
+	auto const check_converges = [&mat_x, &total_volume, expected_volume, &expected_positions](
+									 auto const max_step, auto const final_step) {
+		CHECK(final_step < max_step);
+		Test::check_equal(
+			mat_x,
+			"x",
+			Solver::LDLT::EigenMapOvmVertices{
+				expected_positions.data(), mat_x.rows(), mat_x.cols()},
+			"expected");
+
+		CHECK(total_volume() == Approx(expected_volume).template margin(0.000005));
+	};
+
+	WHEN("displacement is solved using Eigen LDLT")
+	{
+		auto const max_steps = max_ldlt_steps;
+		size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps);
+
+		Test::write_ovm_mesh(mesh, attrib.x, fmt::format("{}_ldlt_{}", file_name_prefix, step));
+
+		THEN("solution converges to deformed mesh")
+		{
+			if (step < max_steps - 1)
+				WARN(fmt::format("LDLT converged in {} steps", step));
+			check_converges(max_steps, step);
+		}
+	}  // WHEN("displacement is solved")
+
+	WHEN("displacement is solved Gauss-Seidel style")
+	{
+		auto const max_steps = max_guass_steps;
+		std::size_t step = Solver::Gauss::solve(mesh, attrib, max_steps);
+
+		Test::write_ovm_mesh(mesh, attrib.x, fmt::format("{}_gauss_{}", file_name_prefix, step));
+
+		THEN("solution converges to deformed mesh")
+		{
+			if (step < max_steps - 1)
+				WARN(fmt::format("Gauss-Seidel converged in {} steps", step));
+			check_converges(max_steps, step);
+		}
+	}
+}
+
 SCENARIO("Solution of two elements")
 {
-	GIVEN("two element mesh and material properties")
+	GIVEN("two element mesh and basic material properties")
 	{
-		using namespace FeltElements;
-		//		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		//		Scalar mu = 0.4;	 // Shear modulus: 0.0003 - 0.02
-		//		Scalar const E = 1;	 // Young's modulus: 0.001 - 0.05
-		//		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		//		Scalar lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
-
 		auto mesh = Test::load_ovm_mesh(file_name_two);
 		Attributes attrib{mesh};
-		attrib.material->rho = 4;
-		attrib.material->lambda = 4;
-		attrib.material->mu = 4;
-		*attrib.f = Node::Force{0.0, -9.81, 0.0};
-		Test::write_ovm_mesh(mesh, attrib.x, "two_elem_initial");
-
-		auto const total_volume = [&attrib]() {
-			return Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
-				Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
-		};
-
-		auto const material_volume = total_volume();
-
+		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
+		constexpr Scalar E = 0.01 * 1e9;   // Young's modulus: 0.001 - 0.05 GPa
+		attrib.material->rho = 2 * 1e3;	   // Density: 1.1 - 2.3 Mg/m3
+		attrib.material->p = 0;			   // Normal pressure
+		attrib.material->mu = 0.01 * 1e9;  // Shear modulus: 0.0003 - 0.02 GPa
+		// -- Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+		attrib.material->lambda =
+			(attrib.material->mu * (E - 2 * attrib.material->mu)) / (3 * attrib.material->mu - E);
+		attrib.material->F_by_m = {0.0, 0.0, 0.0};	// Force per unit mass.
 		// Set boundary condition.
 		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
-			using OvmVtx = Mesh::PointT;
-			OvmVtx const & vtx = mesh.vertex(vtxh);
-
-			if (vtx == OvmVtx{0, 0, 0} || vtx == OvmVtx{1, 0, 0} || vtx == OvmVtx{0, 0, 1})
+			Vtx const & vtx = mesh.vertex(vtxh);
+			if (vtx == Vtx{0, 0, 0} || vtx == Vtx{1, 0, 0} || vtx == Vtx{0, 0, 1})
 				attrib.fixed_dof[vtxh] = Node::Pos{1.0, 1.0, 1.0};
 		}
-		// Set initial condition.
-		attrib.x[Vtxh{0}](0) += 0.5;
-		auto const initial_deformed_volume = total_volume();
 
-		CAPTURE(
-			attrib.material->rho,
-			attrib.material->lambda,
-			attrib.material->mu,
-			material_volume,
-			initial_deformed_volume);
-
-		auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
-		Eigen::Index constexpr cols = 3;
-
-		INFO("Mesh material vertices")
-		Solver::LDLT::EigenMapOvmVertices mat_vtxs{mesh.vertex(Vtxh{0}).data(), rows, cols};
-		INFO(mat_vtxs)
-
-		INFO("Mesh spatial vertices")
-		Solver::LDLT::EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
-		INFO(mat_x)
-
-		auto const check_converges = [&mat_x, &total_volume](
-										 auto const max_step, auto const final_step) {
-			WARN(fmt::format("Converged in {} steps", final_step));
-			CHECK(final_step < max_step);
-			// clang-format off
-			Test::check_equal(mat_x, "x", (
-				Solver::LDLT::VerticesMatrix{mat_x.rows(), mat_x.cols()} <<
-					0.5,             0,               0,
-					1,               0,               0,
-					0.333333333333,  0.627935241331, -0.460080182332,
-					0,               0,               1,
-					0.333333333333,  0.493114858533,  0.412891883689
-				).finished(), "expected");
-			// clang-format on
-
-			CHECK(total_volume() == Approx(0.0816044878));
-		};
-
-		WHEN("displacement is solved using Eigen LDLT")
+		AND_GIVEN("high density material under self-weight")
 		{
-			std::size_t constexpr max_steps = 13;
-			size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps);
+			attrib.material->rho *= 1000;				  // Density.
+			attrib.material->F_by_m = {0.0, -9.81, 0.0};  // Force per unit mass.
 
-			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_ldlt_{}", step));
-
-			THEN("solution converges to deformed mesh")
-			{
-				WARN(fmt::format("Converged in {} steps", step));
-				check_converges(max_steps, step);
-			}
-		}  // WHEN("displacement is solved")
-
-		WHEN("displacement is solved Gauss-Seidel style")
-		{
-			std::size_t constexpr max_steps = 63;
-			std::size_t step = Solver::Gauss::solve(mesh, attrib, max_steps);
-
-			Test::write_ovm_mesh(mesh, attrib.x, fmt::format("two_elem_gauss_{}", step));
-
-			THEN("solution converges to deformed mesh")
-			{
-				WARN(fmt::format("Converged in {} steps", step));
-				check_converges(max_steps, step);
-			}
+			check_solvers(
+				"self_weight",
+				mesh,
+				attrib,
+				4,
+				18,
+				0.1037816713,
+				{
+				// clang-format off
+				0,         0,         0,
+				1,         0,         0,
+				0,   0.67397, 0.0744009,
+				0,         0,         1,
+				0,  0.324633,  0.478132
+				// clang-format on
+				}
+			);
 		}
 	}
 }

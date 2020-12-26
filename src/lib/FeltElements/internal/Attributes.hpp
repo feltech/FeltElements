@@ -140,6 +140,26 @@ protected:
 };
 
 template <typename TData>
+struct SurfaceTraits : public BaseTraits<TData>
+{
+	using Handle = OpenVolumeMesh::HalfFaceHandle;
+	using Prop = OpenVolumeMesh::HalfFacePropertyT<TData>;
+};
+
+template <class Derived>
+class SurfaceBase : protected Base<Derived>
+{
+	using ThisBase = Base<Derived>;
+
+protected:
+	using Data = typename ThisBase::Data;
+	explicit SurfaceBase(Mesh & mesh)
+		: ThisBase{mesh.request_halfface_property<Data>(ThisBase::prop_name.data())}
+	{
+	}
+};
+
+template <typename TData>
 struct CellTraits : public BaseTraits<TData>
 {
 	using Handle = OpenVolumeMesh::CellHandle;
