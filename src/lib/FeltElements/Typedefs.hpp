@@ -80,7 +80,7 @@ using Stress = Gradient;
 using Stiffness = Tensor::Multi<count, Node::dim, count, Node::dim>;
 using Positions = Fastor::Tensor<Scalar, count, Node::dim>;
 using Forces = Fastor::Tensor<Scalar, count, Node::dim>;
-using StiffnessForcesVolume = std::tuple<Stiffness, Forces, Scalar>;
+using StiffnessResidual = std::tuple<Stiffness, Forces>;
 }  // namespace Element
 
 namespace SurfaceElement

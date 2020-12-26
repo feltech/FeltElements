@@ -22,19 +22,16 @@ constexpr auto const index_of = [](auto const & haystack, auto && needle) {
 constexpr Scalar penalty = 10e10;  // TODO: Brittle - depends on scaling.
 }  // namespace
 
-void update_elements_stiffness_and_forces(Mesh const & mesh, FeltElements::Attributes & attributes)
+void update_elements_stiffness_and_residual(
+	Mesh const & mesh, FeltElements::Attributes & attributes)
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells()))
 	{
 		auto const & cell_vtxhs = attributes.vtxh[cellh];
-		auto [K, T, v] = Derivatives::KTv(
-			attributes.x.for_element(cell_vtxhs),
-			attributes.dN_by_dX[cellh],
-			(*attributes.material).lambda,
-			(*attributes.material).mu);
-		attributes.v[cellh] = v;
-		attributes.T[cellh] = T;
+		auto [K, R] = Derivatives::KR(
+			attributes.x.for_element(cell_vtxhs), attributes.dN_by_dX[cellh], *attributes.material);
 		attributes.K[cellh] = K;
+		attributes.R[cellh] = R;
 	}
 }
 
@@ -53,11 +50,6 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 		return vec;
 	})();
 
-	Scalar const rho = attrib.material->rho;
-	Node::Force const & F_by_m = attrib.material->F_by_m;
-	// Force per unit *material* volume - density will change, push-forward per-element below.
-	Eigen::Vector3d const & F_by_V = rho * EigenConstTensorMap<1, 3>{F_by_m.data()};
-
 	Eigen::VectorXd mat_R{3 * mesh.n_vertices()};
 	Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
 	Eigen::VectorXd mat_u{3 * mesh.n_vertices()};
@@ -66,7 +58,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 	for (step = 0; step < max_steps; step++)
 	{
 		SPDLOG_DEBUG("LDLT iteration {}", step);
-		Solver::update_elements_stiffness_and_forces(mesh, attrib);
+		Solver::update_elements_stiffness_and_residual(mesh, attrib);
 
 		mat_R.setZero();
 		mat_K.setZero();
@@ -78,21 +70,14 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 			{
 				auto const & cell_vtxhs = attrib.vtxh[cellh];
 				auto const & cell_vtx_idx = index_of(cell_vtxhs, vtxh);
-				auto const & cell_T = attrib.T[cellh];
-				auto const V = attrib.V[cellh];
-				auto const v = attrib.v[cellh];
+				auto const & cell_R = attrib.R[cellh];
 
-				// Internal forces for node `a`.
-				auto const & Ta = EigenConstTensorMap<4, 3>{cell_T.data()}.block<1, 3>(
+				// Forces for node `a`.
+				auto const & Ra = EigenConstTensorMap<4, 3>{cell_R.data()}.block<1, 3>(
 					static_cast<Eigen::Index>(cell_vtx_idx), 0);
 
-				// External forces for node `a`.
-				auto const J = v / V;
-				auto const & F_by_v = F_by_V / J;
-				auto const & Fa = 1.0 / 4.0 * v * F_by_v.transpose();
-
 				// Update global residual with difference between internal and external forces.
-				mat_R.block<3, 1>(3 * vtx_idx, 0) += Ta - Fa;
+				mat_R.block<3, 1>(3 * vtx_idx, 0) += Ra;
 			}
 		}
 
@@ -139,7 +124,8 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 		for (auto const & vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
 			attrib.x[vtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtxh.idx(), 0).data()};
-//			SPDLOG_DEBUG("({}, {}, {})\n", attrib.x[vtxh](0), attrib.x[vtxh](1), attrib.x[vtxh](2));
+			//			SPDLOG_DEBUG("({}, {}, {})\n", attrib.x[vtxh](0), attrib.x[vtxh](1),
+			//attrib.x[vtxh](2));
 		}
 
 		if (mat_u.lpNorm<Eigen::Infinity>() < epsilon)
@@ -157,10 +143,6 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 	constexpr Scalar epsilon = 0.00001;
 	using Tensor::Func::all;
 
-	Scalar const rho = attrib.material->rho;
-	Node::Force const & F_by_m = attrib.material->F_by_m;
-	Node::Force const & F_by_V = rho * F_by_m;
-
 	std::vector<Node::Pos> u{};
 	u.resize(mesh.n_vertices());
 
@@ -169,7 +151,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 	{
 		SPDLOG_DEBUG("Gauss iteration {}", step);
 
-		Solver::update_elements_stiffness_and_forces(mesh, attrib);
+		Solver::update_elements_stiffness_and_residual(mesh, attrib);
 
 		for (auto & u_a : u) u_a.zeros();
 
@@ -187,18 +169,10 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 			{
 				auto const & cell_vtxhs = attrib.vtxh[cellh];
 				auto const & cell_a = index_of(cell_vtxhs, vtxh_src);
-				auto const & cell_T = attrib.T[cellh];
+				auto const & cell_R = attrib.R[cellh];
 				auto const & cell_K = attrib.K[cellh];
-				auto const V = attrib.V[cellh];
-				auto const v = attrib.v[cellh];
 
-				// External forces for node `a`.
-				auto const J = v / V;
-				auto const & F_by_v = F_by_V / J;
-				using Tensor::Func::transpose;
-				auto const & Fa = 1.0 / 4.0 * v * F_by_v;
-
-				Ra += cell_T(cell_a, all) - Fa;
+				Ra += cell_R(cell_a, all);
 				Kaa += cell_K(cell_a, all, cell_a, all);
 			}
 			diag(Kaa) += penalty * fixed_dof;

@@ -6,13 +6,19 @@
 
 #include "Typedefs.hpp"
 
-namespace FeltElements::Derivatives
+namespace FeltElements
 {
-[[nodiscard]] Element::StiffnessForcesVolume KTv(
+namespace Material
+{
+struct Properties;
+}
+
+namespace Derivatives
+{
+[[nodiscard]] Element::StiffnessResidual KR(
 	Element::Positions const & x,
 	Element::ShapeDerivative const & dN_by_dX,
-	Scalar lambda,
-	Scalar mu);
+	Material::Properties const & material);
 
 [[nodiscard]] Element::Stiffness Kc(
 	Element::ShapeDerivative const & dN_by_dx, Scalar v, Element::Elasticity const & c);
@@ -57,4 +63,5 @@ extern Element::ShapeDerivative const dN_by_dL;
 extern Element::SurfaceShapeDerivative const dN_by_dS;
 extern Element::ShapeDerivativeDeterminant const det_dN_by_dL;
 extern Tensor::Multi<3, 3, 3> const levi_civita;
-}  // namespace FeltElements::Derivatives
+}  // namespace Derivatives
+}  // namespace FeltElements

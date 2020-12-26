@@ -1,6 +1,6 @@
-#include "Attributes.hpp"
-
 #include <boost/range.hpp>
+
+#include "Attributes.hpp"
 
 namespace FeltElements
 {
@@ -10,7 +10,7 @@ namespace Body
 {
 Properties::Properties(Mesh & mesh) : ThisBase(mesh)
 {
-	(*(*this)) = MaterialProperties{0, 0, 0, 0, {0, 0, 0}};
+	(*(*this)) = Material::Properties{0, 0, 0, 0, {0, 0, 0}};
 }
 
 Surface::Surface(Mesh & mesh) : ThisBase(mesh)
@@ -48,18 +48,6 @@ FixedDOF::FixedDOF(Mesh & mesh) : ThisBase(mesh)
 
 namespace Cell
 {
-MaterialVolume::MaterialVolume(
-	Mesh & mesh, Cell::VertexHandles const & vtxh, Vertex::MaterialPosition const & X)
-	: ThisBase{mesh}
-{
-	for (auto cellh : boost::make_iterator_range(mesh.cells()))
-		(*this)[cellh] = Derivatives::V(X.for_element(vtxh[cellh]));
-}
-
-SpatialVolume::SpatialVolume(Mesh & mesh) : ThisBase{mesh}
-{
-	for (auto cellh : boost::make_iterator_range(mesh.cells())) (*this)[cellh] = 0;
-}
 
 VertexHandles::VertexHandles(Mesh & mesh) : ThisBase{mesh}
 {
@@ -99,10 +87,8 @@ Attributes::Attributes(Mesh & mesh)
 	  X{mesh},
 	  fixed_dof(mesh),
 	  vtxh{mesh},
-	  V{mesh, vtxh, X},
-	  v{mesh},
 	  dN_by_dX{mesh, vtxh, X},
-	  T{mesh},
+	  R{mesh},
 	  K{mesh}
 {
 }

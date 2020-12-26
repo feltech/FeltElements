@@ -31,7 +31,7 @@ SCENARIO("Mesh attributes")
 
 			THEN("it is zero initialised")
 			{
-				Attribute::MaterialProperties const & M = *attrib_material_properties;
+				Material::Properties const & M = *attrib_material_properties;
 				CHECK(M.rho == 0);
 				CHECK(M.lambda == 0);
 				CHECK(M.mu == 0);
@@ -162,37 +162,6 @@ SCENARIO("Mesh attributes")
 						{0.000000, 0.500000, 0.500000}
 					});
 					// clang-format on
-				}
-
-				AND_WHEN("element material volume attribute is constructed")
-				{
-					Attribute::Cell::MaterialVolume const attrib_material_volume{
-						mesh, attrib_vtxhs, attrib_x};
-
-					THEN("it is initialised to volume")
-					{
-						itcellh = mesh.cells_begin();
-						Scalar V = attrib_material_volume[*itcellh];
-						CHECK(V == 1.0 / 12.0);
-						itcellh++;
-						V = attrib_material_volume[*itcellh];
-						CHECK(V == 1.0 / 12.0);
-					}
-				}
-
-				AND_WHEN("element spatial volume attribute is constructed")
-				{
-					Attribute::Cell::SpatialVolume const attrib_spatial_volume{mesh};
-
-					THEN("it is initialised to zero")
-					{
-						itcellh = mesh.cells_begin();
-						Scalar V = attrib_spatial_volume[*itcellh];
-						CHECK(V == 0);
-						itcellh++;
-						V = attrib_spatial_volume[*itcellh];
-						CHECK(V == 0);
-					}
 				}
 			}
 		}
@@ -484,8 +453,6 @@ SCENARIO("Metrics of deformed mesh")
 
 			AND_WHEN("spatial volume is calculated from local transform")
 			{
-				auto const & V = attrib.V[cellh];
-
 				Scalar v = Derivatives::v(x);
 
 				THEN("volume is correct")
@@ -499,9 +466,9 @@ SCENARIO("Metrics of deformed mesh")
 
 					THEN("spatial volume calculated from local transform equals naive calculation")
 					{
-						CHECK(Derivatives::V(x) == Derivatives::v(x));
-						auto const& dx_by_dX = Derivatives::dx_by_dX(x, attrib.dN_by_dX[cellh]);
-						CHECK(Derivatives::v(x) == V * Derivatives::det_dx_by_dX(dx_by_dX));
+						Scalar V = Derivatives::V(x);
+						v = Derivatives::v(x);
+						CHECK(V == v);
 					}
 				}
 			}
@@ -1626,7 +1593,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 				}
 			}
 
-			WHEN("neo-hookian Cauchy stress tensor is calculated")
+			WHEN("neo-Hookean Cauchy stress tensor is calculated")
 			{
 				auto const & b = Derivatives::b(F);
 				auto const & sigma = Derivatives::sigma(J, b, lambda, mu);
@@ -1729,7 +1696,7 @@ SCENARIO("Solution of a single element")
 
 		WHEN("element stiffness and internal force tensor attributes are constructed")
 		{
-			Solver::update_elements_stiffness_and_forces(mesh, attrib);
+			Solver::update_elements_stiffness_and_residual(mesh, attrib);
 
 			THEN("attributes hold correct solutions")
 			{
@@ -1755,8 +1722,7 @@ SCENARIO("Solution of a single element")
 				auto const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
 				Element::Stiffness const & K = Kc + Ks;
 
-				CHECK(attrib.v[cellh] == v);
-				Test::check_equal(attrib.T[cellh], "T (attribute)", T, "T (check)");
+				Test::check_equal(attrib.R[cellh], "T (attribute)", T, "T (check)");
 				Test::check_equal(attrib.K[cellh], "K (attribute)", K, "K (check)");
 			}
 		}
@@ -1979,7 +1945,7 @@ void check_solvers(
 				expected_positions.data(), mat_x.rows(), mat_x.cols()},
 			"expected");
 
-		CHECK(total_volume() == Approx(expected_volume).template margin(0.000005));
+		CHECK(total_volume() == Approx(expected_volume).template margin(Test::epsilon));
 	};
 
 	WHEN("displacement is solved using Eigen LDLT")
@@ -2056,6 +2022,29 @@ SCENARIO("Solution of two elements")
 				0,         0,         1,
 				0,  0.324633,  0.478132
 				// clang-format on
+				}
+			);
+		}
+
+		AND_GIVEN("a free vertex is displaced")
+		{
+			attrib.x[Vtxh{2}] += Node::Pos{0.2, 0.2, 0.2};
+
+			check_solvers(
+				"self_weight",
+				mesh,
+				attrib,
+				2,
+				2,
+				1.0 / 6.0,
+				{
+					// clang-format off
+					0,         0,         0,
+					1,         0,         0,
+					0,         1,         0,
+					0,         0,         1,
+					0,       0.5,       0.5
+					// clang-format on
 				}
 			);
 		}

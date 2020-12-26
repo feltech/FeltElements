@@ -12,7 +12,7 @@ class Attributes;
 
 namespace Solver
 {
-void update_elements_stiffness_and_forces(Mesh const & mesh, Attributes & attributes);
+void update_elements_stiffness_and_residual(Mesh const & mesh, Attributes & attributes);
 
 namespace LDLT
 {

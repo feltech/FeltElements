@@ -1,6 +1,7 @@
 #include "Derivatives.hpp"
 
 #include "TetGenIO.hpp"
+#include "Material.hpp"
 
 namespace
 {
@@ -112,11 +113,10 @@ constexpr auto Ks = [](auto const & dN_by_dx, auto const & s) {
 
 namespace FeltElements::Derivatives
 {
-Element::StiffnessForcesVolume KTv(
+Element::StiffnessResidual KR(
 	Element::Positions const & x,
 	Element::ShapeDerivative const & dN_by_dX,
-	Scalar const lambda,
-	Scalar const mu)
+	Material::Properties const & material)
 {
 	Element::Gradient const F = ex::dx_by_dX(x, dN_by_dX);
 	auto const b = ex::finger(F);
@@ -127,18 +127,31 @@ Element::StiffnessForcesVolume KTv(
 	auto const & dL_by_dx = ex::dL_by_dX(dx_by_dL);
 	Element::ShapeDerivative const dN_by_dx = ex::dN_by_dX(dL_by_dx);
 
-	Element::Stress const sigma = ex::sigma(J, b, lambda, mu);
+	Element::Stress const sigma = ex::sigma(J, b, material.lambda, material.mu);
 
-	auto const & c = ex::c(J, lambda, mu);
+	auto const & c = ex::c(J, material.lambda, material.mu);
 	auto const & Kc = ex::Kc(dN_by_dx, c);
 	auto const & Ks = ex::Ks(dN_by_dx, sigma);
 
+	// Tangent stiffness matrix.
 	Element::Stiffness K = v * (Kc + Ks);
-	Element::Forces T = v * ex::T(dN_by_dx, sigma);
+	// Internal forces.
+	auto const & T_by_v = ex::T(dN_by_dx, sigma);
+	// External forces
+	auto const & F_by_V = material.F_by_m * material.rho;
+	Node::Force const F_by_v_per_node = 1.0 / 4.0 * F_by_V / J;
+	Element::Forces F_by_v;
+	using Tensor::Func::all;
+	F_by_v(0, all) = F_by_v_per_node;
+	F_by_v(1, all) = F_by_v_per_node;
+	F_by_v(2, all) = F_by_v_per_node;
+	F_by_v(3, all) = F_by_v_per_node;
 
-	assert(Tensor::Func::all_of(T == T));  // Assert no NaNs
+	Element::Forces const R = v * (T_by_v - F_by_v);
 
-	return Element::StiffnessForcesVolume(K, T, v);
+	assert(Tensor::Func::all_of(R == R));  // Assert no NaNs
+
+	return {K, R};
 }
 
 Element::Stiffness Kc(

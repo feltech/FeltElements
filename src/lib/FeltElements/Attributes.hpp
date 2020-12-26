@@ -1,24 +1,12 @@
 #pragma once
 
+#include "Material.hpp"
 #include "internal/Attributes.hpp"
 
 namespace FeltElements
 {
 namespace Attribute
 {
-struct MaterialProperties
-{
-	/// Density.
-	Scalar rho;
-	/// Shear modulus / Lame's second parameter.
-	Scalar mu;
-	/// Lame's first parameter.
-	Scalar lambda;
-	/// Pressure
-	Scalar p;
-	/// Body force per unit mass (i.e. acceleration).
-	Node::Force F_by_m;
-};
 /*
  * Forward declarations
  */
@@ -40,8 +28,6 @@ class Traction;
 }
 namespace Cell
 {
-class MaterialVolume;
-class SpatialVolume;
 class VertexHandles;
 class MaterialShapeDerivative;
 class NodalForces;
@@ -51,7 +37,7 @@ class Stiffness;
 namespace internal
 {
 template <>
-struct Traits<Body::Properties> : public MeshTraits<MaterialProperties>
+struct Traits<Body::Properties> : public MeshTraits<Material::Properties>
 {
 	static constexpr std::string_view prop_name = "material_properties";
 };
@@ -79,16 +65,6 @@ template <>
 struct Traits<Vertex::FixedDOF> : public VertexTraits<Node::Pos>
 {
 	static constexpr std::string_view prop_name = "fixed_dof";
-};
-template <>
-struct Traits<Cell::MaterialVolume> : public CellTraits<Scalar>
-{
-	static constexpr std::string_view prop_name = "material_volume";
-};
-template <>
-struct Traits<Cell::SpatialVolume> : public CellTraits<Scalar>
-{
-	static constexpr std::string_view prop_name = "spatial_volume";
 };
 template <>
 struct Traits<Cell::VertexHandles> : public CellTraits<Element::Vtxhs>
@@ -182,24 +158,6 @@ public:
 
 namespace Cell
 {
-class MaterialVolume final : private internal::CellBase<MaterialVolume>
-{
-	using ThisBase = internal::CellBase<MaterialVolume>;
-
-public:
-	explicit MaterialVolume(
-		Mesh & mesh, Cell::VertexHandles const & vtxh, Vertex::MaterialPosition const & X);
-	using ThisBase::operator[];
-};
-
-class SpatialVolume final : private internal::CellBase<SpatialVolume>
-{
-	using ThisBase = internal::CellBase<SpatialVolume>;
-
-public:
-	explicit SpatialVolume(Mesh & mesh);
-	using ThisBase::operator[];
-};
 
 class VertexHandles final : private internal::CellBase<VertexHandles>
 {
@@ -250,10 +208,8 @@ struct Attributes final
 	Attribute::Vertex::MaterialPosition const X;
 	Attribute::Vertex::FixedDOF fixed_dof;
 	Attribute::Cell::VertexHandles const vtxh;
-	Attribute::Cell::MaterialVolume const V;
-	Attribute::Cell::SpatialVolume v;
 	Attribute::Cell::MaterialShapeDerivative const dN_by_dX;
-	Attribute::Cell::NodalForces T;
+	Attribute::Cell::NodalForces R;
 	Attribute::Cell::Stiffness K;
 };
 
