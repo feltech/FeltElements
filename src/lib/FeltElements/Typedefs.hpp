@@ -1,7 +1,7 @@
 #pragma once
 #include <Fastor/Fastor.h>
-
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include <boost/container/static_vector.hpp>
 
 namespace FeltElements
 {
@@ -64,6 +64,7 @@ using Force = Tensor::Vector<dim>;
 namespace Element
 {
 static constexpr Tensor::Index count = 4;
+static constexpr Tensor::Index num_faces = 4;
 
 using Vtxhs = FeltElements::Vtxhs<count>;
 using IsoCoordDerivative = Tensor::Matrix<Node::dim, count>;
@@ -82,10 +83,15 @@ using Forces = Fastor::Tensor<Scalar, count, Node::dim>;
 using StiffnessResidual = std::tuple<Stiffness, Forces>;
 }  // namespace Element
 
-namespace SurfaceElement
+namespace BoundaryElement
 {
 static constexpr Tensor::Index count = Element::count - 1;
 using Vtxhs = FeltElements::Vtxhs<count>;
 using Positions = Fastor::Tensor<Scalar, count, Node::dim>;
+}
+
+namespace Element
+{
+using Boundary = boost::container::static_vector<BoundaryElement::Vtxhs, Element::num_faces>;
 }
 }  // namespace FeltElements

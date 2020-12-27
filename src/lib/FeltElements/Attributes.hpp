@@ -32,6 +32,7 @@ class VertexHandles;
 class MaterialShapeDerivative;
 class NodalForces;
 class Stiffness;
+class Boundary;
 }  // namespace Cell
 
 namespace internal
@@ -47,7 +48,7 @@ struct Traits<MeshBody::Forces> : public MeshTraits<Body::Forces>
 	static constexpr std::string_view prop_name = "body_forces";
 };
 template <>
-struct Traits<MeshBody::Surface> : public MeshTraits<std::vector<SurfaceElement::Vtxhs>>
+struct Traits<MeshBody::Surface> : public MeshTraits<std::vector<BoundaryElement::Vtxhs>>
 {
 	static constexpr std::string_view prop_name = "surface_vertices";
 };
@@ -86,11 +87,15 @@ struct Traits<Cell::Stiffness> : public CellTraits<Element::Stiffness>
 {
 	static constexpr std::string_view prop_name = "stiffness";
 };
-
 template <>
 struct Traits<Cell::MaterialShapeDerivative> : public CellTraits<Element::ShapeDerivative>
 {
 	static constexpr std::string_view prop_name = "material_shape_derivative";
+};
+template <>
+struct Traits<Cell::Boundary> : public CellTraits<Element::Boundary>
+{
+	static constexpr std::string_view prop_name = "element_boundary";
 };
 }  // namespace internal
 
@@ -207,6 +212,15 @@ class Stiffness final : private internal::CellBase<Stiffness>
 
 public:
 	explicit Stiffness(Mesh & mesh);
+	using ThisBase::operator[];
+};
+
+class Boundary final : private internal::CellBase<Boundary>
+{
+	using ThisBase = internal::CellBase<Boundary>;
+
+public:
+	explicit Boundary(Mesh & mesh);
 	using ThisBase::operator[];
 };
 }  // namespace Cell

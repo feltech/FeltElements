@@ -50,7 +50,7 @@ namespace Derivatives
 [[nodiscard]] Element::CartesianDerivative dx_by_dN(
 	Element::ShapeCartesianTransform const & N_to_x);
 
-[[nodiscard]] Element::SurfaceGradient dX_by_dS(SurfaceElement::Positions const & X);
+[[nodiscard]] Element::SurfaceGradient dX_by_dS(BoundaryElement::Positions const & X);
 
 [[nodiscard]] Element::ShapeDerivative dN_by_dX(Element::Gradient const & dL_by_dx);
 [[nodiscard]] Element::ShapeDerivative dN_by_dX(Element::ShapeCartesianTransform const & N_to_x);

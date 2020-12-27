@@ -19,7 +19,7 @@ Surface::Surface(Mesh & mesh) : ThisBase(mesh)
 {
 	for (auto ithfh = mesh.bhf_iter(); ithfh.valid(); ithfh++)
 	{
-		SurfaceElement::Vtxhs vtxhs;
+		BoundaryElement::Vtxhs vtxhs;
 		Tensor::Index vtx_idx = 0;
 		for (auto halfedgeh : boost::make_iterator_range(mesh.halfface_halfedges(*ithfh)))
 			vtxhs[vtx_idx++] = mesh.halfedge(halfedgeh).from_vertex();
@@ -82,6 +82,27 @@ Stiffness::Stiffness(Mesh & mesh) : ThisBase(mesh)
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells()))
 		(*this)[cellh] = 0;
+}
+
+Boundary::Boundary(Mesh & mesh) : CellBase(mesh)
+{
+	for (auto cellh : boost::make_iterator_range(mesh.cells()))
+		for (auto hfh : boost::make_iterator_range(mesh.cell_halffaces(cellh)))
+		{
+			if (!mesh.is_boundary(Mesh::face_handle(hfh)))
+				continue;
+
+			BoundaryElement::Vtxhs vtxhs;
+			Tensor::Index vtx_idx = 0;
+			// Get opposite half-face so winding order is on the outside (i.e. normal calculated
+			// from cross product points outward).
+			Mesh::Face const boundary = mesh.opposite_halfface(hfh);
+			for (auto const & heh : boundary.halfedges())
+				vtxhs[vtx_idx++] = mesh.halfedge(heh).from_vertex();
+			assert(vtx_idx == 3);
+
+			(*this)[cellh].push_back(vtxhs);
+		}
 }
 }  // namespace Cell
 }  // namespace Attribute

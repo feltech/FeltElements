@@ -218,7 +218,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("surface elements attribute is constructed")
 		{
-			Attribute::MeshBody::Surface const attrib_surface{mesh};
+			Attribute::Cell::Boundary const attrib_surface{mesh};
 			Attribute::Vertex::MaterialPosition const attrib_X{mesh};
 
 			THEN("it is initialised to the surface vertices of the mesh")
@@ -227,24 +227,31 @@ SCENARIO("Mesh attributes")
 
 				std::vector<Triangle> result;
 
-				for (auto & vtxhs : *attrib_surface)
+				for (auto cellh : boost::make_iterator_range(mesh.cells()))
 				{
-					using Tensor::Func::all;
-					using Tensor::Func::cross;
-					using Tensor::Func::fseq;
-					using Tensor::Func::norm;
+					auto const & surface_elems = attrib_surface[cellh];
+					// 3 sides of each tetrahedron are boundary elements.
+					CHECK(surface_elems.size() == 3);
 
-					SurfaceElement::Positions const & x = attrib_X.for_element(vtxhs);
-					Triangle triangle = 0;
-					Tensor::Vector<3> const vtx0 = x(0, all);
-					Tensor::Vector<3> const vtx1 = x(1, all);
-					Tensor::Vector<3> const vtx2 = x(2, all);
-					Tensor::Vector<3> normal = cross(vtx1 - vtx0, vtx2 - vtx0);
-					normal /= norm(normal);
+					for (auto const & vtxhs : surface_elems)
+					{
+						using Tensor::Func::all;
+						using Tensor::Func::cross;
+						using Tensor::Func::fseq;
+						using Tensor::Func::norm;
 
-					triangle(fseq<0, 3>(), all) = x;
-					triangle(3, all) = normal;
-					result.push_back(triangle);
+						BoundaryElement::Positions const & x = attrib_X.for_element(vtxhs);
+						Triangle triangle = 0;
+						Tensor::Vector<3> const vtx0 = x(0, all);
+						Tensor::Vector<3> const vtx1 = x(1, all);
+						Tensor::Vector<3> const vtx2 = x(2, all);
+						Tensor::Vector<3> normal = cross(vtx1 - vtx0, vtx2 - vtx0);
+						normal /= norm(normal);
+
+						triangle(fseq<0, 3>(), all) = x;
+						triangle(3, all) = normal;
+						result.push_back(triangle);
+					}
 				}
 
 				// clang-format off
@@ -731,13 +738,13 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			using Tensor::Func::fseq;
 			using Tensor::Func::last;
 
-			SurfaceElement::Positions const & Xs1 =
+			BoundaryElement::Positions const & Xs1 =
 				attrib.X.for_element(attrib.surface_vtxh->at(0));
-			SurfaceElement::Positions const & Xs2 =
+			BoundaryElement::Positions const & Xs2 =
 				attrib.X.for_element(attrib.surface_vtxh->at(1));
-			SurfaceElement::Positions const & Xs3 =
+			BoundaryElement::Positions const & Xs3 =
 				attrib.X.for_element(attrib.surface_vtxh->at(2));
-			SurfaceElement::Positions const & Xs4 =
+			BoundaryElement::Positions const & Xs4 =
 				attrib.X.for_element(attrib.surface_vtxh->at(3));
 
 			auto const & dX1_by_dS = Derivatives::dX_by_dS(Xs1);

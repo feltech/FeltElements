@@ -236,7 +236,7 @@ Element::Gradient dX_by_dL(Element::Positions const & X)
 	return ex::dX_by_dL(X);
 }
 
-Element::SurfaceGradient dX_by_dS(SurfaceElement::Positions const & X)
+Element::SurfaceGradient dX_by_dS(BoundaryElement::Positions const & X)
 {
 	return ex::dX_by_dS(X);
 }
