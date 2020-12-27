@@ -1,8 +1,9 @@
 #include <string_view>
 
-#include <boost/range/iterator_range.hpp>
 #include <OpenVolumeMesh/Core/PropertyDefines.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include <boost/range/algorithm/transform.hpp>
+#include <boost/range/iterator_range.hpp>
 
 #include "FeltElements/Typedefs.hpp"
 
@@ -136,6 +137,20 @@ protected:
 			x(node_idx, all) = (*this)[vtxhs[node_idx]];
 
 		return x;
+	}
+
+	[[nodiscard]] Element::BoundaryPositions for_elements(
+		Element::Vtxhs const & vtxhs, Element::BoundaryVtxhIdxs const & vtxhidxs) const
+	{
+		Element::BoundaryPositions boundary_pos;
+		const auto to_tensor = [this, &vtxhs](auto const & idxs) {
+			BoundaryElement::Vtxhs boundary_vtxhs;
+			for (std::size_t i = 0; i < idxs.size(); i++)
+				boundary_vtxhs[i] = vtxhs[idxs[i]];
+			return for_element(boundary_vtxhs);
+		};
+		boost::transform(vtxhidxs, std::back_inserter(boundary_pos), to_tensor);
+		return boundary_pos;
 	}
 };
 

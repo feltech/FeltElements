@@ -218,28 +218,34 @@ SCENARIO("Mesh attributes")
 
 		WHEN("surface elements attribute is constructed")
 		{
-			Attribute::Cell::Boundary const attrib_surface{mesh};
+			Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
+			Attribute::Cell::Boundary const attrib_boundary{mesh, attrib_vtxhs};
 			Attribute::Vertex::MaterialPosition const attrib_X{mesh};
 
 			THEN("it is initialised to the surface vertices of the mesh")
 			{
 				using Triangle = Tensor::Matrix<4, 3>;
 
-				std::vector<Triangle> result;
+				std::vector<Triangle> trianglesFromVtxhs;
 
 				for (auto cellh : boost::make_iterator_range(mesh.cells()))
 				{
-					auto const & surface_elems = attrib_surface[cellh];
+					auto const & cell_boundary = attrib_boundary[cellh];
+					auto const & cell_vtxhs = attrib_vtxhs[cellh];
 					// 3 sides of each tetrahedron are boundary elements.
-					CHECK(surface_elems.size() == 3);
+					CHECK(cell_boundary.size() == 3);
 
-					for (auto const & vtxhs : surface_elems)
+					for (auto const & vtxhidxs : cell_boundary)
 					{
 						using Tensor::Func::all;
 						using Tensor::Func::cross;
 						using Tensor::Func::fseq;
 						using Tensor::Func::norm;
 
+						BoundaryElement::Vtxhs vtxhs;
+						vtxhs[0] = cell_vtxhs[vtxhidxs[0]];
+						vtxhs[1] = cell_vtxhs[vtxhidxs[1]];
+						vtxhs[2] = cell_vtxhs[vtxhidxs[2]];
 						BoundaryElement::Positions const & x = attrib_X.for_element(vtxhs);
 						Triangle triangle = 0;
 						Tensor::Vector<3> const vtx0 = x(0, all);
@@ -250,7 +256,36 @@ SCENARIO("Mesh attributes")
 
 						triangle(fseq<0, 3>(), all) = x;
 						triangle(3, all) = normal;
-						result.push_back(triangle);
+						trianglesFromVtxhs.push_back(triangle);
+					}
+				}
+
+				std::vector<Triangle> trianglesFromX;
+
+				for (auto cellh : boost::make_iterator_range(mesh.cells()))
+				{
+					auto const & cell_boundary = attrib_boundary[cellh];
+					auto const & cell_vtxhs = attrib_vtxhs[cellh];
+					Element::BoundaryPositions const xs =
+						attrib_X.for_elements(cell_vtxhs, cell_boundary);
+
+					for (auto const & x : xs)
+					{
+						using Tensor::Func::all;
+						using Tensor::Func::cross;
+						using Tensor::Func::fseq;
+						using Tensor::Func::norm;
+
+						Triangle triangle = 0;
+						Tensor::Vector<3> const vtx0 = x(0, all);
+						Tensor::Vector<3> const vtx1 = x(1, all);
+						Tensor::Vector<3> const vtx2 = x(2, all);
+						Tensor::Vector<3> normal = cross(vtx1 - vtx0, vtx2 - vtx0);
+						normal /= norm(normal);
+
+						triangle(fseq<0, 3>(), all) = x;
+						triangle(3, all) = normal;
+						trianglesFromX.push_back(triangle);
 					}
 				}
 
@@ -288,10 +323,16 @@ SCENARIO("Mesh attributes")
 				}};
 				// clang-format on
 
-				CHECK(result.size() == expected.size());
+				CHECK(trianglesFromVtxhs.size() == expected.size());
+				CHECK(trianglesFromX.size() == expected.size());
 
-				for (std::size_t tri_idx = 0; tri_idx < result.size(); tri_idx++)
-					Test::check_equal(result[tri_idx], "result", expected[tri_idx], "expected");
+				for (std::size_t tri_idx = 0; tri_idx < trianglesFromVtxhs.size(); tri_idx++)
+					Test::check_equal(
+						trianglesFromVtxhs[tri_idx], "from vtxhs", expected[tri_idx], "expected");
+
+				for (std::size_t tri_idx = 0; tri_idx < trianglesFromX.size(); tri_idx++)
+					Test::check_equal(
+						trianglesFromX[tri_idx], "from x", expected[tri_idx], "expected");
 			}
 		}
 
@@ -2083,6 +2124,29 @@ SCENARIO("Solution of two elements")
 					0,         1,         0,
 					0,         0,         1,
 					0,       0.5,       0.5
+					// clang-format on
+				});
+		}
+
+		AND_GIVEN("atmospheric pressure")
+		{
+			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
+			attrib.forces->p = -10 * atm;
+
+			check_solvers(
+				"pressure",
+				mesh,
+				attrib,
+				10,
+				12,
+				0.117262742,
+				{
+					// clang-format off
+				0,            0,            0,
+				1,            0,            0,
+				0,            0.797073,     0.113693,
+				0,            0,            1,
+				0,            0.381007,     0.459038
 					// clang-format on
 				});
 		}

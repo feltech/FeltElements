@@ -93,7 +93,7 @@ struct Traits<Cell::MaterialShapeDerivative> : public CellTraits<Element::ShapeD
 	static constexpr std::string_view prop_name = "material_shape_derivative";
 };
 template <>
-struct Traits<Cell::Boundary> : public CellTraits<Element::Boundary>
+struct Traits<Cell::Boundary> : public CellTraits<Element::BoundaryVtxhIdxs>
 {
 	static constexpr std::string_view prop_name = "element_boundary";
 };
@@ -154,6 +154,7 @@ public:
 	explicit MaterialPosition(Mesh & mesh);
 	using ThisBase::operator[];
 	using ThisBase::for_element;
+	using ThisBase::for_elements;
 };
 
 class SpatialPosition final : private internal::VertexPositionBase<SpatialPosition>
@@ -164,6 +165,7 @@ public:
 	explicit SpatialPosition(Mesh & mesh);
 	using ThisBase::operator[];
 	using ThisBase::for_element;
+	using ThisBase::for_elements;
 };
 
 class FixedDOF final : private internal::VertexBase<FixedDOF>
@@ -220,7 +222,7 @@ class Boundary final : private internal::CellBase<Boundary>
 	using ThisBase = internal::CellBase<Boundary>;
 
 public:
-	explicit Boundary(Mesh & mesh);
+	explicit Boundary(Mesh & mesh, VertexHandles const & vtxhs);
 	using ThisBase::operator[];
 };
 }  // namespace Cell
@@ -236,6 +238,7 @@ struct Attributes final
 	Attribute::Vertex::MaterialPosition const X;
 	Attribute::Vertex::FixedDOF fixed_dof;
 	Attribute::Cell::VertexHandles const vtxh;
+	Attribute::Cell::Boundary const boundary;
 	Attribute::Cell::MaterialShapeDerivative const dN_by_dX;
 	Attribute::Cell::NodalForces R;
 	Attribute::Cell::Stiffness K;

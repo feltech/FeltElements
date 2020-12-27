@@ -77,14 +77,6 @@ constexpr auto sigma =
 		return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
 	};
 
-constexpr auto t = [](Scalar const p, auto const & dX_by_dS_) {
-	using Tensor::Func::all;
-	using Tensor::Func::fix;
-	Node::Force const & dX1_by_dS = dX_by_dS_(all, fix<0>);
-	Node::Force const & dX2_by_dS = dX_by_dS_(all, fix<1>);
-	return (1.0 / 2.0) * p * cross(dX1_by_dS, dX2_by_dS);
-};
-
 constexpr auto T = [](auto const & dN_by_dx, auto const & sigma_) {
 	// T = v * sigma * dN/dx^T
 	return Func::einsum<Idxs<a, k>, Idxs<i, k>>(dN_by_dx, sigma_);
@@ -114,6 +106,8 @@ namespace FeltElements::Derivatives
 {
 Element::StiffnessResidual KR(
 	Element::Positions const & x,
+	Element::BoundaryVtxhIdxs const & S_idxs,
+	Element::BoundaryPositions const & S,
 	Element::ShapeDerivative const & dN_by_dX,
 	Body::Material const & material, Body::Forces const & forces)
 {
@@ -134,9 +128,11 @@ Element::StiffnessResidual KR(
 
 	// Tangent stiffness matrix.
 	Element::Stiffness K = v * (Kc + Ks);
+
 	// Internal forces.
 	auto const & T_by_v = ex::T(dN_by_dx, sigma);
-	// External forces
+
+	// Body force.
 	auto const & F_by_V = forces.F_by_m * material.rho;
 	Node::Force const F_by_v_per_node = 1.0 / 4.0 * F_by_V / J;
 	Element::Forces F_by_v;
@@ -146,7 +142,17 @@ Element::StiffnessResidual KR(
 	F_by_v(2, all) = F_by_v_per_node;
 	F_by_v(3, all) = F_by_v_per_node;
 
-	Element::Forces const R = v * (T_by_v - F_by_v);
+	Element::Forces R = v * (T_by_v - F_by_v);
+
+	// Traction force.
+	for (Tensor::Index side_idx = 0; side_idx < S.size(); side_idx++)
+	{
+		auto const & s = S[side_idx];
+		auto const & t = Derivatives::t(forces.p, Derivatives::dX_by_dS(s));
+
+		for (Tensor::Index node_idx : S_idxs[side_idx])
+			R(node_idx, all) -= t;
+	}
 
 	assert(Tensor::Func::all_of(R == R));  // Assert no NaNs
 
@@ -172,7 +178,11 @@ Element::Elasticity c(Scalar J, Scalar lambda, Scalar mu)
 
 Node::Force t(Scalar const p, Element::SurfaceGradient const & dX_by_dS)
 {
-	return ex::t(p, dX_by_dS);
+	using Tensor::Func::all;
+	using Tensor::Func::fix;
+	Node::Force const & dX1_by_dS = dX_by_dS(all, fix<0>);
+	Node::Force const & dX2_by_dS = dX_by_dS(all, fix<1>);
+	return (1.0 / 2.0) * p * cross(dX1_by_dS, dX2_by_dS);
 }
 
 Element::Forces T(

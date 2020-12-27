@@ -26,9 +26,13 @@ void update_elements_stiffness_and_residual(
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells()))
 	{
-		auto const & cell_vtxhs = attributes.vtxh[cellh];
+		auto const & vtxhs = attributes.vtxh[cellh];
+		auto const & boundary_vtxhidxs = attributes.boundary[cellh];
+
 		auto [K, R] = Derivatives::KR(
-			attributes.x.for_element(cell_vtxhs),
+			attributes.x.for_element(vtxhs),
+			boundary_vtxhidxs,
+			attributes.x.for_elements(vtxhs, boundary_vtxhidxs),
 			attributes.dN_by_dX[cellh],
 			*attributes.material,
 			*attributes.forces);

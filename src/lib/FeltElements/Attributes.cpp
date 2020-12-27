@@ -1,6 +1,6 @@
 #include "Attributes.hpp"
 
-#include <boost/range.hpp>
+#include <boost/range/algorithm/find.hpp>
 
 #include "Derivatives.hpp"
 
@@ -84,25 +84,36 @@ Stiffness::Stiffness(Mesh & mesh) : ThisBase(mesh)
 		(*this)[cellh] = 0;
 }
 
-Boundary::Boundary(Mesh & mesh) : CellBase(mesh)
+Boundary::Boundary(Mesh & mesh, VertexHandles const & vtxhs) : CellBase(mesh)
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells()))
+	{
+		auto const& cell_vtxhs = vtxhs[cellh];
+
 		for (auto hfh : boost::make_iterator_range(mesh.cell_halffaces(cellh)))
 		{
 			if (!mesh.is_boundary(Mesh::face_handle(hfh)))
 				continue;
 
-			BoundaryElement::Vtxhs vtxhs;
+			BoundaryElement::VtxhIdxs vtxhidxs;
 			Tensor::Index vtx_idx = 0;
 			// Get opposite half-face so winding order is on the outside (i.e. normal calculated
 			// from cross product points outward).
 			Mesh::Face const boundary = mesh.opposite_halfface(hfh);
+
 			for (auto const & heh : boundary.halfedges())
-				vtxhs[vtx_idx++] = mesh.halfedge(heh).from_vertex();
+			{
+				Vtxh const & vtxh = mesh.halfedge(heh).from_vertex();
+				// Get index of handle in cell.
+				auto const vtxhidx = static_cast<Tensor::Index>(
+					std::distance(cell_vtxhs.begin(), boost::range::find(cell_vtxhs, vtxh)));
+				vtxhidxs[vtx_idx++] = vtxhidx;
+			}
 			assert(vtx_idx == 3);
 
-			(*this)[cellh].push_back(vtxhs);
+			(*this)[cellh].push_back(vtxhidxs);
 		}
+	}
 }
 }  // namespace Cell
 }  // namespace Attribute
@@ -115,6 +126,7 @@ Attributes::Attributes(Mesh & mesh)
 	  X{mesh},
 	  fixed_dof(mesh),
 	  vtxh{mesh},
+	  boundary{mesh, vtxh},
 	  dN_by_dX{mesh, vtxh, X},
 	  R{mesh},
 	  K{mesh}

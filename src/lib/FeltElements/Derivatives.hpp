@@ -19,6 +19,8 @@ namespace Derivatives
 {
 [[nodiscard]] Element::StiffnessResidual KR(
 	Element::Positions const & x,
+	Element::BoundaryVtxhIdxs const & S_idxs,
+	Element::BoundaryPositions const & S,
 	Element::ShapeDerivative const & dN_by_dX,
 	Body::Material const & material, Body::Forces const & forces);
 

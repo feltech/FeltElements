@@ -87,11 +87,15 @@ namespace BoundaryElement
 {
 static constexpr Tensor::Index count = Element::count - 1;
 using Vtxhs = FeltElements::Vtxhs<count>;
+using VtxhIdxs = std::array<Tensor::Index, BoundaryElement::count>;
 using Positions = Fastor::Tensor<Scalar, count, Node::dim>;
-}
+}  // namespace BoundaryElement
 
 namespace Element
 {
-using Boundary = boost::container::static_vector<BoundaryElement::Vtxhs, Element::num_faces>;
-}
+template <class T>
+using PerFace = boost::container::static_vector<T, Element::num_faces>;
+using BoundaryVtxhIdxs = PerFace<BoundaryElement::VtxhIdxs>;
+using BoundaryPositions = PerFace<BoundaryElement::Positions>;
+}  // namespace Element
 }  // namespace FeltElements
