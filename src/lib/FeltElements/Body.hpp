@@ -2,9 +2,9 @@
 
 #include "Typedefs.hpp"
 
-namespace FeltElements::Material
+namespace FeltElements::Body
 {
-struct Properties
+struct Material
 {
 	/// Density.
 	Scalar rho;
@@ -12,6 +12,10 @@ struct Properties
 	Scalar mu;
 	/// Lame's first parameter.
 	Scalar lambda;
+};
+
+struct Forces
+{
 	/// Pressure
 	Scalar p;
 	/// Body force per unit mass (i.e. acceleration).

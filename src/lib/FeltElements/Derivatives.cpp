@@ -1,7 +1,6 @@
 #include "Derivatives.hpp"
 
-#include "TetGenIO.hpp"
-#include "Material.hpp"
+#include "Body.hpp"
 
 namespace
 {
@@ -116,7 +115,7 @@ namespace FeltElements::Derivatives
 Element::StiffnessResidual KR(
 	Element::Positions const & x,
 	Element::ShapeDerivative const & dN_by_dX,
-	Material::Properties const & material)
+	Body::Material const & material, Body::Forces const & forces)
 {
 	Element::Gradient const F = ex::dx_by_dX(x, dN_by_dX);
 	auto const b = ex::finger(F);
@@ -138,7 +137,7 @@ Element::StiffnessResidual KR(
 	// Internal forces.
 	auto const & T_by_v = ex::T(dN_by_dx, sigma);
 	// External forces
-	auto const & F_by_V = material.F_by_m * material.rho;
+	auto const & F_by_V = forces.F_by_m * material.rho;
 	Node::Force const F_by_v_per_node = 1.0 / 4.0 * F_by_V / J;
 	Element::Forces F_by_v;
 	using Tensor::Func::all;

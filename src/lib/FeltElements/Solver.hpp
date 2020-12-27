@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Fastor/Fastor.h>
-
 #include <eigen3/Eigen/Core>
+#include <boost/preprocessor/cat.hpp>
 
 #include "Typedefs.hpp"
 

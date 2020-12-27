@@ -1,8 +1,9 @@
-#include <OpenVolumeMesh/Core/PropertyDefines.hh>
-#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <string_view>
 
-#include "FeltElements/Derivatives.hpp"
+#include <boost/range/iterator_range.hpp>
+#include <OpenVolumeMesh/Core/PropertyDefines.hh>
+#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+
 #include "FeltElements/Typedefs.hpp"
 
 namespace FeltElements::Attribute::internal
@@ -118,11 +119,10 @@ class VertexPositionBase : protected VertexBase<Derived>
 protected:
 	explicit VertexPositionBase(Mesh & mesh) : ThisBase{mesh}
 	{
-		for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
+		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
-			Mesh::PointT vtx = mesh.vertex(*itvtxh);
-			(*this)[*itvtxh] =
-				Tensor::BaseMap<Mesh::PointT::value_type, Mesh::PointT::size()>{vtx.data()};
+			Vtx const & vtx = mesh.vertex(vtxh);
+			(*this)[vtxh] = Tensor::BaseMap<Vtx::value_type const, Vtx::size()>{vtx.data()};
 		}
 	}
 
@@ -133,7 +133,7 @@ protected:
 		using Positions = Tensor::Matrix<count, Node::dim>;
 		Positions x;
 		for (Tensor::Index node_idx = 0; node_idx < Positions::dimension(0); node_idx++)
-			x(node_idx, all) = ThisBase::m_prop[vtxhs[node_idx]];
+			x(node_idx, all) = (*this)[vtxhs[node_idx]];
 
 		return x;
 	}

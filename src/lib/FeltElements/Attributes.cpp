@@ -1,16 +1,18 @@
+#include "Attributes.hpp"
+
 #include <boost/range.hpp>
 
-#include "Attributes.hpp"
+#include "Derivatives.hpp"
 
 namespace FeltElements
 {
 namespace Attribute
 {
-namespace Body
+namespace MeshBody
 {
-Properties::Properties(Mesh & mesh) : ThisBase(mesh)
+MaterialProperties::MaterialProperties(Mesh & mesh) : ThisBase(mesh)
 {
-	(*(*this)) = Material::Properties{0, 0, 0, 0, {0, 0, 0}};
+	(*(*this)) = Body::Material{0, 0, 0};
 }
 
 Surface::Surface(Mesh & mesh) : ThisBase(mesh)
@@ -24,7 +26,12 @@ Surface::Surface(Mesh & mesh) : ThisBase(mesh)
 		(*this)->push_back(vtxhs);
 	}
 }
-}  // namespace Body
+
+Forces::Forces(Mesh & mesh) : MeshBase(mesh)
+{
+	(*(*this)) = Body::Forces{0, {0, 0, 0}};
+}
+}  // namespace MeshBody
 
 namespace Surface
 {
@@ -48,7 +55,6 @@ FixedDOF::FixedDOF(Mesh & mesh) : ThisBase(mesh)
 
 namespace Cell
 {
-
 VertexHandles::VertexHandles(Mesh & mesh) : ThisBase{mesh}
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells()))
@@ -62,26 +68,27 @@ MaterialShapeDerivative::MaterialShapeDerivative(
 	Mesh & mesh, VertexHandles const & vtxhs, Vertex::MaterialPosition const & X_)
 	: ThisBase{mesh}
 {
-	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_end(); itcellh++)
-	{ (*this)[*itcellh] = Derivatives::dN_by_dX(X_.for_element(vtxhs[*itcellh])); }
+	for (auto cellh : boost::make_iterator_range(mesh.cells()))
+		(*this)[cellh] = Derivatives::dN_by_dX(X_.for_element(vtxhs[cellh]));
 }
 
 NodalForces::NodalForces(Mesh & mesh) : ThisBase{mesh}
 {
-	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_begin(); itcellh++)
-		(*this)[*itcellh] = 0;
+	for (auto cellh : boost::make_iterator_range(mesh.cells()))
+		(*this)[cellh] = 0;
 }
 
 Stiffness::Stiffness(Mesh & mesh) : ThisBase(mesh)
 {
-	for (auto itcellh = mesh.cells_begin(); itcellh != mesh.cells_begin(); itcellh++)
-		(*this)[*itcellh] = 0;
+	for (auto cellh : boost::make_iterator_range(mesh.cells()))
+		(*this)[cellh] = 0;
 }
 }  // namespace Cell
 }  // namespace Attribute
 
 Attributes::Attributes(Mesh & mesh)
 	: material{mesh},
+	  forces{mesh},
 	  surface_vtxh{mesh},
 	  x{mesh},
 	  X{mesh},

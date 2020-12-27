@@ -8,9 +8,11 @@
 
 namespace FeltElements
 {
-namespace Material
+// Forward declarations.
+namespace Body
 {
-struct Properties;
+struct Material;
+struct Forces;
 }
 
 namespace Derivatives
@@ -18,7 +20,7 @@ namespace Derivatives
 [[nodiscard]] Element::StiffnessResidual KR(
 	Element::Positions const & x,
 	Element::ShapeDerivative const & dN_by_dX,
-	Material::Properties const & material);
+	Body::Material const & material, Body::Forces const & forces);
 
 [[nodiscard]] Element::Stiffness Kc(
 	Element::ShapeDerivative const & dN_by_dx, Scalar v, Element::Elasticity const & c);

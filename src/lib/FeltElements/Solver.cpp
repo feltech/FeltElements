@@ -19,7 +19,6 @@ constexpr auto const index_of = [](auto const & haystack, auto && needle) {
 	return static_cast<FeltElements::Tensor::Index>(std::distance(haystack.cbegin(), it));
 };
 
-constexpr Scalar penalty = 10e10;  // TODO: Brittle - depends on scaling.
 }  // namespace
 
 void update_elements_stiffness_and_residual(
@@ -29,7 +28,10 @@ void update_elements_stiffness_and_residual(
 	{
 		auto const & cell_vtxhs = attributes.vtxh[cellh];
 		auto [K, R] = Derivatives::KR(
-			attributes.x.for_element(cell_vtxhs), attributes.dN_by_dX[cellh], *attributes.material);
+			attributes.x.for_element(cell_vtxhs),
+			attributes.dN_by_dX[cellh],
+			*attributes.material,
+			*attributes.forces);
 		attributes.K[cellh] = K;
 		attributes.R[cellh] = R;
 	}
@@ -40,6 +42,7 @@ namespace LDLT
 std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 {
 	constexpr Scalar epsilon = 0.00005;
+	constexpr Scalar penalty = std::numeric_limits<Scalar>::max() / 2;
 
 	EigenFixedDOFs const & mat_fixed_dof = ([&attrib,
 											 rows = static_cast<Eigen::Index>(mesh.n_vertices()),
@@ -125,7 +128,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 		{
 			attrib.x[vtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtxh.idx(), 0).data()};
 			//			SPDLOG_DEBUG("({}, {}, {})\n", attrib.x[vtxh](0), attrib.x[vtxh](1),
-			//attrib.x[vtxh](2));
+			// attrib.x[vtxh](2));
 		}
 
 		if (mat_u.lpNorm<Eigen::Infinity>() < epsilon)
@@ -175,7 +178,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 				Ra += cell_R(cell_a, all);
 				Kaa += cell_K(cell_a, all, cell_a, all);
 			}
-			diag(Kaa) += penalty * fixed_dof;
+			//			diag(Kaa) += penalty * fixed_dof;
 
 			for (auto heh : boost::make_iterator_range(mesh.outgoing_halfedges(vtxh_src)))
 			{

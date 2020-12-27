@@ -27,14 +27,23 @@ SCENARIO("Mesh attributes")
 
 		WHEN("material properties attribute is constructed")
 		{
-			Attribute::Body::Properties const attrib_material_properties{mesh};
+			Attribute::MeshBody::MaterialProperties const attrib_material_properties{mesh};
 
 			THEN("it is zero initialised")
 			{
-				Material::Properties const & M = *attrib_material_properties;
+				Body::Material const & M = *attrib_material_properties;
 				CHECK(M.rho == 0);
 				CHECK(M.lambda == 0);
 				CHECK(M.mu == 0);
+			}
+		}
+		WHEN("body forces attribute is constructed")
+		{
+			Attribute::MeshBody::Forces const attrib_forces{mesh};
+
+			THEN("it is zero initialised")
+			{
+				Body::Forces const & M = *attrib_forces;
 				CHECK(M.p == 0);
 				using Tensor::Func::all_of;
 				CHECK(all_of(M.F_by_m == 0));
@@ -209,7 +218,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("surface elements attribute is constructed")
 		{
-			Attribute::Body::Surface const attrib_surface{mesh};
+			Attribute::MeshBody::Surface const attrib_surface{mesh};
 			Attribute::Vertex::MaterialPosition const attrib_X{mesh};
 
 			THEN("it is initialised to the surface vertices of the mesh")
@@ -1988,12 +1997,12 @@ SCENARIO("Solution of two elements")
 		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
 		constexpr Scalar E = 0.01 * 1e9;   // Young's modulus: 0.001 - 0.05 GPa
 		attrib.material->rho = 2 * 1e3;	   // Density: 1.1 - 2.3 Mg/m3
-		attrib.material->p = 0;			   // Normal pressure
 		attrib.material->mu = 0.01 * 1e9;  // Shear modulus: 0.0003 - 0.02 GPa
 		// -- Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		attrib.material->lambda =
 			(attrib.material->mu * (E - 2 * attrib.material->mu)) / (3 * attrib.material->mu - E);
-		attrib.material->F_by_m = {0.0, 0.0, 0.0};	// Force per unit mass.
+		attrib.forces->p = 0;					  // Normal pressure
+		attrib.forces->F_by_m = {0.0, 0.0, 0.0};  // Force per unit mass.
 		// Set boundary condition.
 		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
@@ -2004,8 +2013,8 @@ SCENARIO("Solution of two elements")
 
 		AND_GIVEN("high density material under self-weight")
 		{
-			attrib.material->rho *= 1000;				  // Density.
-			attrib.material->F_by_m = {0.0, -9.81, 0.0};  // Force per unit mass.
+			attrib.material->rho *= 1000;				// Density.
+			attrib.forces->F_by_m = {0.0, -9.81, 0.0};	// Force per unit mass.
 
 			check_solvers(
 				"self_weight",
@@ -2015,15 +2024,14 @@ SCENARIO("Solution of two elements")
 				18,
 				0.1037816713,
 				{
-				// clang-format off
+					// clang-format off
 				0,         0,         0,
 				1,         0,         0,
 				0,   0.67397, 0.0744009,
 				0,         0,         1,
 				0,  0.324633,  0.478132
-				// clang-format on
-				}
-			);
+					// clang-format on
+				});
 		}
 
 		AND_GIVEN("a free vertex is displaced")
@@ -2031,7 +2039,7 @@ SCENARIO("Solution of two elements")
 			attrib.x[Vtxh{2}] += Node::Pos{0.2, 0.2, 0.2};
 
 			check_solvers(
-				"self_weight",
+				"displaced_vertex",
 				mesh,
 				attrib,
 				2,
@@ -2045,8 +2053,31 @@ SCENARIO("Solution of two elements")
 					0,         0,         1,
 					0,       0.5,       0.5
 					// clang-format on
-				}
-			);
+				});
+		}
+
+		AND_GIVEN("no constraints and no deformation")
+		{
+			// Set boundary condition.
+			for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
+				attrib.fixed_dof[vtxh] = Node::Pos{0.0, 0.0, 0.0};
+
+			check_solvers(
+				"no_constraint",
+				mesh,
+				attrib,
+				1,
+				1,
+				1.0 / 6.0,
+				{
+					// clang-format off
+					0,         0,         0,
+					1,         0,         0,
+					0,         1,         0,
+					0,         0,         1,
+					0,       0.5,       0.5
+					// clang-format on
+				});
 		}
 	}
 }

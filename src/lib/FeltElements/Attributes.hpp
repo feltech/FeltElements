@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Material.hpp"
+#include "Body.hpp"
 #include "internal/Attributes.hpp"
 
 namespace FeltElements
@@ -10,12 +10,12 @@ namespace Attribute
 /*
  * Forward declarations
  */
-namespace Body
+namespace MeshBody
 {
-class Properties;
-class Force;
+class MaterialProperties;
+class Forces;
 class Surface;
-}  // namespace Body
+}  // namespace MeshBody
 namespace Vertex
 {
 class MaterialPosition;
@@ -37,12 +37,17 @@ class Stiffness;
 namespace internal
 {
 template <>
-struct Traits<Body::Properties> : public MeshTraits<Material::Properties>
+struct Traits<MeshBody::MaterialProperties> : public MeshTraits<Body::Material>
 {
 	static constexpr std::string_view prop_name = "material_properties";
 };
 template <>
-struct Traits<Body::Surface> : public MeshTraits<std::vector<SurfaceElement::Vtxhs>>
+struct Traits<MeshBody::Forces> : public MeshTraits<Body::Forces>
+{
+	static constexpr std::string_view prop_name = "body_forces";
+};
+template <>
+struct Traits<MeshBody::Surface> : public MeshTraits<std::vector<SurfaceElement::Vtxhs>>
 {
 	static constexpr std::string_view prop_name = "surface_vertices";
 };
@@ -89,14 +94,24 @@ struct Traits<Cell::MaterialShapeDerivative> : public CellTraits<Element::ShapeD
 };
 }  // namespace internal
 
-namespace Body
+namespace MeshBody
 {
-class Properties final : private internal::MeshBase<Properties>
+class MaterialProperties final : private internal::MeshBase<MaterialProperties>
 {
-	using ThisBase = internal::MeshBase<Properties>;
+	using ThisBase = internal::MeshBase<MaterialProperties>;
 
 public:
-	explicit Properties(Mesh & mesh);
+	explicit MaterialProperties(Mesh & mesh);
+	using ThisBase::operator*;
+	using ThisBase::operator->;
+};
+
+class Forces final : private internal::MeshBase<Forces>
+{
+	using ThisBase = internal::MeshBase<Forces>;
+
+public:
+	explicit Forces(Mesh & mesh);
 	using ThisBase::operator*;
 	using ThisBase::operator->;
 };
@@ -110,7 +125,7 @@ public:
 	using ThisBase::operator*;
 	using ThisBase::operator->;
 };
-}  // namespace Body
+}  // namespace MeshBody
 
 namespace Surface
 {
@@ -158,7 +173,6 @@ public:
 
 namespace Cell
 {
-
 class VertexHandles final : private internal::CellBase<VertexHandles>
 {
 	using ThisBase = internal::CellBase<VertexHandles>;
@@ -176,7 +190,6 @@ public:
 	explicit MaterialShapeDerivative(
 		Mesh & mesh, VertexHandles const & vtxhs, Vertex::MaterialPosition const & X_);
 	using ThisBase::operator[];
-	static Element::Positions const X;
 };
 
 class NodalForces final : private internal::CellBase<NodalForces>
@@ -202,8 +215,9 @@ public:
 struct Attributes final
 {
 	explicit Attributes(Mesh & mesh);
-	Attribute::Body::Properties material;
-	Attribute::Body::Surface surface_vtxh;
+	Attribute::MeshBody::MaterialProperties material;
+	Attribute::MeshBody::Forces forces;
+	Attribute::MeshBody::Surface surface_vtxh;
 	Attribute::Vertex::SpatialPosition x;
 	Attribute::Vertex::MaterialPosition const X;
 	Attribute::Vertex::FixedDOF fixed_dof;
