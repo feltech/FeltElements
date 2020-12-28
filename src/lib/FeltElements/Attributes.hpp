@@ -237,8 +237,8 @@ struct Attributes final
 	Attribute::Vertex::SpatialPosition x;
 	Attribute::Vertex::MaterialPosition const X;
 	Attribute::Vertex::FixedDOF fixed_dof;
-	Attribute::Cell::VertexHandles const vtxh;
-	Attribute::Cell::Boundary const boundary;
+	Attribute::Cell::VertexHandles const vtxhs;
+	Attribute::Cell::Boundary const boundary_faces_vtxh_idxs;
 	Attribute::Cell::MaterialShapeDerivative const dN_by_dX;
 	Attribute::Cell::NodalForces R;
 	Attribute::Cell::Stiffness K;

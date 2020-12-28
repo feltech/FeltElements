@@ -18,9 +18,9 @@ struct Forces;
 namespace Derivatives
 {
 [[nodiscard]] Element::StiffnessResidual KR(
-	Element::Positions const & x,
-	Element::BoundaryVtxhIdxs const & S_idxs,
-	Element::BoundaryPositions const & S,
+	Element::NodePositions const & x,
+	Element::BoundaryVtxhIdxs const & boundary_faces_idxs,
+	Element::BoundaryNodePositions const & boundary_faces_x,
 	Element::ShapeDerivative const & dN_by_dX,
 	Body::Material const & material, Body::Forces const & forces);
 
@@ -40,27 +40,27 @@ namespace Derivatives
 [[nodiscard]] Element::Gradient b(Element::Gradient const & F);
 
 [[nodiscard]] Element::Gradient dx_by_dX(
-	Element::Positions const & x, Element::ShapeDerivative const & dN_by_dX);
+	Element::NodePositions const & x, Element::ShapeDerivative const & dN_by_dX);
 [[nodiscard]] Element::Gradient dx_by_dX(
 	Element::Gradient const & dx_by_dL, Element::Gradient const & dL_by_dX);
 
-[[nodiscard]] Scalar V(Element::Positions const & x);
-[[nodiscard]] Scalar v(Element::Positions const & x);
+[[nodiscard]] Scalar V(Element::NodePositions const & x);
+[[nodiscard]] Scalar v(Element::NodePositions const & x);
 
-[[nodiscard]] Element::Gradient dX_by_dL(Element::Positions const & X);
+[[nodiscard]] Element::Gradient dX_by_dL(Element::NodePositions const & X);
 [[nodiscard]] Element::Gradient dL_by_dX(Element::Gradient const & dX_by_dL);
 [[nodiscard]] Element::CartesianDerivative dx_by_dN(
 	Element::ShapeCartesianTransform const & N_to_x);
 
-[[nodiscard]] Element::SurfaceGradient dX_by_dS(BoundaryElement::Positions const & X);
+[[nodiscard]] Element::SurfaceGradient dX_by_dS(BoundaryElement::NodePositions const & X);
 
 [[nodiscard]] Element::ShapeDerivative dN_by_dX(Element::Gradient const & dL_by_dx);
 [[nodiscard]] Element::ShapeDerivative dN_by_dX(Element::ShapeCartesianTransform const & N_to_x);
-[[nodiscard]] Element::ShapeDerivative dN_by_dX(Element::Positions const & X);
+[[nodiscard]] Element::ShapeDerivative dN_by_dX(Element::NodePositions const & X);
 
-[[nodiscard]] Element::ShapeCartesianTransform N_to_x(Element::Positions const & X);
+[[nodiscard]] Element::ShapeCartesianTransform N_to_x(Element::NodePositions const & X);
 
-[[nodiscard]] Scalar det_dx_by_dL(Element::Positions const & x);
+[[nodiscard]] Scalar det_dx_by_dL(Element::NodePositions const & x);
 
 extern Element::IsoCoordDerivative const dL_by_dN;
 extern Element::ShapeDerivative const dN_by_dL;

@@ -1,9 +1,9 @@
-#include <string_view>
-
 #include <OpenVolumeMesh/Core/PropertyDefines.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include <boost/range/adaptor/indexed.hpp>
 #include <boost/range/algorithm/transform.hpp>
 #include <boost/range/iterator_range.hpp>
+#include <string_view>
 
 #include "FeltElements/Typedefs.hpp"
 
@@ -127,30 +127,33 @@ protected:
 		}
 	}
 
-	template <std::size_t count>
-	[[nodiscard]] Tensor::Matrix<count, Node::dim> for_element(Vtxhs<count> const & vtxhs) const
+	template <std::size_t num_nodes>
+	[[nodiscard]] Tensor::Matrix<num_nodes, Node::dim> for_element(
+		Vtxhs<num_nodes> const & vtxhs) const
 	{
 		using Tensor::Func::all;
-		using Positions = Tensor::Matrix<count, Node::dim>;
-		Positions x;
-		for (Tensor::Index node_idx = 0; node_idx < Positions::dimension(0); node_idx++)
+		using NodePositions = Tensor::Matrix<num_nodes, Node::dim>;
+		NodePositions x;
+		for (Tensor::Index node_idx = 0; node_idx < NodePositions::dimension(0); node_idx++)
 			x(node_idx, all) = (*this)[vtxhs[node_idx]];
 
 		return x;
 	}
 
-	[[nodiscard]] Element::BoundaryPositions for_elements(
-		Element::Vtxhs const & vtxhs, Element::BoundaryVtxhIdxs const & vtxhidxs) const
+	[[nodiscard]] Element::BoundaryNodePositions for_elements(
+		Element::Vtxhs const & cell_vtxhs, Element::BoundaryVtxhIdxs const & faces_vtxh_idxs) const
 	{
-		Element::BoundaryPositions boundary_pos;
-		const auto to_tensor = [this, &vtxhs](auto const & idxs) {
-			BoundaryElement::Vtxhs boundary_vtxhs;
-			for (std::size_t i = 0; i < idxs.size(); i++)
-				boundary_vtxhs[i] = vtxhs[idxs[i]];
-			return for_element(boundary_vtxhs);
+		Element::BoundaryNodePositions faces_x;
+
+		const auto to_tensor = [this, &cell_vtxhs](BoundaryElement::VtxhIdxs const & face_idxs) {
+			BoundaryElement::Vtxhs face_vtxhs;
+			for (auto const & [face_idx, cell_idx] : boost::adaptors::index(face_idxs))
+				face_vtxhs[face_idx] = cell_vtxhs[cell_idx];
+			return for_element(face_vtxhs);
 		};
-		boost::transform(vtxhidxs, std::back_inserter(boundary_pos), to_tensor);
-		return boundary_pos;
+
+		boost::transform(faces_vtxh_idxs, std::back_inserter(faces_x), to_tensor);
+		return faces_x;
 	}
 };
 

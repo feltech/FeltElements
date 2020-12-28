@@ -26,13 +26,13 @@ void update_elements_stiffness_and_residual(
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells()))
 	{
-		auto const & vtxhs = attributes.vtxh[cellh];
-		auto const & boundary_vtxhidxs = attributes.boundary[cellh];
+		auto const & cell_vtxhs = attributes.vtxhs[cellh];
+		auto const & boundary_faces_vtxh_idxs = attributes.boundary_faces_vtxh_idxs[cellh];
 
-		auto [K, R] = Derivatives::KR(
-			attributes.x.for_element(vtxhs),
-			boundary_vtxhidxs,
-			attributes.x.for_elements(vtxhs, boundary_vtxhidxs),
+		auto const & [K, R] = Derivatives::KR(
+			attributes.x.for_element(cell_vtxhs),
+			boundary_faces_vtxh_idxs,
+			attributes.x.for_elements(cell_vtxhs, boundary_faces_vtxh_idxs),
 			attributes.dN_by_dX[cellh],
 			*attributes.material,
 			*attributes.forces);
@@ -75,7 +75,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 			auto const vtx_idx = vtxh.idx();
 			for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh)))
 			{
-				auto const & cell_vtxhs = attrib.vtxh[cellh];
+				auto const & cell_vtxhs = attrib.vtxhs[cellh];
 				auto const & cell_vtx_idx = index_of(cell_vtxhs, vtxh);
 				auto const & cell_R = attrib.R[cellh];
 
@@ -91,7 +91,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 		auto const update_submatrix =
 			[&mat_K, &attrib](auto const vtxh_src, auto const vtxh_dst, auto const cellh_) {
 				auto const & cell_K = attrib.K[cellh_];
-				auto const & cell_vtxhs = attrib.vtxh[cellh_];
+				auto const & cell_vtxhs = attrib.vtxhs[cellh_];
 				auto const cell_a = index_of(cell_vtxhs, vtxh_src);
 				auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
 				auto const a = vtxh_src.idx();
@@ -174,7 +174,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 			Node::Force Ka_u = 0;
 			for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh_src)))
 			{
-				auto const & cell_vtxhs = attrib.vtxh[cellh];
+				auto const & cell_vtxhs = attrib.vtxhs[cellh];
 				auto const & cell_a = index_of(cell_vtxhs, vtxh_src);
 				auto const & cell_R = attrib.R[cellh];
 				auto const & cell_K = attrib.K[cellh];
@@ -194,7 +194,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 				for (auto cellh : boost::make_iterator_range(mesh.halfedge_cells(heh)))
 				{
 					auto const & cell_K = attrib.K[cellh];
-					auto const & cell_vtxhs = attrib.vtxh[cellh];
+					auto const & cell_vtxhs = attrib.vtxhs[cellh];
 					auto const cell_a = index_of(cell_vtxhs, vtxh_src);
 					auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
 					Kab += cell_K(cell_a, all, cell_b, all);

@@ -151,9 +151,9 @@ SCENARIO("Mesh attributes")
 				Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
 
 				auto itcellh = mesh.cells_begin();
-				Element::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				Element::NodePositions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
 				itcellh++;
-				Element::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				Element::NodePositions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
 
 				THEN("positions are expected")
 				{
@@ -192,9 +192,9 @@ SCENARIO("Mesh attributes")
 				Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
 
 				auto itcellh = mesh.cells_begin();
-				Element::Positions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				Element::NodePositions x1 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
 				itcellh++;
-				Element::Positions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
+				Element::NodePositions x2 = attrib_x.for_element(attrib_vtxhs[*itcellh]);
 
 				THEN("positions are expected")
 				{
@@ -246,7 +246,7 @@ SCENARIO("Mesh attributes")
 						vtxhs[0] = cell_vtxhs[vtxhidxs[0]];
 						vtxhs[1] = cell_vtxhs[vtxhidxs[1]];
 						vtxhs[2] = cell_vtxhs[vtxhidxs[2]];
-						BoundaryElement::Positions const & x = attrib_X.for_element(vtxhs);
+						BoundaryElement::NodePositions const & x = attrib_X.for_element(vtxhs);
 						Triangle triangle = 0;
 						Tensor::Vector<3> const vtx0 = x(0, all);
 						Tensor::Vector<3> const vtx1 = x(1, all);
@@ -266,7 +266,7 @@ SCENARIO("Mesh attributes")
 				{
 					auto const & cell_boundary = attrib_boundary[cellh];
 					auto const & cell_vtxhs = attrib_vtxhs[cellh];
-					Element::BoundaryPositions const xs =
+					Element::BoundaryNodePositions const xs =
 						attrib_X.for_elements(cell_vtxhs, cell_boundary);
 
 					for (auto const & x : xs)
@@ -372,7 +372,7 @@ SCENARIO("Metrics of undeformed mesh")
 			AND_WHEN("material node position tensor is constructed")
 			{
 				Attribute::Vertex::MaterialPosition const attrib_X{mesh};
-				Element::Positions const X = attrib_X.for_element(vtxhs);
+				Element::NodePositions const X = attrib_X.for_element(vtxhs);
 
 				THEN("expected positions are reported")
 				{
@@ -454,7 +454,7 @@ SCENARIO("Metrics of undeformed mesh")
 			Attribute::Vertex::MaterialPosition const attrib_X{mesh};
 
 			auto const & vtxhs = attrib_vtxhs[Cellh{0}];
-			Element::Positions const X = attrib_X.for_element(vtxhs);
+			Element::NodePositions const X = attrib_X.for_element(vtxhs);
 
 			Scalar V = Derivatives::V(X);
 			Scalar v = Derivatives::v(X);
@@ -475,7 +475,7 @@ SCENARIO("Metrics of deformed mesh")
 		Attributes attrib{mesh};
 
 		Cellh cellh{0};
-		auto const & vtxh0 = attrib.vtxh[cellh];
+		auto const & vtxh0 = attrib.vtxhs[cellh];
 		auto const & X = attrib.X.for_element(vtxh0);
 		auto x = attrib.x.for_element(vtxh0);
 
@@ -671,7 +671,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_one);
 		Attributes const attrib{mesh};
-		auto const & X = attrib.X.for_element(attrib.vtxh[Cellh{0}]);
+		auto const & X = attrib.X.for_element(attrib.vtxhs[Cellh{0}]);
 
 		WHEN("derivative of material wrt local coords is calculated")
 		{
@@ -779,13 +779,13 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			using Tensor::Func::fseq;
 			using Tensor::Func::last;
 
-			BoundaryElement::Positions const & Xs1 =
+			BoundaryElement::NodePositions const & Xs1 =
 				attrib.X.for_element(attrib.surface_vtxh->at(0));
-			BoundaryElement::Positions const & Xs2 =
+			BoundaryElement::NodePositions const & Xs2 =
 				attrib.X.for_element(attrib.surface_vtxh->at(1));
-			BoundaryElement::Positions const & Xs3 =
+			BoundaryElement::NodePositions const & Xs3 =
 				attrib.X.for_element(attrib.surface_vtxh->at(2));
-			BoundaryElement::Positions const & Xs4 =
+			BoundaryElement::NodePositions const & Xs4 =
 				attrib.X.for_element(attrib.surface_vtxh->at(3));
 
 			auto const & dX1_by_dS = Derivatives::dX_by_dS(Xs1);
@@ -934,7 +934,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 		THEN("expected positions are reported")
 		{
 			// clang-format off
-			Element::Positions expected{
+			Element::NodePositions expected{
 			   {0.0, 0.0, 0.0},
 			   {0.0, 0.0, 1.0},
 			   {1.0, 0.0, 0.0},
@@ -1356,7 +1356,7 @@ SCENARIO("Internal equivalent nodal force")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_one);
 		auto attrib = Attributes{mesh};
-		auto const & vtxhs = attrib.vtxh[Cellh{0}];
+		auto const & vtxhs = attrib.vtxhs[Cellh{0}];
 		auto const & X = attrib.X.for_element(vtxhs);
 		auto x = attrib.x.for_element(vtxhs);
 
@@ -1740,7 +1740,7 @@ SCENARIO("Solution of a single element")
 		Attributes attrib{mesh};
 		(*attrib.material).lambda = lambda;
 		(*attrib.material).mu = mu;
-		auto const & vtxhs = attrib.vtxh[Cellh{0}];
+		auto const & vtxhs = attrib.vtxhs[Cellh{0}];
 		auto const & X = attrib.X.for_element(vtxhs);
 		// Push top-most node to the right slightly.
 		attrib.x[Vtxh{3}](0) += 0.5;
@@ -1758,7 +1758,7 @@ SCENARIO("Solution of a single element")
 			THEN("attributes hold correct solutions")
 			{
 				Cellh const cellh{0};
-				auto const & x = attrib.x.for_element(attrib.vtxh[cellh]);
+				auto const & x = attrib.x.for_element(attrib.vtxhs[cellh]);
 				Scalar const v = Derivatives::V(x);
 				auto const & dN_by_dX = attrib.dN_by_dX[cellh];
 
@@ -1918,9 +1918,9 @@ SCENARIO("Solution of a single element")
 				//				K(2, 2, 2, 2) = 10e4;
 				log += fmt::format("\nK (constrained)\n{}", K);
 
-				Element::Positions u = 0;
+				Element::NodePositions u = 0;
 
-				for (Tensor::Index a = 0; a < Element::Positions::dimension(0); a++)
+				for (Tensor::Index a = 0; a < Element::NodePositions::dimension(0); a++)
 				{
 					using namespace Tensor;
 					using Func::einsum;
@@ -1972,8 +1972,8 @@ void check_solvers(
 	std::vector<Scalar> const & expected_positions)
 {
 	auto const total_volume = [&attrib]() {
-		return Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{0}])) +
-			Derivatives::V(attrib.x.for_element(attrib.vtxh[Cellh{1}]));
+		return Derivatives::V(attrib.x.for_element(attrib.vtxhs[Cellh{0}])) +
+			Derivatives::V(attrib.x.for_element(attrib.vtxhs[Cellh{1}]));
 	};
 
 	auto const material_volume = total_volume();

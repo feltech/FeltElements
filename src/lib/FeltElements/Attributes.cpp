@@ -74,21 +74,19 @@ MaterialShapeDerivative::MaterialShapeDerivative(
 
 NodalForces::NodalForces(Mesh & mesh) : ThisBase{mesh}
 {
-	for (auto cellh : boost::make_iterator_range(mesh.cells()))
-		(*this)[cellh] = 0;
+	for (auto cellh : boost::make_iterator_range(mesh.cells())) (*this)[cellh] = 0;
 }
 
 Stiffness::Stiffness(Mesh & mesh) : ThisBase(mesh)
 {
-	for (auto cellh : boost::make_iterator_range(mesh.cells()))
-		(*this)[cellh] = 0;
+	for (auto cellh : boost::make_iterator_range(mesh.cells())) (*this)[cellh] = 0;
 }
 
 Boundary::Boundary(Mesh & mesh, VertexHandles const & vtxhs) : CellBase(mesh)
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells()))
 	{
-		auto const& cell_vtxhs = vtxhs[cellh];
+		auto const & cell_vtxhs = vtxhs[cellh];
 
 		for (auto hfh : boost::make_iterator_range(mesh.cell_halffaces(cellh)))
 		{
@@ -99,9 +97,9 @@ Boundary::Boundary(Mesh & mesh, VertexHandles const & vtxhs) : CellBase(mesh)
 			Tensor::Index vtx_idx = 0;
 			// Get opposite half-face so winding order is on the outside (i.e. normal calculated
 			// from cross product points outward).
-			Mesh::Face const boundary = mesh.opposite_halfface(hfh);
+			Mesh::Face const boundary_face = mesh.opposite_halfface(hfh);
 
-			for (auto const & heh : boundary.halfedges())
+			for (auto const & heh : boundary_face.halfedges())
 			{
 				Vtxh const & vtxh = mesh.halfedge(heh).from_vertex();
 				// Get index of handle in cell.
@@ -125,9 +123,9 @@ Attributes::Attributes(Mesh & mesh)
 	  x{mesh},
 	  X{mesh},
 	  fixed_dof(mesh),
-	  vtxh{mesh},
-	  boundary{mesh, vtxh},
-	  dN_by_dX{mesh, vtxh, X},
+	  vtxhs{mesh},
+	  boundary_faces_vtxh_idxs{mesh, vtxhs},
+	  dN_by_dX{mesh, vtxhs, X},
 	  R{mesh},
 	  K{mesh}
 {

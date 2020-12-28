@@ -1,7 +1,9 @@
 #pragma once
 #include <Fastor/Fastor.h>
+
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <boost/container/static_vector.hpp>
+#include <boost/range/iterator.hpp>
 
 namespace FeltElements
 {
@@ -63,32 +65,33 @@ using Force = Tensor::Vector<dim>;
 
 namespace Element
 {
-static constexpr Tensor::Index count = 4;
+static constexpr Tensor::Index num_nodes = 4;
 static constexpr Tensor::Index num_faces = 4;
 
-using Vtxhs = FeltElements::Vtxhs<count>;
-using IsoCoordDerivative = Tensor::Matrix<Node::dim, count>;
-using ShapeDerivative = Tensor::Matrix<count, Node::dim>;
-using SurfaceShapeDerivative = Tensor::Matrix<count - 1, Node::dim - 1>;
-using ShapeDerivativeDeterminant = Tensor::Multi<count, count, count>;
+using Vtxhs = FeltElements::Vtxhs<num_nodes>;
+using IsoCoordDerivative = Tensor::Matrix<Node::dim, num_nodes>;
+using ShapeDerivative = Tensor::Matrix<num_nodes, Node::dim>;
+using SurfaceShapeDerivative = Tensor::Matrix<num_nodes - 1, Node::dim - 1>;
+using ShapeDerivativeDeterminant = Tensor::Multi<num_nodes, num_nodes, num_nodes>;
 using Elasticity = Tensor::Multi<Node::dim, Node::dim, Node::dim, Node::dim>;
 using ShapeCartesianTransform = Tensor::Matrix<4, 4>;
-using CartesianDerivative = Tensor::Matrix<Node::dim, count>;
+using CartesianDerivative = Tensor::Matrix<Node::dim, num_nodes>;
 using Gradient = Tensor::Matrix<Node::dim, Node::dim>;
 using SurfaceGradient = Tensor::Matrix<Node::dim, Node::dim - 1>;
 using Stress = Gradient;
-using Stiffness = Tensor::Multi<count, Node::dim, count, Node::dim>;
-using Positions = Fastor::Tensor<Scalar, count, Node::dim>;
-using Forces = Fastor::Tensor<Scalar, count, Node::dim>;
+using Stiffness = Tensor::Multi<num_nodes, Node::dim, num_nodes, Node::dim>;
+using NodePositions = Fastor::Tensor<Scalar, num_nodes, Node::dim>;
+using Forces = Fastor::Tensor<Scalar, num_nodes, Node::dim>;
 using StiffnessResidual = std::tuple<Stiffness, Forces>;
 }  // namespace Element
 
 namespace BoundaryElement
 {
-static constexpr Tensor::Index count = Element::count - 1;
-using Vtxhs = FeltElements::Vtxhs<count>;
-using VtxhIdxs = std::array<Tensor::Index, BoundaryElement::count>;
-using Positions = Fastor::Tensor<Scalar, count, Node::dim>;
+static constexpr Tensor::Index num_nodes = Element::num_nodes - 1;
+
+using Vtxhs = FeltElements::Vtxhs<num_nodes>;
+using VtxhIdxs = std::array<Tensor::Index, BoundaryElement::num_nodes>;
+using NodePositions = Fastor::Tensor<Scalar, num_nodes, Node::dim>;
 }  // namespace BoundaryElement
 
 namespace Element
@@ -96,6 +99,20 @@ namespace Element
 template <class T>
 using PerFace = boost::container::static_vector<T, Element::num_faces>;
 using BoundaryVtxhIdxs = PerFace<BoundaryElement::VtxhIdxs>;
-using BoundaryPositions = PerFace<BoundaryElement::Positions>;
+using BoundaryNodePositions = PerFace<BoundaryElement::NodePositions>;
 }  // namespace Element
 }  // namespace FeltElements
+
+// Override index type for ranges to avoid the need to static_cast all over the place.
+template <>
+struct boost::iterator_difference<
+	boost::range_iterator<const FeltElements::BoundaryElement::VtxhIdxs>::type>
+{
+	using type = FeltElements::BoundaryElement::VtxhIdxs::size_type;
+};
+template <>
+struct boost::iterator_difference<
+	boost::range_iterator<const FeltElements::Element::BoundaryNodePositions>::type>
+{
+	using type = FeltElements::Element::BoundaryNodePositions::size_type;
+};

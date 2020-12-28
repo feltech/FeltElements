@@ -15,12 +15,12 @@ Mesh load_ovm_mesh(std::string_view const & file_name)
 	return mesh;
 }
 
-std::tuple<Element::Positions, Element::Positions> load_tet(std::string_view const & file_name)
+std::tuple<Element::NodePositions, Element::NodePositions> load_tet(std::string_view const & file_name)
 {
 	using namespace FeltElements;
 	FeltElements::Mesh mesh = load_ovm_mesh(file_name);
 	FeltElements::Attributes attrib{mesh};
-	auto const & cell_vtxhs = attrib.vtxh[FeltElements::Cellh{0}];
+	auto const & cell_vtxhs = attrib.vtxhs[FeltElements::Cellh{0}];
 
 	return std::tuple(attrib.X.for_element(cell_vtxhs), attrib.x.for_element(cell_vtxhs));
 }

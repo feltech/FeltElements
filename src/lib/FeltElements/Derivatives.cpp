@@ -1,5 +1,8 @@
 #include "Derivatives.hpp"
 
+#include <boost/range/combine.hpp>
+#include <boost/range/irange.hpp>
+
 #include "Body.hpp"
 
 namespace
@@ -68,14 +71,11 @@ constexpr auto dx_by_dX = [](auto const & x, auto const & dN_by_dX_) {
 	return Func::einsum<Idxs<k, i>, Idxs<k, j>>(x, dN_by_dX_);
 };
 
-constexpr auto finger = [](auto const & F) {
-	return Func::einsum<Idxs<i, k>, Idxs<j, k>>(F, F);
-};
+constexpr auto finger = [](auto const & F) { return Func::einsum<Idxs<i, k>, Idxs<j, k>>(F, F); };
 
-constexpr auto sigma =
-	[](Scalar const J, auto const & b, Scalar const lambda, Scalar const mu) {
-		return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
-	};
+constexpr auto sigma = [](Scalar const J, auto const & b, Scalar const lambda, Scalar const mu) {
+	return (mu / J) * (b - I) + (lambda / J) * log(J) * I;
+};
 
 constexpr auto T = [](auto const & dN_by_dx, auto const & sigma_) {
 	// T = v * sigma * dN/dx^T
@@ -105,16 +105,19 @@ constexpr auto Ks = [](auto const & dN_by_dx, auto const & s) {
 namespace FeltElements::Derivatives
 {
 Element::StiffnessResidual KR(
-	Element::Positions const & x,
-	Element::BoundaryVtxhIdxs const & S_idxs,
-	Element::BoundaryPositions const & S,
+	Element::NodePositions const & x,
+	Element::BoundaryVtxhIdxs const & boundary_faces_idxs,
+	Element::BoundaryNodePositions const & boundary_faces_x,
 	Element::ShapeDerivative const & dN_by_dX,
-	Body::Material const & material, Body::Forces const & forces)
+	Body::Material const & material,
+	Body::Forces const & forces)
 {
-	Element::Gradient const F = ex::dx_by_dX(x, dN_by_dX);
-	auto const b = ex::finger(F);
-	Scalar const J = Derivatives::det_dx_by_dX(F);
-	Scalar const v = Derivatives::v(x); // TODO: but also v = J*V
+	using Tensor::Func::all;
+
+	Element::Gradient const dx_by_dX = ex::dx_by_dX(x, dN_by_dX);
+	auto const b = ex::finger(dx_by_dX);
+	Scalar const J = Derivatives::det_dx_by_dX(dx_by_dX);
+	Scalar const v = Derivatives::v(x);	 // TODO: but also v = J*V
 
 	auto const & dx_by_dL = ex::dX_by_dL(x);
 	auto const & dL_by_dx = ex::dL_by_dX(dx_by_dL);
@@ -132,26 +135,22 @@ Element::StiffnessResidual KR(
 	// Internal forces.
 	auto const & T_by_v = ex::T(dN_by_dx, sigma);
 
+	// Residual
+	Element::Forces R = v * T_by_v;
+
 	// Body force.
 	auto const & F_by_V = forces.F_by_m * material.rho;
-	Node::Force const F_by_v_per_node = 1.0 / 4.0 * F_by_V / J;
-	Element::Forces F_by_v;
-	using Tensor::Func::all;
-	F_by_v(0, all) = F_by_v_per_node;
-	F_by_v(1, all) = F_by_v_per_node;
-	F_by_v(2, all) = F_by_v_per_node;
-	F_by_v(3, all) = F_by_v_per_node;
+	auto const & F_by_v = F_by_V / J;
+	auto const & F_by_v_per_node = (1.0 / Element::num_nodes) * F_by_v;
+	Node::Force const F_per_node = v * F_by_v_per_node;
 
-	Element::Forces R = v * (T_by_v - F_by_v);
+	for (const auto node_idx : boost::irange(Element::num_nodes)) R(node_idx, all) -= F_per_node;
 
 	// Traction force.
-	for (Tensor::Index side_idx = 0; side_idx < S.size(); side_idx++)
+	for (const auto & [s, idxs] : boost::range::combine(boundary_faces_x, boundary_faces_idxs))
 	{
-		auto const & s = S[side_idx];
-		auto const & t = Derivatives::t(forces.p, Derivatives::dX_by_dS(s));
-
-		for (Tensor::Index node_idx : S_idxs[side_idx])
-			R(node_idx, all) -= t;
+		const Node::Force & t = Derivatives::t(forces.p, Derivatives::dX_by_dS(s));
+		for (Tensor::Index node_idx : idxs) R(node_idx, all) -= t;
 	}
 
 	assert(Tensor::Func::all_of(R == R));  // Assert no NaNs
@@ -207,7 +206,8 @@ Element::Gradient b(Element::Gradient const & F)
 	return ex::finger(F);
 }
 
-Element::Gradient dx_by_dX(Element::Positions const & x, Element::ShapeDerivative const & dN_by_dX)
+Element::Gradient dx_by_dX(
+	Element::NodePositions const & x, Element::ShapeDerivative const & dN_by_dX)
 {
 	return ex::dx_by_dX(x, dN_by_dX);
 }
@@ -223,7 +223,7 @@ Element::ShapeDerivative dN_by_dX(Element::Gradient const & dL_by_dx)
 	return ex::dN_by_dX(dL_by_dx);
 }
 
-Element::ShapeDerivative dN_by_dX(Element::Positions const & X)
+Element::ShapeDerivative dN_by_dX(Element::NodePositions const & X)
 {
 	auto const & dX_by_dL = ex::dX_by_dL(X);
 	auto const & dL_by_dX = ex::dL_by_dX(dX_by_dL);
@@ -241,12 +241,12 @@ Element::Gradient dL_by_dX(Element::Gradient const & dX_by_dL)
 	return ex::dL_by_dX(dX_by_dL);
 }
 
-Element::Gradient dX_by_dL(Element::Positions const & X)
+Element::Gradient dX_by_dL(Element::NodePositions const & X)
 {
 	return ex::dX_by_dL(X);
 }
 
-Element::SurfaceGradient dX_by_dS(BoundaryElement::Positions const & X)
+Element::SurfaceGradient dX_by_dS(BoundaryElement::NodePositions const & X)
 {
 	return ex::dX_by_dS(X);
 }
@@ -259,7 +259,7 @@ Element::ShapeDerivative dN_by_dX(Element::ShapeCartesianTransform const & N_to_
 	return evaluate(inv(N_to_x))(all, fseq<1, last>{});
 }
 
-Element::ShapeCartesianTransform N_to_x(Element::Positions const & X)
+Element::ShapeCartesianTransform N_to_x(Element::NodePositions const & X)
 {
 	Element::ShapeCartesianTransform mat;
 	mat(Fastor::ffirst, Fastor::all) = 1.0;
@@ -267,7 +267,7 @@ Element::ShapeCartesianTransform N_to_x(Element::Positions const & X)
 	return mat;
 }
 
-Scalar V(Element::Positions const & x)
+Scalar V(Element::NodePositions const & x)
 {
 	using namespace Tensor::Func;
 	auto const & start_3x3 = x(fseq<0, 3>{}, all);
@@ -281,14 +281,14 @@ Scalar V(Element::Positions const & x)
 	return std::abs(Fastor::det(delta) / 6.0);
 }
 
-Scalar v(Element::Positions const & x)
+Scalar v(Element::NodePositions const & x)
 {
 	// Volume in local coords (constant)
 	constexpr Scalar v_wrt_L = 1.0 / 6.0;
 	return v_wrt_L * det_dx_by_dL(x);
 }
 
-Scalar det_dx_by_dL(Element::Positions const & x)
+Scalar det_dx_by_dL(Element::NodePositions const & x)
 {
 	using namespace Tensor;
 	using Func::all;
@@ -354,9 +354,9 @@ Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([]() {  // NOLINT(cert
 	using Tensor::Func::all;
 	using Tensor::Func::det;
 	Element::ShapeDerivativeDeterminant det_dN_by_dL_;
-	for (Index i = 0; i < Element::count; i++)
-		for (Index j = 0; j < Element::count; j++)
-			for (Index k = 0; k < Element::count; k++)
+	for (Index i = 0; i < Element::num_nodes; i++)
+		for (Index j = 0; j < Element::num_nodes; j++)
+			for (Index k = 0; k < Element::num_nodes; k++)
 			{
 				Tensor::Matrix<3> dN_by_dL_ijk;
 				dN_by_dL_ijk(0, all) = dN_by_dL(i, all);
@@ -367,7 +367,7 @@ Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([]() {  // NOLINT(cert
 	return det_dN_by_dL_;
 }());
 
-Tensor::Multi<Node::dim, Node::dim, Node::dim> const levi_civita = // NOLINT(cert-err58-cpp)
+Tensor::Multi<Node::dim, Node::dim, Node::dim> const levi_civita =	// NOLINT(cert-err58-cpp)
 	([]() {
 		using LeviCivita = Tensor::Multi<Node::dim, Node::dim, Node::dim>;
 		LeviCivita E;
