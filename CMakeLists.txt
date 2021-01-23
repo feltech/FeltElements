@@ -103,7 +103,7 @@ get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests
 catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")
 # Copy test resources
-set(_resources_dir ${CMAKE_CURRENT_SOURCE_DIR}/src/test/resources)
+set(_resources_dir ${CMAKE_CURRENT_SOURCE_DIR}/resources/test)
 # Gather all resources required for tests (i.e. mesh files).
 file(
 	GLOB_RECURSE _resources LIST_DIRECTORIES false RELATIVE ${_resources_dir}
