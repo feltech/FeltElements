@@ -48,8 +48,6 @@ add_executable(tests)
 
 conan_cmake_run(
 	REQUIRES
-	tetgen/1.5.0@local/tetgen
-
 	boost/1.75.0
 	catch2/2.11.0
 	eigen/3.3.4@conan/stable
@@ -100,7 +98,7 @@ target_link_options(
 # Note: this mix of libs requires `compiler.libcxx=libstdc++11` in ~/.conan/profiles/default
 target_link_libraries(
 	tests PRIVATE
-	project_warnings OpenVolumeMeshd CONAN_PKG::tetgen CONAN_PKG::spdlog CONAN_PKG::fmt)
+	project_warnings OpenVolumeMeshd CONAN_PKG::spdlog CONAN_PKG::fmt)
 get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests
 catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")
