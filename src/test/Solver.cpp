@@ -2,11 +2,11 @@
 #include <FeltElements/Derivatives.hpp>
 #include <FeltElements/Solver.hpp>
 // clang-format off
-#include "util/Format.hpp"
+#include "FeltElements/internal/Format.hpp"
 #include <catch2/catch.hpp>
+#include <boost/range/combine.hpp>
+#include <boost/range/numeric.hpp>
 // clang-format on
-#include <range/v3/view/iota.hpp>
-
 #include "util/Assert.hpp"
 #include "util/IO.hpp"
 
@@ -358,11 +358,12 @@ SCENARIO("Metrics of undeformed mesh")
 	GIVEN("one-element mesh")
 	{
 		FeltElements::Mesh mesh = Test::load_ovm_mesh(file_name_one);
+		Cellh cellh{0};
 
 		WHEN("vertex index mapping is fetched")
 		{
 			Attribute::Cell::VertexHandles const attrib_vtxhs{mesh};
-			auto const & vtxhs = attrib_vtxhs[Cellh{0}];
+			auto const & vtxhs = attrib_vtxhs[cellh];
 
 			THEN("mapping is expected")
 			{
@@ -440,7 +441,23 @@ SCENARIO("Metrics of undeformed mesh")
 						}
 					}
 				}
-			}
+
+				AND_WHEN("boundary position tensor is constructed")
+				{
+					Attribute::Cell::Boundary const attrib_boundary{mesh, attrib_vtxhs};
+					Element::BoundaryVtxhIdxs const & vtxh_idxs = attrib_boundary[cellh];
+					Element::BoundaryNodePositions const & s =
+						attrib_X.for_elements(vtxhs, vtxh_idxs);
+
+					THEN("areas of boundary faces are calculated correctly")
+					{
+						CHECK(Derivatives::A(s[0]) == 0.5);
+						CHECK(Derivatives::A(s[1]) == Approx(0.8660254038));
+						CHECK(Derivatives::A(s[2]) == 0.5);
+						CHECK(Derivatives::A(s[3]) == 0.5);
+					}
+				}
+			}  // AND_WHEN("material node position tensor is constructed")
 		}
 	}
 
@@ -1492,7 +1509,12 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 		AND_GIVEN("an undeformed tetrahedron")
 		{
-			auto [X, x] = Test::load_tet(file_name_one);
+			auto mesh = Test::load_ovm_mesh(file_name_one);
+			Attributes attrib{mesh};
+			Cellh const cellh{0};
+			auto const & vtxhs = attrib.vtxhs[cellh];
+			auto const & X = attrib.X.for_element(vtxhs);
+			auto const & x = attrib.x.for_element(vtxhs);
 
 			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
@@ -1574,6 +1596,89 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 					}
 				}
 			}
+
+			AND_GIVEN("surface shape derivative")
+			{
+				Element::BoundaryVtxhIdxs const & S_to_Vs = attrib.boundary_faces_vtxh_idxs[cellh];
+				Element::BoundaryNodePositions const & Ss = attrib.X.for_elements(vtxhs, S_to_Vs);
+
+				AND_GIVEN("pressure is zero")
+				{
+					constexpr Scalar p = 0.0;
+
+					WHEN("external pressure tangent stiffness tensor is calculated")
+					{
+						auto const & Kp = Derivatives::Kp(Ss, S_to_Vs, p);
+
+						THEN("pressure component is zero")
+						{
+							Test::check_equal(
+								Kp,
+								"Kp",
+								{
+									// clang-format off
+									{
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}}
+									}, {
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}}
+									}, {
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}}
+									}, {
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, 0.000000}}
+									}
+									// clang-format on
+								});
+						}
+					}
+				}
+
+				AND_GIVEN("pressure is one")
+				{
+					constexpr Scalar p = 1.0;
+
+					WHEN("external pressure tangent stiffness tensor is calculated")
+					{
+						auto const & Kp = Derivatives::Kp(Ss, S_to_Vs, p);
+
+						THEN("pressure component is correct")
+						{
+							Test::check_equal(
+								Kp,
+								"Kp",
+								{
+									// clang-format off
+									{
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, -0.166667}, {0.000000, 0.166667, 0.166667}, {0.000000, -0.166667, 0.000000}},
+										{{0.000000, 0.000000, 0.000000}, {0.000000, 0.000000, -0.166667}, {-0.166667, 0.000000, 0.000000}, {0.166667, 0.000000, 0.166667}},
+										{{0.000000, 0.000000, 0.000000}, {0.166667, 0.166667, 0.000000}, {-0.166667, 0.000000, 0.000000}, {0.000000, -0.166667, 0.000000}}
+									}, {
+										{{0.000000, 0.000000, 0.166667}, {0.000000, 0.000000, 0.000000}, {0.000000, -0.061004, -0.288675}, {0.000000, 0.061004, -0.061004}},
+										{{0.000000, 0.000000, 0.166667}, {0.000000, 0.000000, 0.000000}, {0.061004, 0.000000, -0.061004}, {-0.061004, 0.000000, -0.288675}},
+										{{-0.166667, -0.166667, 0.000000}, {0.000000, 0.000000, 0.000000}, {0.288675, 0.061004, 0.000000}, {0.061004, 0.288675, 0.000000}}
+									}, {
+										{{0.000000, -0.166667, -0.166667}, {0.000000, 0.061004, 0.288675}, {0.000000, 0.000000, 0.000000}, {0.000000, 0.288675, 0.061004}},
+										{{0.166667, 0.000000, 0.000000}, {-0.061004, 0.000000, 0.061004}, {0.000000, 0.000000, 0.000000}, {-0.288675, 0.000000, -0.061004}},
+										{{0.166667, 0.000000, 0.000000}, {-0.288675, -0.061004, 0.000000}, {0.000000, 0.000000, 0.000000}, {-0.061004, 0.061004, 0.000000}}
+									}, {
+										{{0.000000, 0.166667, 0.000000}, {0.000000, -0.061004, 0.061004}, {0.000000, -0.288675, -0.061004}, {0.000000, 0.000000, 0.000000}},
+										{{-0.166667, 0.000000, -0.166667}, {0.061004, 0.000000, 0.288675}, {0.288675, 0.000000, 0.061004}, {0.000000, 0.000000, 0.000000}},
+										{{0.000000, 0.166667, 0.000000}, {-0.061004, -0.288675, 0.000000}, {0.061004, -0.061004, 0.000000}, {0.000000, 0.000000, 0.000000}}
+									}
+									// clang-format on
+								});
+						}
+					}
+				}
+			}
+
 		}  // End AND_GIVEN("an undeformed tetrahedron")
 
 		AND_GIVEN("a deformed tetrahedron")
@@ -1701,23 +1806,60 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 	}
 }
 
-// SCENARIO("Enclosed normal pressure")
+//SCENARIO("Single step solution parts")
 //{
-//	GIVEN("a one-element mesh")
+//	GIVEN("one element mesh and basic material properties")
 //	{
 //		auto mesh = Test::load_ovm_mesh(file_name_one);
 //		Attributes attrib{mesh};
 //
-//		WHEN("a face's external pressure component of the stiffness matrix is calculated")
+//		WHEN("pressure stiffness is solved")
 //		{
-//			Scalar const constexpr p = 1;
-//			auto const & vtxhs = attrib.surface_vtxh->at(0);
-//			auto const & dx_by_dS = Derivatives::dX_by_dS(attrib.x.for_element(vtxhs));
-//			Element::Stiffness Kp = Derivatives::Kp();
+//			Cellh cellh{0};
+//			Scalar const p = 1;
+//			auto const & cell_vtxhs = attrib.vtxhs[cellh];
+//			auto const & boundary_faces_idxs = attrib.boundary_faces_vtxh_idxs[cellh];
+//			auto const & boundary_faces_x = attrib.x.for_elements(cell_vtxhs, boundary_faces_idxs);
+//
+//			auto const & Kp = Derivatives::Kp(boundary_faces_x, boundary_faces_idxs, p);
+//
+//			Element::Forces R = 0;
+//			for (const auto & [s, idxs] :
+//				 boost::range::combine(boundary_faces_x, boundary_faces_idxs))
+//			{
+//				const Node::Force & t = (1.0 / BoundaryElement::num_nodes) *
+//					Derivatives::t(p, Derivatives::dX_by_dS(s));
+//				for (Tensor::Index const node_idx : idxs) R(node_idx, Tensor::Func::all) -= t;
+//			}
+//
+//			using Stiffness = Eigen::Matrix<Scalar, 12, 12, Eigen::RowMajor>;
+//			using StiffnessMap = Eigen::Map<Stiffness const, EIGEN_FASTOR_ALIGN>;
+//			using Residual = Eigen::Matrix<Scalar, 12, 1>;
+//			using ResidualMap = Eigen::Map<Residual const, EIGEN_FASTOR_ALIGN>;
+//			using Displacement = Eigen::Matrix<Scalar, 12, 1>;
+//
+//			StiffnessMap const map_K{Kp.data(), 12, 12};
+//			ResidualMap const map_R{R.data(), 12};
+//			Residual const mat_R = -map_R;
+//			Stiffness const mat_K = map_K;
+//
+//			INFO("K")
+//			INFO(mat_K)
+//			INFO("R")
+//			INFO(mat_R)
+//
+//			CHECK(std::abs(mat_K.determinant()) > 0.00001);
+//
+//			Displacement const mat_u = mat_K.inverse() * mat_R;
+//
+//			THEN("displacements are as expected")
+//			{
+//				Displacement expected;
+//				expected << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+//				CHECK(mat_u == expected);
+//			}
 //		}
-//
 //	}
-//
 //}
 
 SCENARIO("Solution of a single element")
@@ -1971,9 +2113,11 @@ void check_solvers(
 	Scalar const expected_volume,
 	std::vector<Scalar> const & expected_positions)
 {
-	auto const total_volume = [&attrib]() {
-		return Derivatives::V(attrib.x.for_element(attrib.vtxhs[Cellh{0}])) +
-			Derivatives::V(attrib.x.for_element(attrib.vtxhs[Cellh{1}]));
+	auto const total_volume = [&attrib, &mesh]() {
+		auto const add = [&attrib](auto const total, auto const & cellh) {
+			return total + Derivatives::V(attrib.x.for_element(attrib.vtxhs[cellh]));
+		};
+		return boost::accumulate(boost::make_iterator_range(mesh.cells()), 0.0, add);
 	};
 
 	auto const material_volume = total_volume();
@@ -2036,6 +2180,44 @@ void check_solvers(
 	}
 }
 
+//SCENARIO("Solution of one element")
+//{
+//	GIVEN("one element mesh and basic material properties")
+//	{
+//		auto mesh = Test::load_ovm_mesh(file_name_one);
+//		Attributes attrib{mesh};
+//		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
+//		constexpr Scalar E = 0.01 * 1e9;   // Young's modulus: 0.001 - 0.05 GPa
+//		attrib.material->rho = 2 * 1e3;	   // Density: 1.1 - 2.3 Mg/m3
+//		attrib.material->mu = 0.01 * 1e9;  // Shear modulus: 0.0003 - 0.02 GPa
+//		// -- Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
+//		attrib.material->lambda =
+//			(attrib.material->mu * (E - 2 * attrib.material->mu)) / (3 * attrib.material->mu - E);
+//
+//		AND_GIVEN("no constraints but pressure")
+//		{
+////			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
+//			attrib.forces->p = -1;
+//
+//			check_solvers(
+//				"single_no_constraint",
+//				mesh,
+//				attrib,
+//				100,
+//				100,
+//				1.0 / 6.0,
+//				{
+//					// clang-format off
+//					0,         0,         0,
+//					0,         0,         1,
+//					1,         0,         0,
+//					0,         1,         0
+//					// clang-format on
+//				});
+//		}
+//	}
+//}
+
 SCENARIO("Solution of two elements")
 {
 	GIVEN("two element mesh and basic material properties")
@@ -2075,9 +2257,9 @@ SCENARIO("Solution of two elements")
 					// clang-format off
 				0,         0,         0,
 				1,         0,         0,
-				0,   0.67397, 0.0744009,
+				0,   0.673986, 0.0744648,
 				0,         0,         1,
-				0,  0.324633,  0.478132
+				0,  0.324621,  0.478153
 					// clang-format on
 				});
 		}
@@ -2137,18 +2319,44 @@ SCENARIO("Solution of two elements")
 				"pressure",
 				mesh,
 				attrib,
-				10,
+				6,
 				12,
-				0.117262742,
+				0.1484595104,
 				{
 					// clang-format off
 				0,            0,            0,
 				1,            0,            0,
-				0,            0.797073,     0.113693,
+				0,            0.929629,     0.0413998,
 				0,            0,            1,
-				0,            0.381007,     0.459038
+				0,            0.457987,     0.485926
 					// clang-format on
 				});
 		}
+
+		//		AND_GIVEN("no constraints but pressure")
+		//		{
+		//			// Set boundary condition.
+		//			for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
+		//				attrib.fixed_dof[vtxh] = Node::Pos{0.0, 0.0, 0.0};
+		//			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
+		//			attrib.forces->p = -10 * atm;
+		//
+		//			check_solvers(
+		//				"no_constraint",
+		//				mesh,
+		//				attrib,
+		//				100,
+		//				100,
+		//				1.0 / 6.0,
+		//				{
+		//					// clang-format off
+		//					0,         0,         0,
+		//					1,         0,         0,
+		//					0,         1,         0,
+		//					0,         0,         1,
+		//					0,       0.5,       0.5
+		//					// clang-format on
+		//				});
+		//		}
 	}
 }

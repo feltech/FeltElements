@@ -13,7 +13,7 @@ namespace Body
 {
 struct Material;
 struct Forces;
-}
+}  // namespace Body
 
 namespace Derivatives
 {
@@ -22,12 +22,15 @@ namespace Derivatives
 	Element::BoundaryVtxhIdxs const & boundary_faces_idxs,
 	Element::BoundaryNodePositions const & boundary_faces_x,
 	Element::ShapeDerivative const & dN_by_dX,
-	Body::Material const & material, Body::Forces const & forces);
+	Body::Material const & material,
+	Body::Forces const & forces);
 
 [[nodiscard]] Element::Stiffness Kc(
 	Element::ShapeDerivative const & dN_by_dx, Scalar v, Element::Elasticity const & c);
 [[nodiscard]] Element::Stiffness Ks(
 	Element::ShapeDerivative const & dN_by_dx, Scalar v, Element::Stress const & s);
+[[nodiscard]] Element::Stiffness Kp(
+	Element::BoundaryNodePositions const & xs, Element::BoundaryVtxhIdxs const & S_to_Vs, Scalar p);
 
 [[nodiscard]] Element::Elasticity c(Scalar J, Scalar lambda, Scalar mu);
 [[nodiscard]] Node::Force t(Scalar p, Element::SurfaceGradient const & dX_by_dS);
@@ -46,6 +49,7 @@ namespace Derivatives
 
 [[nodiscard]] Scalar V(Element::NodePositions const & x);
 [[nodiscard]] Scalar v(Element::NodePositions const & x);
+[[nodiscard]] Scalar A(BoundaryElement::NodePositions const & s);
 
 [[nodiscard]] Element::Gradient dX_by_dL(Element::NodePositions const & X);
 [[nodiscard]] Element::Gradient dL_by_dX(Element::Gradient const & dX_by_dL);

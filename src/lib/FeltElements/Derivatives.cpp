@@ -2,6 +2,7 @@
 
 #include <boost/range/combine.hpp>
 #include <boost/range/irange.hpp>
+#include <boost/range/adaptor/indexed.hpp>
 
 #include "Body.hpp"
 
@@ -126,11 +127,15 @@ Element::StiffnessResidual KR(
 	Element::Stress const sigma = ex::sigma(J, b, material.lambda, material.mu);
 
 	auto const & c = ex::c(J, material.lambda, material.mu);
+	// Elasticity component.
 	auto const & Kc = ex::Kc(dN_by_dx, c);
+	// Initial stress component.
 	auto const & Ks = ex::Ks(dN_by_dx, sigma);
+	// Constitutive (traction) component.
+	auto const & Kp = Derivatives::Kp(boundary_faces_x, boundary_faces_idxs, forces.p);
 
 	// Tangent stiffness matrix.
-	Element::Stiffness K = v * (Kc + Ks);
+	Element::Stiffness K = v * (Kc + Ks) + Kp;
 
 	// Internal forces.
 	auto const & T_by_v = ex::T(dN_by_dx, sigma);
@@ -149,8 +154,9 @@ Element::StiffnessResidual KR(
 	// Traction force.
 	for (const auto & [s, idxs] : boost::range::combine(boundary_faces_x, boundary_faces_idxs))
 	{
-		const Node::Force & t = Derivatives::t(forces.p, Derivatives::dX_by_dS(s));
-		for (Tensor::Index node_idx : idxs) R(node_idx, all) -= t;
+		const Node::Force & t =
+			(1.0 / BoundaryElement::num_nodes) * Derivatives::t(forces.p, Derivatives::dX_by_dS(s));
+		for (Tensor::Index const node_idx : idxs) R(node_idx, all) -= t;
 	}
 
 	assert(Tensor::Func::all_of(R == R));  // Assert no NaNs
@@ -168,6 +174,69 @@ Element::Stiffness Ks(
 	Element::ShapeDerivative const & dN_by_dx, Scalar const v, Element::Stress const & s)
 {
 	return v * ex::Ks(dN_by_dx, s);
+}
+
+
+Element::SurfaceShapeDerivative const dN_by_dS = // NOLINT(cert-err58-cpp)
+	Fastor::evaluate(Fastor::inv(Tensor::Matrix<3, 3>{
+		{1, 1, 1},
+		{0, 1, 0},
+		{0, 0, 1},
+	}))(Fastor::all, Fastor::fseq<1, 3>());
+// clang-format on
+
+namespace
+{
+auto const [KpLHS, KpRHS] = ([]() {  // NOLINT(cert-err58-cpp)
+	using Tensor::Func::all;
+	Tensor::Matrix<3> KpLHS_, KpRHS_;
+	for (auto const a : boost::irange(BoundaryElement::num_nodes))
+		for (auto const b : boost::irange(BoundaryElement::num_nodes))
+		{
+			// Assuming single-point integral, i.e. sample at centre where Na = Nb = 1/3.
+			KpLHS_(a, b) = dN_by_dS(a, 1) * (1.0 / 3.0) - dN_by_dS(b, 1) * (1.0 / 3.0);
+			KpRHS_(a, b) = dN_by_dS(a, 0) * (1.0 / 3.0) - dN_by_dS(b, 0) * (1.0 / 3.0);
+		}
+
+	return std::tuple{KpLHS_, KpRHS_};
+}());
+}
+
+Element::Stiffness Kp(Element::BoundaryNodePositions const & xs, const Element::BoundaryVtxhIdxs & S_to_Vs, Scalar const p)
+{
+	using Tensor::Idxs;
+	using Tensor::Order;
+	using Tensor::Func::all;
+	using Tensor::Func::einsum;
+	enum
+	{
+		i,
+		j,
+		k,
+		a,
+		b
+	};
+	Element::Stiffness K = 0;
+	for (auto const & [x, S_to_V] : boost::range::combine(xs, S_to_Vs))
+	{
+		auto const & dx_by_dS = Derivatives::dX_by_dS(x);
+		Scalar const A = Derivatives::A(x);
+
+		Tensor::Vector<3> const & dx_by_dS1 = dx_by_dS(all, 0);
+		Tensor::Vector<3> const & dx_by_dS2 = dx_by_dS(all, 1);
+		
+		BoundaryElement::Stiffness const & K_face = 0.5 * A * p *
+			(einsum<Idxs<i, j, k>, Idxs<k>, Idxs<a, b>, Order<a, i, b, j>>(
+				 levi_civita, dx_by_dS1, KpLHS) -
+			 einsum<Idxs<i, j, k>, Idxs<k>, Idxs<a, b>, Order<a, i, b, j>>(
+				 levi_civita, dx_by_dS2, KpRHS));
+
+		for (auto const & [face_idx_a, cell_idx_a] : boost::adaptors::index(S_to_V))
+			for (auto const & [face_idx_b, cell_idx_b] : boost::adaptors::index(S_to_V))
+				K(cell_idx_a, all, cell_idx_b, all) += K_face(face_idx_a, all, face_idx_b, all);
+	}
+
+	return K;
 }
 
 Element::Elasticity c(Scalar J, Scalar lambda, Scalar mu)
@@ -288,6 +357,16 @@ Scalar v(Element::NodePositions const & x)
 	return v_wrt_L * det_dx_by_dL(x);
 }
 
+Scalar A(BoundaryElement::NodePositions const & s)
+{
+	using Tensor::Func::all;
+	using Tensor::Func::cross;
+	using Tensor::Func::norm;
+	Tensor::Vector<3> const & v1 = s(0, all) - s(2, all);
+	Tensor::Vector<3> const & v2 = s(1, all) - s(2, all);
+	return 0.5 * norm(cross(v1, v2));
+}
+
 Scalar det_dx_by_dL(Element::NodePositions const & x)
 {
 	using namespace Tensor;
@@ -340,14 +419,6 @@ Element::ShapeDerivative const dN_by_dL = // NOLINT(cert-err58-cpp)
 		{0, 1, 0, 0},
 		{0, 0, 1, 0},
 		{0, 0, 0, 1}}))(Fastor::all, Fastor::fseq<1, 4>());
-
-Element::SurfaceShapeDerivative const dN_by_dS = // NOLINT(cert-err58-cpp)
-	Fastor::evaluate(Fastor::inv(Tensor::Matrix<3, 3>{
-		{1, 1, 1},
-		{0, 1, 0},
-		{0, 0, 1},
-		}))(Fastor::all, Fastor::fseq<1, 3>());
-// clang-format on
 
 Element::ShapeDerivativeDeterminant const det_dN_by_dL = ([]() {  // NOLINT(cert-err58-cpp)
 	using Tensor::Index;

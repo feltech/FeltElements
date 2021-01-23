@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.15)
-include(ExternalProject)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -20,7 +19,7 @@ set_project_warnings(project_warnings)
 
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
 	message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-	file(DOWNLOAD "https://github.com/conan-io/cmake-conan/raw/v0.14/conan.cmake"
+	file(DOWNLOAD "https://github.com/conan-io/cmake-conan/raw/master/conan.cmake"
 		"${CMAKE_BINARY_DIR}/conan.cmake")
 endif()
 include(${CMAKE_BINARY_DIR}/conan.cmake)
@@ -48,14 +47,26 @@ add_executable(tests)
 # Install C++ libraries.
 
 conan_cmake_run(
-	CONANFILE conanfile.txt  # Install from conanfile
-	BASIC_SETUP CMAKE_TARGETS # Run conan_basic_setup
+	REQUIRES
+	tetgen/1.5.0@local/tetgen
+
+	boost/1.75.0
+	catch2/2.11.0
+	eigen/3.3.4@conan/stable
+	fmt/6.2.0
+	spdlog/1.6.1
+
+	OPTIONS
+	boost:header_only=True
+
+	BASIC_SETUP # Run conan_basic_setup
 	PROFILE default PROFILE_AUTO build_type # Use default profile override with Debug/Release
 	BUILD missing  # build packages with no binary available
 	CMAKE_TARGETS  # Generate CMake targets to link to
 )
 conan_load_buildinfo()
 
+include(ExternalProject)
 set(OpenVolumeMesh_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/OpenVolumeMesh)
 ExternalProject_Add(
 	OpenVolumeMeshGit

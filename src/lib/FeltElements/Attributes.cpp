@@ -93,23 +93,23 @@ Boundary::Boundary(Mesh & mesh, VertexHandles const & vtxhs) : CellBase(mesh)
 			if (!mesh.is_boundary(Mesh::face_handle(hfh)))
 				continue;
 
-			BoundaryElement::VtxhIdxs vtxhidxs;
-			Tensor::Index vtx_idx = 0;
+			// Indices of vertex handles for this face within this cell's list of vertex handles.
+			BoundaryElement::VtxhIdxs vtxh_idxs;
 			// Get opposite half-face so winding order is on the outside (i.e. normal calculated
 			// from cross product points outward).
-			Mesh::Face const boundary_face = mesh.opposite_halfface(hfh);
+			Mesh::Face const & boundary_face = mesh.opposite_halfface(hfh);
 
-			for (auto const & heh : boundary_face.halfedges())
+			for (auto const & [vtx_idx, heh] : boost::adaptors::index(boundary_face.halfedges()))
 			{
+				// Handle to vertex at start endpoint of this halfedge.
 				Vtxh const & vtxh = mesh.halfedge(heh).from_vertex();
-				// Get index of handle in cell.
-				auto const vtxhidx = static_cast<Tensor::Index>(
-					std::distance(cell_vtxhs.begin(), boost::range::find(cell_vtxhs, vtxh)));
-				vtxhidxs[vtx_idx++] = vtxhidx;
+				using VtxhIdx = decltype(vtxh_idxs)::size_type;
+				// Face vertex's index within cell's list of vertex handles.
+				vtxh_idxs[static_cast<VtxhIdx>(vtx_idx)] =
+					static_cast<Tensor::Index>(index_of(cell_vtxhs, vtxh));
 			}
-			assert(vtx_idx == 3);
 
-			(*this)[cellh].push_back(vtxhidxs);
+			(*this)[cellh].push_back(vtxh_idxs);
 		}
 	}
 }

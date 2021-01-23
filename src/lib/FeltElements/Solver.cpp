@@ -1,26 +1,18 @@
+// For spdlog
+#include "internal/Format.hpp"
 #include "Solver.hpp"
 #ifndef SPDLOG_ACTIVE_LEVEL
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_DEBUG
 #endif
 
 #include <spdlog/spdlog.h>
+#include <boost/range/irange.hpp>
 
 #include "Attributes.hpp"
 #include "Derivatives.hpp"
-#include "Format.hpp"
 
 namespace FeltElements::Solver
 {
-namespace
-{
-constexpr auto const index_of = [](auto const & haystack, auto && needle) {
-	auto const & it =
-		std::find(haystack.cbegin(), haystack.cend(), std::forward<decltype(needle)>(needle));
-	return static_cast<FeltElements::Tensor::Index>(std::distance(haystack.cbegin(), it));
-};
-
-}  // namespace
-
 void update_elements_stiffness_and_residual(
 	Mesh const & mesh, FeltElements::Attributes & attributes)
 {
@@ -87,6 +79,12 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 				mat_R.block<3, 1>(3 * vtx_idx, 0) += Ra;
 			}
 		}
+
+		// Compute sum to check equilibrium.
+//		Eigen::Vector3d sum; sum.setZero();
+//		Eigen::Map<Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>> mat_R_Nx3{mat_R.data(), mat_R.rows() / 3, 3};
+//		for (Eigen::Index const node_idx : boost::irange(mat_R_Nx3.rows()))
+//			sum += mat_R_Nx3.row(node_idx);
 
 		auto const update_submatrix =
 			[&mat_K, &attrib](auto const vtxh_src, auto const vtxh_dst, auto const cellh_) {
@@ -208,8 +206,8 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 			using Tensor::Func::abs;
 			using Tensor::Func::max;
 			max_norm = std::max(max(abs(u[a])), max_norm);
-			SPDLOG_DEBUG("\nR[{}] = {}", a, Ra);
-			SPDLOG_DEBUG("\nu[{}] = {}", a, u[a]);
+			SPDLOG_DEBUG("R[{}] = {}", a, Ra);
+			SPDLOG_DEBUG("u[{}] = {}", a, u[a]);
 		}
 
 		if (max_norm < epsilon)

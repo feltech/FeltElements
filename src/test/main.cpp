@@ -1,7 +1,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
-#include "util/Format.hpp"
+#include "FeltElements/internal/Format.hpp"
 #define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_CONSOLE_WIDTH 200
 #include <catch2/catch.hpp>

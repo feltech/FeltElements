@@ -3,6 +3,7 @@
 
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <boost/container/static_vector.hpp>
+#include <boost/range/algorithm/find.hpp>
 #include <boost/range/iterator.hpp>
 
 namespace FeltElements
@@ -91,7 +92,8 @@ static constexpr Tensor::Index num_nodes = Element::num_nodes - 1;
 
 using Vtxhs = FeltElements::Vtxhs<num_nodes>;
 using VtxhIdxs = std::array<Tensor::Index, BoundaryElement::num_nodes>;
-using NodePositions = Fastor::Tensor<Scalar, num_nodes, Node::dim>;
+using NodePositions = Tensor::Matrix<num_nodes, Node::dim>;
+using Stiffness = Tensor::Multi<num_nodes, Node::dim, num_nodes, Node::dim>;
 }  // namespace BoundaryElement
 
 namespace Element
@@ -104,6 +106,8 @@ using BoundaryNodePositions = PerFace<BoundaryElement::NodePositions>;
 }  // namespace FeltElements
 
 // Override index type for ranges to avoid the need to static_cast all over the place.
+// TODO: this is basically for boost::adaptors::index - overriding the difference_type for all
+// 	range_iterators seems a bit extreme, and potentially dangerous.
 template <>
 struct boost::iterator_difference<
 	boost::range_iterator<const FeltElements::BoundaryElement::VtxhIdxs>::type>
@@ -115,4 +119,10 @@ struct boost::iterator_difference<
 	boost::range_iterator<const FeltElements::Element::BoundaryNodePositions>::type>
 {
 	using type = FeltElements::Element::BoundaryNodePositions::size_type;
+};
+
+constexpr auto const index_of = [](auto && haystack, auto && needle) {
+	auto const & it = boost::range::find(
+		std::forward<decltype(haystack)>(haystack), std::forward<decltype(needle)>(needle));
+	return std::distance(haystack.begin(), it);
 };

@@ -7,11 +7,13 @@
 
 #include <FeltElements/Typedefs.hpp>
 #include <boost/algorithm/string/join.hpp>
-#include <range/v3/view/subrange.hpp>
-#include <range/v3/view/transform.hpp>
+#include <boost/range/adaptor/transformed.hpp>
 
+namespace
+{
 // std::to_string has non-configurable precision of too many decimal places.
 auto const to_string = [](auto const f) { return fmt::format("{:f}", f); };
+}  // namespace
 
 template <std::size_t dim0, std::size_t dim1, std::size_t dim2, std::size_t dim3>
 std::ostream & operator<<(
@@ -34,8 +36,8 @@ std::ostream & operator<<(
 				Vec const & vec = value(i, j, k, all);
 
 				ks[k] = join(
-					ranges::subrange{vec.data(), vec.data() + Vec::size()} |
-						ranges::views::transform(to_string),
+					boost::make_iterator_range(vec.data(), vec.data() + Vec::size()) |
+						boost::adaptors::transformed(to_string),
 					", ");
 			}
 			js[j] = join(ks, "}, {");
@@ -64,8 +66,8 @@ std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Multi<dim0, d
 			Vec const & vec = value(i, j, all);
 
 			js[j] = join(
-				ranges::subrange{vec.data(), vec.data() + Vec::size()} |
-					ranges::views::transform(to_string),
+				boost::make_iterator_range(vec.data(), vec.data() + Vec::size()) |
+					boost::adaptors::transformed(to_string),
 				", ");
 		}
 		is[i] = join(js, "},\n\t{");
@@ -87,8 +89,8 @@ std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Matrix<dim0, 
 		using Vec = Vector<value.dimension(1)>;
 		Vec const & vec = value(i, all);
 		is[i] = join(
-			ranges::subrange{vec.data(), vec.data() + Vec::size()} |
-				ranges::views::transform(to_string),
+			boost::make_iterator_range(vec.data(), vec.data() + Vec::size()) |
+				boost::adaptors::transformed(to_string),
 			", ");
 	}
 	os << "{\n\t{" << join(is, "},\n\t{") << "}\n}";
@@ -98,17 +100,24 @@ std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Matrix<dim0, 
 inline std::ostream & operator<<(
 	std::ostream & os, std::vector<OpenVolumeMesh::VertexHandle> const & vtxhs)
 {
+	using boost::adaptors::transformed;
 	using boost::algorithm::join;
-	using ranges::views::transform;
-	os << join(vtxhs | transform([](auto vtxh) { return vtxh.idx(); }) | transform(to_string), ", ")
-	   << "\n";
+
+	constexpr auto to_idx = [](auto const & vtxh) { return vtxh.idx(); };
+
+	os << join(vtxhs | transformed(to_idx) | transformed(to_string), ", ") << "\n";
 	return os;
 }
 
-inline std::ostream & operator<<(std::ostream & os, FeltElements::Mesh::PointT const & vtx)
+inline std::ostream & operator<<(std::ostream & os, FeltElements::Vtx const & vtx)
 {
-	using boost::algorithm::join;
-	using ranges::views::transform;
-	os << fmt::format("{{{}, {}, {}}}\n", vtx[0], vtx[1], vtx[2]);
+	os << fmt::format("{{{}, {}, {}}}", vtx[0], vtx[1], vtx[2]);
+	return os;
+}
+
+inline std::ostream & operator<<(std::ostream & os, FeltElements::Node::Pos const & pos)
+{
+	os << fmt::format("{{{}, {}, {}}}", pos(0), pos(1), pos(2));
+
 	return os;
 }
