@@ -14,7 +14,6 @@ namespace MeshBody
 {
 class MaterialProperties;
 class Forces;
-class Surface;
 }  // namespace MeshBody
 namespace Vertex
 {
@@ -46,11 +45,6 @@ template <>
 struct Traits<MeshBody::Forces> : public MeshTraits<Body::Forces>
 {
 	static constexpr std::string_view prop_name = "body_forces";
-};
-template <>
-struct Traits<MeshBody::Surface> : public MeshTraits<std::vector<BoundaryElement::Vtxhs>>
-{
-	static constexpr std::string_view prop_name = "surface_vertices";
 };
 template <>
 struct Traits<Surface::Traction> : public SurfaceTraits<Node::Force>
@@ -117,16 +111,6 @@ class Forces final : private internal::MeshBase<Forces>
 
 public:
 	explicit Forces(Mesh & mesh);
-	using ThisBase::operator*;
-	using ThisBase::operator->;
-};
-
-class Surface final : private internal::MeshBase<Surface>
-{
-	using ThisBase = internal::MeshBase<Surface>;
-
-public:
-	explicit Surface(Mesh & mesh);
 	using ThisBase::operator*;
 	using ThisBase::operator->;
 };
@@ -233,7 +217,6 @@ struct Attributes final
 	explicit Attributes(Mesh & mesh);
 	Attribute::MeshBody::MaterialProperties material;
 	Attribute::MeshBody::Forces forces;
-	Attribute::MeshBody::Surface surface_vtxh;
 	Attribute::Vertex::SpatialPosition x;
 	Attribute::Vertex::MaterialPosition const X;
 	Attribute::Vertex::FixedDOF fixed_dof;

@@ -688,7 +688,8 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_one);
 		Attributes const attrib{mesh};
-		auto const & X = attrib.X.for_element(attrib.vtxhs[Cellh{0}]);
+		Cellh const cellh{0};
+		auto const & X = attrib.X.for_element(attrib.vtxhs[cellh]);
 
 		WHEN("derivative of material wrt local coords is calculated")
 		{
@@ -796,14 +797,15 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			using Tensor::Func::fseq;
 			using Tensor::Func::last;
 
-			BoundaryElement::NodePositions const & Xs1 =
-				attrib.X.for_element(attrib.surface_vtxh->at(0));
-			BoundaryElement::NodePositions const & Xs2 =
-				attrib.X.for_element(attrib.surface_vtxh->at(1));
-			BoundaryElement::NodePositions const & Xs3 =
-				attrib.X.for_element(attrib.surface_vtxh->at(2));
-			BoundaryElement::NodePositions const & Xs4 =
-				attrib.X.for_element(attrib.surface_vtxh->at(3));
+			Element::BoundaryNodePositions const & ss =
+				attrib.X.for_elements(attrib.vtxhs[cellh], attrib.boundary_faces_vtxh_idxs[cellh]);
+
+			REQUIRE(ss.size() == 4);
+
+			BoundaryElement::NodePositions const & Xs1 = ss[0];
+			BoundaryElement::NodePositions const & Xs2 = ss[1];
+			BoundaryElement::NodePositions const & Xs3 = ss[2];
+			BoundaryElement::NodePositions const & Xs4 = ss[3];
 
 			auto const & dX1_by_dS = Derivatives::dX_by_dS(Xs1);
 			auto const & dX2_by_dS = Derivatives::dX_by_dS(Xs2);
@@ -812,7 +814,6 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 			THEN("derivative is correct")
 			{
-				CHECK(attrib.surface_vtxh->size() == 4);
 				// clang-format off
 				Test::check_equal(Xs1, "Xs1", {
 					{0.000000, 0.000000, 0.000000},
@@ -1373,7 +1374,8 @@ SCENARIO("Internal equivalent nodal force")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_one);
 		auto attrib = Attributes{mesh};
-		auto const & vtxhs = attrib.vtxhs[Cellh{0}];
+		Cellh const cellh{0};
+		auto const & vtxhs = attrib.vtxhs[cellh];
 		auto const & X = attrib.X.for_element(vtxhs);
 		auto x = attrib.x.for_element(vtxhs);
 
@@ -1431,8 +1433,9 @@ SCENARIO("Internal equivalent nodal force")
 		WHEN("uniform pressure traction force is calculated")
 		{
 			Scalar constexpr p = 10.0;
-			Node::Force t = Derivatives::t(
-				p, Derivatives::dX_by_dS(attrib.x.for_element(attrib.surface_vtxh->at(0))));
+			Element::BoundaryNodePositions const & ss =
+				attrib.X.for_elements(attrib.vtxhs[cellh], attrib.boundary_faces_vtxh_idxs[cellh]);
+			Node::Force t = Derivatives::t(p, Derivatives::dX_by_dS(ss[0]));
 
 			THEN("pressure component is as expected")
 			{

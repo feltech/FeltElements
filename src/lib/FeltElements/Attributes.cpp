@@ -15,18 +15,6 @@ MaterialProperties::MaterialProperties(Mesh & mesh) : ThisBase(mesh)
 	(*(*this)) = Body::Material{0, 0, 0};
 }
 
-Surface::Surface(Mesh & mesh) : ThisBase(mesh)
-{
-	for (auto ithfh = mesh.bhf_iter(); ithfh.valid(); ithfh++)
-	{
-		BoundaryElement::Vtxhs vtxhs;
-		Tensor::Index vtx_idx = 0;
-		for (auto halfedgeh : boost::make_iterator_range(mesh.halfface_halfedges(*ithfh)))
-			vtxhs[vtx_idx++] = mesh.halfedge(halfedgeh).from_vertex();
-		(*this)->push_back(vtxhs);
-	}
-}
-
 Forces::Forces(Mesh & mesh) : MeshBase(mesh)
 {
 	(*(*this)) = Body::Forces{0, {0, 0, 0}};
@@ -119,7 +107,6 @@ Boundary::Boundary(Mesh & mesh, VertexHandles const & vtxhs) : CellBase(mesh)
 Attributes::Attributes(Mesh & mesh)
 	: material{mesh},
 	  forces{mesh},
-	  surface_vtxh{mesh},
 	  x{mesh},
 	  X{mesh},
 	  fixed_dof(mesh),
