@@ -71,7 +71,9 @@ ExternalProject_Add(
 	OpenVolumeMeshGit
 	GIT_REPOSITORY "https://www.graphics.rwth-aachen.de:9000/OpenVolumeMesh/OpenVolumeMesh.git"
 	PREFIX "${CMAKE_CURRENT_BINARY_DIR}/OpenVolumeMesh"
-	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${OpenVolumeMesh_DIR}
+	CMAKE_ARGS
+	-DCMAKE_INSTALL_PREFIX:PATH=${OpenVolumeMesh_DIR}
+	-DBUILD_SHARED_LIBS:BOOL=OFF
 	BUILD_BYPRODUCTS # Required for ninja
 )
 # Create OpenVolumeMesh interface target
