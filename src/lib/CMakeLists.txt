@@ -1,11 +1,11 @@
 # Create static library
-add_library(feltelements STATIC)
-# Link OpenVolumeMesh
-add_dependencies(feltelements OpenVolumeMeshGit)
+add_library(feltelements.lib STATIC)
+set_target_properties(feltelements.lib PROPERTIES OUTPUT_NAME "feltelements")
+
 # Add libraries to link.
 # Note: this mix of libs requires `compiler.libcxx=libstdc++11` in ~/.conan/profiles/default
 target_link_libraries(
-	feltelements
+	feltelements.lib
 	PUBLIC
 	EXT::OpenVolumeMesh
 	EXT::Fastor
@@ -17,9 +17,10 @@ target_link_libraries(
 	CONAN_PKG::boost
 )
 # Library include directories
-target_include_directories(feltelements PUBLIC .)
+target_include_directories(feltelements.lib PUBLIC .)
 # Put lib under a "lib" directory.
-set_target_properties(feltelements PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set_target_properties(
+	feltelements.lib PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 # Add source files to target.
 file(GLOB_RECURSE _src_lib LIST_DIRECTORIES false *.cpp)
-target_sources(feltelements PRIVATE ${_src_lib})
+target_sources(feltelements.lib PRIVATE ${_src_lib})

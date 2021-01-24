@@ -1,29 +1,31 @@
 # Create test executable
-add_executable(tests)
+add_executable(feltelements.tests)
+set_target_properties(feltelements.tests PROPERTIES OUTPUT_NAME "tests")
 include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 # Put tests executable under a "test" directory, rather than "bin".
-set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
+set_target_properties(
+	feltelements.tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
 # Add source files to tests target.
 file(GLOB_RECURSE _src_test LIST_DIRECTORIES false *.cpp)
-target_sources(tests PRIVATE ${_src_test})
+target_sources(feltelements.tests PRIVATE ${_src_test})
 # Add sanitizer and coverage build options.
 target_compile_options(
-	tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage)
+	feltelements.tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage)
 target_link_options(
-	tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage)
+	feltelements.tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage)
 # Add libraries to link.
 # Note: this mix of libs requires `compiler.libcxx=libstdc++11` in ~/.conan/profiles/default
 target_link_libraries(
-	tests
+	feltelements.tests
 	PRIVATE
 	project_warnings
-	feltelements
+	feltelements.lib
 	CONAN_PKG::fmt
 	CONAN_PKG::boost
 	CONAN_PKG::catch2)
-get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
+get_target_property(_test_runtime_dir feltelements.tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests
-catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")
+catch_discover_tests(feltelements.tests WORKING_DIRECTORY "${_test_runtime_dir}")
 # Copy test resources
 set(_resources_dir ${CMAKE_SOURCE_DIR}/resources/test)
 # Gather all resources required for tests (i.e. mesh files).

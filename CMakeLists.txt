@@ -66,6 +66,11 @@ include (vendor/CreateTargets.cmake)
 add_subdirectory(src/lib)
 
 ###################################
+# Configure app
+
+add_subdirectory(src/app)
+
+###################################
 # Configure tests
 
 add_subdirectory(src/test)
