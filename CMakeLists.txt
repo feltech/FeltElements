@@ -33,18 +33,9 @@ conan_check(REQUIRED)
 add_compile_options(
 	# Enable SSE etc
 	-march=native)
-# Global compiler definitions
-add_compile_definitions(
-	# Required for OpenVolumeMesh
-	INCLUDE_TEMPLATES=1)
-
-# Create static library
-add_library(feltelements STATIC)
-# Create test executable
-add_executable(tests)
 
 ###################################
-# Install C++ libraries.
+# Install/configure conan libraries.
 
 conan_cmake_run(
 	REQUIRES
@@ -61,11 +52,15 @@ conan_cmake_run(
 	PROFILE default PROFILE_AUTO build_type # Use default profile override with Debug/Release
 	BUILD missing  # build packages with no binary available
 	CMAKE_TARGETS  # Generate CMake targets to link to
+	NO_OUTPUT_DIRS
 )
 conan_load_buildinfo()
 
+###################################
+# Install/configure external libraries.
+
 include(ExternalProject)
-# Download and install OpenVolumeMesh
+# Download and install OpenVolumeMesh.
 set(OpenVolumeMesh_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/OpenVolumeMesh)
 ExternalProject_Add(
 	OpenVolumeMeshGit
@@ -76,22 +71,22 @@ ExternalProject_Add(
 	-DBUILD_SHARED_LIBS:BOOL=OFF
 	BUILD_BYPRODUCTS # Required for ninja
 )
-# Create OpenVolumeMesh interface target
+# Create OpenVolumeMesh interface target.
 add_library(EXT::OpenVolumeMesh INTERFACE IMPORTED)
+set_property(
+	TARGET EXT::OpenVolumeMesh
+	PROPERTY INTERFACE_COMPILE_DEFINITIONS
+	INCLUDE_TEMPLATES=1  # Required to avoid compile errors
+)
 set_property(
 	TARGET EXT::OpenVolumeMesh
 	PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${OpenVolumeMesh_DIR}/include)
 set_property(
 	TARGET EXT::OpenVolumeMesh PROPERTY INTERFACE_LINK_DIRECTORIES ${OpenVolumeMesh_DIR}/lib)
-if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-	set_property(
-		TARGET EXT::OpenVolumeMesh PROPERTY INTERFACE_LINK_LIBRARIES OpenVolumeMeshd)
-else()
-	set_property(
-		TARGET EXT::OpenVolumeMesh PROPERTY INTERFACE_LINK_LIBRARIES OpenVolumeMesh)
-endif()
+set_property(
+	TARGET EXT::OpenVolumeMesh PROPERTY INTERFACE_LINK_LIBRARIES OpenVolumeMesh)
 
-# Create Fastor interface target
+# Create Fastor interface target.
 add_library(EXT::Fastor INTERFACE IMPORTED)
 set_property(
 	TARGET EXT::Fastor
@@ -100,6 +95,8 @@ set_property(
 ###################################
 # Configure lib
 
+# Create static library
+add_library(feltelements STATIC)
 # Link OpenVolumeMesh
 add_dependencies(feltelements OpenVolumeMeshGit)
 # Add libraries to link.
@@ -127,6 +124,8 @@ target_sources(feltelements PRIVATE ${_src_lib})
 ###################################
 # Configure tests
 
+# Create test executable
+add_executable(tests)
 include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 # Put tests executable under a "test" directory, rather than "bin".
 set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
