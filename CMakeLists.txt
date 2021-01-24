@@ -33,13 +33,13 @@ conan_check(REQUIRED)
 add_compile_options(
 	# Enable SSE etc
 	-march=native)
-# Glob lib sources
-file(GLOB_RECURSE _src_lib src/lib/*.cpp)
 # Global compiler definitions
 add_compile_definitions(
 	# Required for OpenVolumeMesh
 	INCLUDE_TEMPLATES=1)
 
+# Create static library
+add_library(feltelements STATIC)
 # Create test executable
 add_executable(tests)
 
@@ -65,6 +65,7 @@ conan_cmake_run(
 conan_load_buildinfo()
 
 include(ExternalProject)
+# Download and install OpenVolumeMesh
 set(OpenVolumeMesh_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/OpenVolumeMesh)
 ExternalProject_Add(
 	OpenVolumeMeshGit
@@ -73,9 +74,53 @@ ExternalProject_Add(
 	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${OpenVolumeMesh_DIR}
 	BUILD_BYPRODUCTS # Required for ninja
 )
+# Create OpenVolumeMesh interface target
+add_library(EXT::OpenVolumeMesh INTERFACE IMPORTED)
+set_property(
+	TARGET EXT::OpenVolumeMesh
+	PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${OpenVolumeMesh_DIR}/include)
+set_property(
+	TARGET EXT::OpenVolumeMesh PROPERTY INTERFACE_LINK_DIRECTORIES ${OpenVolumeMesh_DIR}/lib)
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+	set_property(
+		TARGET EXT::OpenVolumeMesh PROPERTY INTERFACE_LINK_LIBRARIES OpenVolumeMeshd)
+else()
+	set_property(
+		TARGET EXT::OpenVolumeMesh PROPERTY INTERFACE_LINK_LIBRARIES OpenVolumeMesh)
+endif()
 
+# Create Fastor interface target
+add_library(EXT::Fastor INTERFACE IMPORTED)
+set_property(
+	TARGET EXT::Fastor
+	PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/Fastor)
+
+###################################
+# Configure lib
+
+# Link OpenVolumeMesh
+add_dependencies(feltelements OpenVolumeMeshGit)
+# Add libraries to link.
+# Note: this mix of libs requires `compiler.libcxx=libstdc++11` in ~/.conan/profiles/default
+target_link_libraries(
+	feltelements
+	PUBLIC
+	EXT::OpenVolumeMesh
+	EXT::Fastor
+	CONAN_PKG::eigen
+	CONAN_PKG::spdlog
+	PRIVATE
+	project_warnings
+	CONAN_PKG::fmt
+	CONAN_PKG::boost
+)
 # Library include directories
-include_directories(src/lib SYSTEM vendor/Fastor ${OpenVolumeMesh_DIR}/include ${CONAN_INCLUDE_DIRS})
+target_include_directories(feltelements PUBLIC src/lib)
+# Put lib under a "lib" directory.
+set_target_properties(feltelements PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+# Add source files to target.
+file(GLOB_RECURSE _src_lib LIST_DIRECTORIES false src/lib/*.cpp)
+target_sources(feltelements PRIVATE ${_src_lib})
 
 ###################################
 # Configure tests
@@ -85,10 +130,7 @@ include(${CONAN_LIB_DIRS_CATCH2}/cmake/Catch2/Catch.cmake)
 set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
 # Add source files to tests target.
 file(GLOB_RECURSE _src_test LIST_DIRECTORIES false src/test/*.cpp)
-target_sources(tests PRIVATE ${_src_test} ${_src_lib})
-# Link OpenVolumeMesh
-add_dependencies(tests OpenVolumeMeshGit)
-target_link_directories(tests PRIVATE ${OpenVolumeMesh_DIR}/lib)
+target_sources(tests PRIVATE ${_src_test})
 # Add sanitizer and coverage build options.
 target_compile_options(
 	tests PRIVATE -fsanitize=address,leak,undefined -static-libasan --coverage)
@@ -97,8 +139,13 @@ target_link_options(
 # Add libraries to link.
 # Note: this mix of libs requires `compiler.libcxx=libstdc++11` in ~/.conan/profiles/default
 target_link_libraries(
-	tests PRIVATE
-	project_warnings OpenVolumeMeshd CONAN_PKG::spdlog CONAN_PKG::fmt)
+	tests
+	PRIVATE
+	project_warnings
+	feltelements
+	CONAN_PKG::fmt
+	CONAN_PKG::boost
+	CONAN_PKG::catch2)
 get_target_property(_test_runtime_dir tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests
 catch_discover_tests(tests WORKING_DIRECTORY "${_test_runtime_dir}")
