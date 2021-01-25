@@ -11,10 +11,10 @@ target_link_libraries(
 	EXT::Fastor
 	CONAN_PKG::eigen
 	CONAN_PKG::spdlog
+	CONAN_PKG::boost
 	PRIVATE
 	project_warnings
 	CONAN_PKG::fmt
-	CONAN_PKG::boost
 )
 # Library include directories
 target_include_directories(feltelements.lib PUBLIC .)

@@ -38,14 +38,19 @@ add_compile_options(
 
 conan_cmake_run(
 	REQUIRES
+	# TODO(df): Linking boost links _all_ it's static libraries, when we don't want them, except for
+	#	program_options.  The bincrafters packages allow nice modular linking, but at time of
+	#	writing only go up to 1.69, which is missing fixes for boost::adaptors::index to allow
+	#	destructuring assignment in the for loop.
 	boost/1.75.0
+#	boost_algorithm/1.69.0@bincrafters/stable
+#	boost_container/1.69.0@bincrafters/stable
+#	boost_program_options/1.69.0@bincrafters/stable
+#	boost_range/1.69.0@bincrafters/stable
 	catch2/2.11.0
 	eigen/3.3.4@conan/stable
 	fmt/6.2.0
 	spdlog/1.6.1
-
-	OPTIONS
-	boost:header_only=True
 
 	BASIC_SETUP # Run conan_basic_setup
 	PROFILE default PROFILE_AUTO build_type # Use default profile override with Debug/Release

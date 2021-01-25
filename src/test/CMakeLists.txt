@@ -21,7 +21,6 @@ target_link_libraries(
 	project_warnings
 	feltelements.lib
 	CONAN_PKG::fmt
-	CONAN_PKG::boost
 	CONAN_PKG::catch2)
 get_target_property(_test_runtime_dir feltelements.tests RUNTIME_OUTPUT_DIRECTORY)
 # Add CTest tests

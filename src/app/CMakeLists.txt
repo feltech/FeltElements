@@ -6,5 +6,6 @@ target_link_libraries(
 	feltelements.app
 	PRIVATE
 	feltelements.lib
-	CONAN_PKG::boost
+	# CONAN_PKG::boost_program_options  # See top-level CMakeLists.txt.
+	CONAN_PKG::fmt
 )

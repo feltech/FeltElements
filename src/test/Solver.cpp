@@ -1389,7 +1389,7 @@ SCENARIO("Internal equivalent nodal force")
 		double const mu = 0.4;	// Shear modulus: 0.0003 - 0.02
 		double const E = 1;		// Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		double lambda = Body::Material::lames_first(E, mu);
 
 		WHEN("neo-hookean stress is calculated")
 		{
@@ -1504,7 +1504,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 		double const mu = 0.4;	// Shear modulus: 0.0003 - 0.02
 		double const E = 1;		// Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		double lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
+		double lambda = Body::Material::lames_first(E, mu);
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
@@ -2232,8 +2232,7 @@ SCENARIO("Solution of two elements")
 		attrib.material->rho = 2 * 1e3;	   // Density: 1.1 - 2.3 Mg/m3
 		attrib.material->mu = 0.01 * 1e9;  // Shear modulus: 0.0003 - 0.02 GPa
 		// -- Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		attrib.material->lambda =
-			(attrib.material->mu * (E - 2 * attrib.material->mu)) / (3 * attrib.material->mu - E);
+		attrib.material->lambda = Body::Material::lames_first(E, attrib.material->mu);
 		attrib.forces->p = 0;					  // Normal pressure
 		attrib.forces->F_by_m = {0.0, 0.0, 0.0};  // Force per unit mass.
 		// Set boundary condition.
