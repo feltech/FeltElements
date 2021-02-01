@@ -2132,11 +2132,11 @@ void check_solvers(
 	Eigen::Index constexpr cols = 3;
 
 	INFO("Mesh material vertices")
-	Solver::LDLT::EigenMapOvmVertices mat_vtxs{mesh.vertex(Vtxh{0}).data(), rows, cols};
+	Solver::Matrix::EigenMapOvmVertices mat_vtxs{mesh.vertex(Vtxh{0}).data(), rows, cols};
 	INFO(mat_vtxs)
 
 	INFO("Mesh initial spatial vertices")
-	Solver::LDLT::EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
+	Solver::Matrix::EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
 	INFO(mat_x)
 
 	auto const check_converges = [&mat_x, &total_volume, expected_volume, &expected_positions](
@@ -2145,7 +2145,7 @@ void check_solvers(
 		Test::check_equal(
 			mat_x,
 			"x",
-			Solver::LDLT::EigenMapOvmVertices{
+			Solver::Matrix::EigenMapOvmVertices{
 				expected_positions.data(), mat_x.rows(), mat_x.cols()},
 			"expected");
 
@@ -2155,7 +2155,7 @@ void check_solvers(
 	WHEN("displacement is solved using Eigen LDLT")
 	{
 		auto const max_steps = max_ldlt_steps;
-		size_t const step = Solver::LDLT::solve(mesh, attrib, max_steps);
+		size_t const step = Solver::Matrix::solve(mesh, attrib, max_steps);
 
 		Test::write_ovm_mesh(mesh, attrib.x, fmt::format("{}_ldlt_{}", file_name_prefix, step));
 

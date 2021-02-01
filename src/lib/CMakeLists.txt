@@ -1,7 +1,7 @@
 # Create static library
 add_library(feltelements.lib STATIC)
 set_target_properties(feltelements.lib PROPERTIES OUTPUT_NAME "feltelements")
-
+find_package(OpenMP REQUIRED)
 # Add libraries to link.
 # Note: this mix of libs requires `compiler.libcxx=libstdc++11` in ~/.conan/profiles/default
 target_link_libraries(
@@ -10,11 +10,12 @@ target_link_libraries(
 	EXT::OpenVolumeMesh
 	EXT::Fastor
 	CONAN_PKG::eigen
-	CONAN_PKG::spdlog
-	CONAN_PKG::boost
+	OpenMP::OpenMP_CXX
 	PRIVATE
 	project_warnings
 	CONAN_PKG::fmt
+	CONAN_PKG::boost
+	CONAN_PKG::spdlog
 )
 # Library include directories
 target_include_directories(feltelements.lib PUBLIC .)

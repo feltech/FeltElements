@@ -1,23 +1,23 @@
-// For spdlog
-#include "internal/Format.hpp"
-#include "Solver.hpp"
-#ifndef SPDLOG_ACTIVE_LEVEL
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_DEBUG
-#endif
-
 #include <spdlog/spdlog.h>
+#include <Eigen/IterativeLinearSolvers>
 #include <boost/range/irange.hpp>
 
 #include "Attributes.hpp"
 #include "Derivatives.hpp"
+#include "Solver.hpp"
+#include "internal/Format.hpp"  // For logging
 
 namespace FeltElements::Solver
 {
 void update_elements_stiffness_and_residual(
 	Mesh const & mesh, FeltElements::Attributes & attributes)
 {
-	for (auto cellh : boost::make_iterator_range(mesh.cells()))
+	auto const num_cells = static_cast<int>(mesh.n_cells());
+
+#pragma omp parallel for default(none) shared(num_cells, attributes)
+	for (int cell_idx = 0; cell_idx < num_cells; cell_idx++)
 	{
+		Cellh cellh{cell_idx};
 		auto const & cell_vtxhs = attributes.vtxhs[cellh];
 		auto const & boundary_faces_vtxh_idxs = attributes.boundary_faces_vtxh_idxs[cellh];
 
@@ -33,9 +33,10 @@ void update_elements_stiffness_and_residual(
 	}
 }
 
-namespace LDLT
+namespace Matrix
 {
-std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
+std::size_t solve(
+	Mesh & mesh, Attributes & attrib, std::size_t max_steps, std::atomic_uint * counter)
 {
 	constexpr Scalar epsilon = 0.00005;
 	constexpr Scalar penalty = std::numeric_limits<Scalar>::max() / 2;
@@ -56,7 +57,10 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 	std::size_t step;
 	for (step = 0; step < max_steps; step++)
 	{
-		SPDLOG_DEBUG("LDLT iteration {}", step);
+		SPDLOG_DEBUG("Matrix solver iteration {}", step);
+		if (counter)
+			(*counter)++;
+
 		Solver::update_elements_stiffness_and_residual(mesh, attrib);
 
 		mat_R.setZero();
@@ -81,10 +85,10 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 		}
 
 		// Compute sum to check equilibrium.
-//		Eigen::Vector3d sum; sum.setZero();
-//		Eigen::Map<Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>> mat_R_Nx3{mat_R.data(), mat_R.rows() / 3, 3};
-//		for (Eigen::Index const node_idx : boost::irange(mat_R_Nx3.rows()))
-//			sum += mat_R_Nx3.row(node_idx);
+		//		Eigen::Vector3d sum; sum.setZero();
+		//		Eigen::Map<Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>>
+		// mat_R_Nx3{mat_R.data(), mat_R.rows() / 3, 3}; 		for (Eigen::Index const node_idx :
+		// boost::irange(mat_R_Nx3.rows())) 			sum += mat_R_Nx3.row(node_idx);
 
 		auto const update_submatrix =
 			[&mat_K, &attrib](auto const vtxh_src, auto const vtxh_dst, auto const cellh_) {
@@ -122,7 +126,15 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 
 		assert(std::abs(mat_K.determinant()) > 0.00001);
 
-		mat_u = mat_K.ldlt().solve(-mat_R);
+		//		spdlog::info("Conjugate gradient start {}", step);
+		//		mat_u = mat_K.ldlt().solve(-mat_R);
+		//		Eigen::ConjugateGradient< decltype(mat_K), Eigen::Lower|Eigen::Upper> cg;
+		//		cg.compute(mat_K);
+		//		mat_u = cg.solve(-mat_R);
+		mat_u = mat_K.partialPivLu().solve(-mat_R);
+
+		//		spdlog::info("Conjugate gradient end {}", step);
+
 		mat_u.array() *= (Eigen::VectorXd::Ones(mat_u.size()) - mat_fixed_dof).array();
 		SPDLOG_DEBUG("u (constrained)\n{}", mat_u);
 
@@ -139,11 +151,12 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 
 	return step;
 }
-}  // namespace LDLT
+}  // namespace Matrix
 
 namespace Gauss
 {
-std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
+std::size_t solve(
+	Mesh & mesh, Attributes & attrib, std::size_t max_steps, std::atomic_uint * counter)
 {
 	constexpr Scalar epsilon = 0.00001;
 	using Tensor::Func::all;
@@ -155,6 +168,8 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 	for (step = 0; step < max_steps; step++)
 	{
 		SPDLOG_DEBUG("Gauss iteration {}", step);
+		if (counter)
+			(*counter)++;
 
 		Solver::update_elements_stiffness_and_residual(mesh, attrib);
 
@@ -162,8 +177,10 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 
 		Scalar max_norm = 0;
 
-		for (auto vtxh_src : boost::make_iterator_range(mesh.vertices()))
+#pragma omp parallel for default(none) shared(attrib, mesh, u, index_of) reduction(max : max_norm)
+		for (std::size_t vtx_idx = 0; vtx_idx < mesh.n_vertices(); vtx_idx++)
 		{
+			Vtxh vtxh_src{static_cast<int>(vtx_idx)};
 			auto const a = static_cast<Tensor::Index>(vtxh_src.idx());
 			auto const & fixed_dof = attrib.fixed_dof[vtxh_src];
 
@@ -205,7 +222,7 @@ std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps)
 			attrib.x[vtxh_src] += u[a];
 			using Tensor::Func::abs;
 			using Tensor::Func::max;
-			max_norm = std::max(max(abs(u[a])), max_norm);
+			max_norm = max(abs(u[a]));
 			SPDLOG_DEBUG("R[{}] = {}", a, Ra);
 			SPDLOG_DEBUG("u[{}] = {}", a, u[a]);
 		}

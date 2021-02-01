@@ -1,3 +1,5 @@
+#pragma once
+
 #include <OpenVolumeMesh/Core/PropertyDefines.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
 #include <boost/range/adaptor/indexed.hpp>

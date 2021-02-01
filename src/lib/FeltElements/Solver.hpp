@@ -1,8 +1,9 @@
 #pragma once
+#include <atomic>
 
 #include <Fastor/Fastor.h>
-#include <eigen3/Eigen/Core>
 #include <boost/preprocessor/cat.hpp>
+#include <eigen3/Eigen/Core>
 
 #include "Typedefs.hpp"
 
@@ -14,7 +15,7 @@ namespace Solver
 {
 void update_elements_stiffness_and_residual(Mesh const & mesh, Attributes & attributes);
 
-namespace LDLT
+namespace Matrix
 {
 #define EIGEN_FASTOR_ALIGN BOOST_PP_CAT(Eigen::Aligned, FASTOR_MEMORY_ALIGNMENT_VALUE)
 template <int rows, int cols>
@@ -28,12 +29,14 @@ using EigenMapTensorVertices = Eigen::Map<
 	Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
 using EigenFixedDOFs = Eigen::VectorXd;
 
-std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps);
-}  // namespace LDLT
+std::size_t solve(
+	Mesh & mesh, Attributes & attrib, std::size_t max_steps, std::atomic_uint * counter = nullptr);
+}  // namespace Matrix
 
 namespace Gauss
 {
-std::size_t solve(Mesh & mesh, Attributes & attrib, std::size_t max_steps);
+std::size_t solve(
+	Mesh & mesh, Attributes & attrib, std::size_t max_steps, std::atomic_uint * counter = nullptr);
 }
 
 }  // namespace Solver
