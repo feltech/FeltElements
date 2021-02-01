@@ -1,6 +1,7 @@
 #include <sysexits.h>
 
 #include <atomic>
+#include <filesystem>
 #include <future>
 #include <iostream>
 
@@ -33,12 +34,97 @@ constexpr const char * kVersion = "1.0.0";
 // "input_or_output_iterator"); static_assert(ranges::sentinel_for<OpenVolumeMesh::VertexIter,
 // OpenVolumeMesh::VertexIter>, "sized_sentinel_for");
 
-namespace SolverType
+namespace CommandLine
 {
 constexpr std::string_view kMatrix = "matrix";
 constexpr std::string_view kGauss = "gauss";
-constexpr std::array Available{kMatrix, kGauss};
-}  // namespace SolverType
+constexpr std::array Solvers{kMatrix, kGauss};
+
+using ConstraintPlane = FeltElements::Tensor::Vector<4>;
+
+}  // namespace CommandLine
+
+namespace FeltElements
+{
+void execute(
+	std::string const & input_file_path,
+	std::string const & output_file_path,
+	Body::Material const & material,
+	Body::Forces const & forces,
+	CommandLine::ConstraintPlane const & constraint_plane,
+	std::string_view const solver,
+	std::size_t const max_steps)
+{
+	spdlog::info("Reading mesh file '{}'", input_file_path);
+
+	FeltElements::Mesh mesh;
+	OpenVolumeMesh::IO::FileManager file_manager{};
+	if (!file_manager.readFile(input_file_path, mesh))
+		throw std::filesystem::filesystem_error{
+			fmt::format("Unable to read mesh file '{}", input_file_path),
+			std::make_error_code(std::errc::no_such_file_or_directory)};
+
+	spdlog::info("Constructing initial mesh attributes");
+
+	FeltElements::Attributes attrs{mesh};
+	*attrs.material = material;
+	*attrs.forces = forces;
+
+	spdlog::info("Calculating fixed vertices...");
+
+	auto const norm = constraint_plane(FeltElements::Tensor::Func::fseq<0, 3>());
+	auto const height = constraint_plane(3);
+	auto const num_constrained_vtxs = boost::size(
+		boost::make_iterator_range(mesh.vertices()) |
+		boost::adaptors::filtered([&mesh, norm, height](auto const & vtxh) {
+			using FeltElements::Tensor::ConstMap;
+			using FeltElements::Tensor::Func::inner;
+			ConstMap<3> const vec{mesh.vertex(vtxh).data()};
+			return inner(norm, vec) < height;
+		}) |
+		boost::adaptors::tapped([&attrs](auto const & vtxh) {
+			attrs.fixed_dof[vtxh] = {1, 1, 1};
+		}));
+
+	spdlog::info("...constrained {}/{} vertices", num_constrained_vtxs, mesh.n_vertices());
+
+	spdlog::info("Starting {} solver", solver);
+
+	if (solver == CommandLine::kMatrix)
+		spdlog::info("Eigen matrix solver using {} threads", Eigen::nbThreads());
+
+	boost::timer::progress_display progress(max_steps);
+	auto const solver_fn = (solver == CommandLine::kMatrix) ? &FeltElements::Solver::Matrix::solve
+															: &FeltElements::Solver::Gauss::solve;
+	std::atomic_uint num_steps{0};
+
+	auto solver_future = std::async(
+		std::launch::async, solver_fn, std::ref(mesh), std::ref(attrs), max_steps, &num_steps);
+
+	while (true)
+	{
+		if (solver_future.wait_for(std::chrono::milliseconds(100)) == std::future_status::ready)
+			break;
+
+		progress += num_steps.load() - progress.count();
+	}
+	fmt::print("\n");
+
+	std::size_t const num_steps_at_finish = solver_future.get();
+	spdlog::info("Finished in {}/{} steps", num_steps_at_finish, max_steps);
+	if (num_steps_at_finish == max_steps)
+		spdlog::warn("Solution did not converge");
+
+	spdlog::info("Writing output to '{}'", output_file_path);
+
+	for (auto const & vtxh : boost::make_iterator_range(mesh.vertices()))
+	{
+		auto const & x = attrs.x[vtxh];
+		mesh.set_vertex(vtxh, {x(0), x(1), x(2)});
+	}
+	file_manager.writeFile(output_file_path, mesh);
+}
+}  // namespace FeltElements
 
 int main(int argc, char * argv[])
 {
@@ -55,7 +141,7 @@ int main(int argc, char * argv[])
 	FeltElements::Body::Material material{};
 	Scalar E;
 	FeltElements::Body::Forces forces{};
-	FeltElements::Tensor::Vector<4> constraint_plane;
+	CommandLine::ConstraintPlane constraint_plane;
 
 	po::options_description main_desc("Usage: feltelements [input-file] [output-file] [options]");
 	po::options_description cmdline_desc("Generic options");
@@ -122,7 +208,7 @@ int main(int argc, char * argv[])
 
 		po::notify(vm);
 
-		if (!boost::algorithm::any_of_equal(SolverType::Available, solver))
+		if (!boost::algorithm::any_of_equal(CommandLine::Solvers, solver))
 			throw po::validation_error{
 				po::validation_error::invalid_option_value,
 				"solver",
@@ -153,69 +239,22 @@ int main(int argc, char * argv[])
 		forces.F_by_m,
 		constraint_plane);
 
-	spdlog::info("Reading mesh file '{}'", input_file_path);
-
-	FeltElements::Mesh mesh;
-	OpenVolumeMesh::IO::FileManager file_manager{};
-	if (!file_manager.readFile(input_file_path, mesh))
-		return EX_NOINPUT;
-
-	spdlog::info("Constructing initial mesh attributes");
-
-	FeltElements::Attributes attrs{mesh};
-	*attrs.material = material;
-	*attrs.forces = forces;
-
-	auto const norm = constraint_plane(FeltElements::Tensor::Func::fseq<0, 3>());
-	auto const height = constraint_plane(3);
-	auto const num_constrained_vtxs = boost::size(
-		boost::make_iterator_range(mesh.vertices()) |
-		boost::adaptors::filtered([&mesh, norm, height](auto const & vtxh) {
-			using FeltElements::Tensor::ConstMap;
-			using FeltElements::Tensor::Func::inner;
-			ConstMap<3> const vec{mesh.vertex(vtxh).data()};
-			return inner(norm, vec) < height;
-		}) |
-		boost::adaptors::tapped([&attrs](auto const & vtxh) {
-			attrs.fixed_dof[vtxh] = {1, 1, 1};
-		}));
-
-	spdlog::info("Constrained {}/{} vertices", num_constrained_vtxs, mesh.n_vertices());
-
-	spdlog::info("Starting {} solver", solver);
-	if (solver == SolverType::kMatrix)
-		spdlog::info("Eigen matrix using {} threads", Eigen::nbThreads());
-
-	boost::timer::progress_display progress(max_steps);
-	auto const solver_fn = (solver == SolverType::kMatrix) ? &FeltElements::Solver::Matrix::solve
-														   : &FeltElements::Solver::Gauss::solve;
-	std::atomic_uint num_steps{0};
-
-	auto solver_future = std::async(
-		std::launch::async, solver_fn, std::ref(mesh), std::ref(attrs), max_steps, &num_steps);
-
-	while (true)
+	try
 	{
-		if (solver_future.wait_for(std::chrono::milliseconds(100)) == std::future_status::ready)
-			break;
-
-		progress += num_steps.load() - progress.count();
+		FeltElements::execute(
+			input_file_path,
+			output_file_path,
+			material,
+			forces,
+			constraint_plane,
+			solver,
+			max_steps);
 	}
-	fmt::print("\n");
-
-	std::size_t const num_steps_at_finish = solver_future.get();
-	spdlog::info("Finished in {}/{} steps", num_steps_at_finish, max_steps);
-	if (num_steps_at_finish == max_steps)
-		spdlog::warn("Solution did not converge");
-
-	spdlog::info("Writing output to  '{}'", output_file_path);
-
-	for (auto const & vtxh : boost::make_iterator_range(mesh.vertices()))
+	catch (std::filesystem::filesystem_error & e)
 	{
-		auto const & x = attrs.x[vtxh];
-		mesh.set_vertex(vtxh, {x(0), x(1), x(2)});
+		spdlog::error(e.what());
+		return e.code().value();
 	}
-	file_manager.writeFile(output_file_path, mesh);
 
 	return EX_OK;
 }
