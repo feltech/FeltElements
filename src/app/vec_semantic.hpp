@@ -1,4 +1,8 @@
+#pragma once
+#include <fmt/format.h>
+
 #include <boost/range/irange.hpp>
+#include <boost/program_options.hpp>
 
 namespace boost::program_options
 {
@@ -11,12 +15,18 @@ public:
 
 	explicit vec_semantic(value_type * store_to) : m_store_to{store_to} {}
 
+	[[nodiscard]] vec_semantic * value_name(const std::string_view & value_name)
+	{
+		m_value_name = value_name;
+		return this;
+	}
+
 	[[nodiscard]] std::string name() const override
 	{
-		std::string n = "REAL";
-		for (auto idx : boost::irange(value_type::size()))
-			n += " REAL";
-		return n;
+		if (!m_value_name.empty())
+			return m_value_name;
+
+		return fmt::format("REAL^{}", N);
 	}
 	[[nodiscard]] unsigned int min_tokens() const override
 	{
@@ -39,18 +49,15 @@ public:
 	{
 		return m_is_required;
 	}
-	void parse(boost::any & value_store, std::vector<std::string> const & new_tokens, bool utf8)
+	void parse(boost::any & value_store, std::vector<std::string> const & new_tokens, bool)
 		const override
 	{
-		if (new_tokens.size() != value_type::size())
-			throw std::logic_error{"ignored"};
-
 		value_type value;
 		for (auto idx : boost::irange(value_type::size()))
 			value(idx) = boost::lexical_cast<scalar_type>(new_tokens[idx]);
 		value_store = value;
 	}
-	bool apply_default(boost::any & value_store) const override
+	bool apply_default(boost::any &) const override
 	{
 		return false;
 	}
@@ -62,6 +69,7 @@ public:
 private:
 	value_type * m_store_to;
 	bool m_is_required{false};
+	std::string m_value_name;
 };
 
 template <FeltElements::Tensor::Index N>
