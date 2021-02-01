@@ -5,7 +5,29 @@ set_target_properties(feltelements.app PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CM
 target_link_libraries(
 	feltelements.app
 	PRIVATE
+	project_warnings
 	feltelements.lib
-	# CONAN_PKG::boost_program_options  # See top-level CMakeLists.txt.
+
+	CONAN_PKG::boost
 	CONAN_PKG::fmt
+	CONAN_PKG::spdlog
 )
+
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+	# Set default spdlog logging level.
+	target_compile_definitions(feltelements.app PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO)
+
+	# Enable interprocedural (whole-program) optimisation.
+	include(CheckIPOSupported)
+	check_ipo_supported(RESULT _ipo_supported OUTPUT error)
+	if(_ipo_supported )
+		message(STATUS "IPO / LTO enabled")
+		set_property(TARGET feltelements.app PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+	else()
+		message(STATUS "IPO / LTO not supported: <${error}>")
+	endif()
+
+else()
+	# Set default spdlog logging level.
+	target_compile_definitions(feltelements.app PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
+endif()
