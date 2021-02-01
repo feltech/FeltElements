@@ -38,19 +38,46 @@ add_compile_options(
 
 conan_cmake_run(
 	REQUIRES
-	# TODO(df): Linking boost links _all_ it's static libraries, when we don't want them, except for
-	#	program_options.  The bincrafters packages allow nice modular linking, but at time of
-	#	writing only go up to 1.69, which is missing fixes for boost::adaptors::index to allow
-	#	destructuring assignment in the for loop.
 	boost/1.75.0
-#	boost_algorithm/1.69.0@bincrafters/stable
-#	boost_container/1.69.0@bincrafters/stable
-#	boost_program_options/1.69.0@bincrafters/stable
-#	boost_range/1.69.0@bincrafters/stable
 	catch2/2.11.0
-	eigen/3.3.4@conan/stable
+	eigen/3.3.9
 	fmt/6.2.0
 	spdlog/1.6.1
+	
+	OPTIONS
+	# Frustratingly, to avoid linking all static libs (apart from the one we want), we must
+	# explicitly exclude them all one by one.
+	boost:without_atomic=True
+	boost:without_chrono=True
+	boost:without_container=True
+	boost:without_context=True
+	boost:without_contract=True
+	boost:without_coroutine=True
+	boost:without_date_time=True
+	boost:without_exception=True
+	boost:without_fiber=True
+	boost:without_filesystem=True
+	boost:without_graph=True
+	boost:without_graph_parallel=True
+	boost:without_iostreams=True
+	boost:without_json=True
+	boost:without_locale=True
+	boost:without_log=True
+	boost:without_math=True
+	boost:without_mpi=True
+	boost:without_nowide=True
+	boost:without_program_options=False
+	boost:without_python=True
+	boost:without_random=True
+	boost:without_regex=True
+	boost:without_serialization=True
+	boost:without_stacktrace=True
+	boost:without_system=True
+	boost:without_test=True
+	boost:without_thread=True
+	boost:without_timer=True
+	boost:without_type_erasure=True
+	boost:without_wave=True
 
 	BASIC_SETUP # Run conan_basic_setup
 	PROFILE default PROFILE_AUTO build_type # Use default profile override with Debug/Release
