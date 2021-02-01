@@ -8,6 +8,7 @@
 #include <FeltElements/Typedefs.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/irange.hpp>
 
 namespace
 {
@@ -115,9 +116,14 @@ inline std::ostream & operator<<(std::ostream & os, FeltElements::Vtx const & vt
 	return os;
 }
 
-inline std::ostream & operator<<(std::ostream & os, FeltElements::Node::Pos const & pos)
+template <std::size_t N>
+inline std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Vector<N> const & pos)
 {
-	os << fmt::format("{{{}, {}, {}}}", pos(0), pos(1), pos(2));
+	const std::string elems = boost::algorithm::join(
+		boost::irange(N) |
+			boost::adaptors::transformed([&pos](auto i) { return fmt::format("{:.5}", pos(i)); }),
+		", ");
+	os << fmt::format("{{{}}}", elems);
 
 	return os;
 }
