@@ -41,8 +41,8 @@ conan_cmake_run(
 	boost/1.75.0
 	catch2/2.11.0
 	eigen/3.3.9
-	fmt/6.2.0
-	spdlog/1.6.1
+	fmt/7.1.3
+	spdlog/1.8.2
 	
 	OPTIONS
 	# Frustratingly, to avoid linking all static libs (apart from the one we want), we must
@@ -83,7 +83,7 @@ conan_cmake_run(
 	PROFILE default PROFILE_AUTO build_type # Use default profile override with Debug/Release
 	BUILD missing  # build packages with no binary available
 	CMAKE_TARGETS  # Generate CMake targets to link to
-	NO_OUTPUT_DIRS
+	NO_OUTPUT_DIRS  # Don't screw with specifically set output dirs
 )
 conan_load_buildinfo()
 
