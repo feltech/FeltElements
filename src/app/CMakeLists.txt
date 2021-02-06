@@ -14,9 +14,6 @@ target_link_libraries(
 )
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-	# Set default spdlog logging level.
-	target_compile_definitions(feltelements.app PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO)
-
 	# Enable interprocedural (whole-program) optimisation.
 	include(CheckIPOSupported)
 	check_ipo_supported(RESULT _ipo_supported OUTPUT error)
@@ -26,8 +23,4 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
 	else()
 		message(STATUS "IPO / LTO not supported: <${error}>")
 	endif()
-
-else()
-	# Set default spdlog logging level.
-	target_compile_definitions(feltelements.app PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 endif()

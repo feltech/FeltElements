@@ -25,3 +25,11 @@ set_target_properties(
 # Add source files to target.
 file(GLOB_RECURSE _src_lib LIST_DIRECTORIES false *.cpp)
 target_sources(feltelements.lib PRIVATE ${_src_lib})
+
+# Set default spdlog logging level.
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+	target_compile_definitions(feltelements.lib PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_WARN)
+else()
+	# Set default spdlog logging level.
+	target_compile_definitions(feltelements.lib PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
+endif()
