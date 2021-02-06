@@ -1,7 +1,10 @@
 #pragma once
 #include <atomic>
+#include <mutex>
 
 #include <Fastor/Fastor.h>
+#include <boost/atomic.hpp>
+#include <boost/atomic/atomic_flag.hpp>
 #include <boost/preprocessor/cat.hpp>
 #include <eigen3/Eigen/Core>
 
@@ -9,10 +12,25 @@
 
 namespace FeltElements
 {
-class Attributes;
+struct Attributes;
 
 namespace Solver
 {
+struct Params
+{
+	std::size_t num_steps{1};
+	std::size_t num_force_increments{1};
+};
+
+struct Stats
+{
+	std::atomic_uint step_counter{0};
+	std::atomic_uint force_increment_counter{0};
+	std::atomic<Scalar> max_norm{0};
+	boost::atomic_flag pause{};
+	std::mutex running{};
+};
+
 void update_elements_stiffness_and_residual(Mesh const & mesh, Attributes & attributes);
 
 namespace Matrix
@@ -29,14 +47,12 @@ using EigenMapTensorVertices = Eigen::Map<
 	Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
 using EigenFixedDOFs = Eigen::VectorXd;
 
-std::size_t solve(
-	Mesh & mesh, Attributes & attrib, std::size_t max_steps, std::atomic_uint * counter = nullptr);
+Scalar solve(Mesh & mesh, Attributes & attrib, Params params, Stats * stats = nullptr);
 }  // namespace Matrix
 
 namespace Gauss
 {
-std::size_t solve(
-	Mesh & mesh, Attributes & attrib, std::size_t max_steps, std::atomic_uint * counter = nullptr);
+Scalar solve(Mesh & mesh, Attributes & attrib, Params params, Stats * stats = nullptr);
 }
 
 }  // namespace Solver

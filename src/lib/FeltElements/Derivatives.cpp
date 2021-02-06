@@ -1,9 +1,12 @@
 #include "Derivatives.hpp"
 
+#include <fmt/format.h>
+#include <spdlog/spdlog.h>
+#include <boost/range/adaptor/indexed.hpp>
 #include <boost/range/combine.hpp>
 #include <boost/range/irange.hpp>
-#include <boost/range/adaptor/indexed.hpp>
 
+#include <FeltElements/internal/Format.hpp>
 #include "Body.hpp"
 
 namespace
@@ -118,6 +121,13 @@ Element::StiffnessResidual KR(
 	Element::Gradient const dx_by_dX = ex::dx_by_dX(x, dN_by_dX);
 	auto const b = ex::finger(dx_by_dX);
 	Scalar const J = Derivatives::det_dx_by_dX(dx_by_dX);
+	if (J < 0)
+	{
+		std::string const msg = fmt::format("J < 0:\nJ = {}\nF = {}\nb = {}", J, dx_by_dX, b);
+		spdlog::error(msg);
+		throw std::invalid_argument{msg};
+	}
+//	spdlog::info("J={}", J);
 	Scalar const v = Derivatives::v(x);	 // TODO: but also v = J*V
 
 	auto const & dx_by_dL = ex::dX_by_dL(x);
@@ -158,9 +168,27 @@ Element::StiffnessResidual KR(
 			(1.0 / BoundaryElement::num_nodes) * Derivatives::t(forces.p, Derivatives::dX_by_dS(s));
 		for (Tensor::Index const node_idx : idxs) R(node_idx, all) -= t;
 	}
+/*
+	if (!Tensor::Func::all_of(R == R))	// Assert no NaNs
+	{
+		std::string const & msg = fmt::format(
+			"Residual is NaN because: v={}; T_by_v={}; dN_by_dx={}; sigma={}; J={}; b={}; "
+			"dx_by_dX={}.  Where J={}; dx_by_dX=\n{}",
+			std::isnan(v),
+			!Tensor::Func::all_of(T_by_v == T_by_v),
+			!Tensor::Func::all_of(dN_by_dx == dN_by_dx),
+			!Tensor::Func::all_of(sigma == sigma),
+			std::isnan(J),
+			!Tensor::Func::all_of(b == b),
+			!Tensor::Func::all_of(dx_by_dX == dx_by_dX),
+			J,
+			dx_by_dX);
 
-	assert(Tensor::Func::all_of(R == R));  // Assert no NaNs
+		spdlog::error(msg);
 
+		throw std::logic_error{msg};
+	};
+*/
 	return {K, R};
 }
 
@@ -176,8 +204,7 @@ Element::Stiffness Ks(
 	return v * ex::Ks(dN_by_dx, s);
 }
 
-
-Element::SurfaceShapeDerivative const dN_by_dS = // NOLINT(cert-err58-cpp)
+Element::SurfaceShapeDerivative const dN_by_dS =  // NOLINT(cert-err58-cpp)
 	Fastor::evaluate(Fastor::inv(Tensor::Matrix<3, 3>{
 		{1, 1, 1},
 		{0, 1, 0},
@@ -187,7 +214,7 @@ Element::SurfaceShapeDerivative const dN_by_dS = // NOLINT(cert-err58-cpp)
 
 namespace
 {
-auto const [KpLHS, KpRHS] = ([]() {  // NOLINT(cert-err58-cpp)
+auto const [KpLHS, KpRHS] = ([]() {	 // NOLINT(cert-err58-cpp)
 	using Tensor::Func::all;
 	Tensor::Matrix<3> KpLHS_, KpRHS_;
 	for (auto const a : boost::irange(BoundaryElement::num_nodes))
@@ -202,7 +229,10 @@ auto const [KpLHS, KpRHS] = ([]() {  // NOLINT(cert-err58-cpp)
 }());
 }
 
-Element::Stiffness Kp(Element::BoundaryNodePositions const & xs, const Element::BoundaryVtxhIdxs & S_to_Vs, Scalar const p)
+Element::Stiffness Kp(
+	Element::BoundaryNodePositions const & xs,
+	const Element::BoundaryVtxhIdxs & S_to_Vs,
+	Scalar const p)
 {
 	using Tensor::Idxs;
 	using Tensor::Order;
@@ -224,7 +254,7 @@ Element::Stiffness Kp(Element::BoundaryNodePositions const & xs, const Element::
 
 		Tensor::Vector<3> const & dx_by_dS1 = dx_by_dS(all, 0);
 		Tensor::Vector<3> const & dx_by_dS2 = dx_by_dS(all, 1);
-		
+
 		BoundaryElement::Stiffness const & K_face = 0.5 * A * p *
 			(einsum<Idxs<i, j, k>, Idxs<k>, Idxs<a, b>, Order<a, i, b, j>>(
 				 levi_civita, dx_by_dS1, KpLHS) -

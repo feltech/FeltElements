@@ -1,11 +1,23 @@
+#include "internal/Format.hpp"	// For logging
+
 #include <spdlog/spdlog.h>
 #include <Eigen/IterativeLinearSolvers>
+#ifdef NDEBUG
+#include <boost/preprocessor/stringize.hpp>
+#endif
 #include <boost/range/irange.hpp>
 
 #include "Attributes.hpp"
 #include "Derivatives.hpp"
 #include "Solver.hpp"
-#include "internal/Format.hpp"  // For logging
+#include "MeshDecorator.hpp"
+
+#ifdef NDEBUG
+#define FE_PARALLEL_PREAMBLE omp parallel for default(none)
+#define FE_PARALLEL(args) _Pragma(BOOST_PP_STRINGIZE(FE_PARALLEL_PREAMBLE args))
+#else
+#define FE_PARALLEL(args)
+#endif
 
 namespace FeltElements::Solver
 {
@@ -14,7 +26,7 @@ void update_elements_stiffness_and_residual(
 {
 	auto const num_cells = static_cast<int>(mesh.n_cells());
 
-#pragma omp parallel for default(none) shared(num_cells, attributes)
+	FE_PARALLEL(shared(num_cells, attributes))
 	for (int cell_idx = 0; cell_idx < num_cells; cell_idx++)
 	{
 		Cellh cellh{cell_idx};
@@ -33,13 +45,60 @@ void update_elements_stiffness_and_residual(
 	}
 }
 
+Scalar find_epsilon(Mesh const & mesh, Attributes const & attrs)
+{
+	Scalar total_V = 0;
+	Scalar min_V = std::numeric_limits<Scalar>::max();
+	Scalar max_V = 0;
+	Element::NodePositions min_X;
+
+	for (auto const & X : MeshDecorator{mesh, attrs}.Xs())
+	{
+		auto const V = Derivatives::V(X);
+		total_V += V;
+		if (V > max_V)
+			max_V = V;
+		if (V < min_V)
+		{
+			min_X = X;
+			min_V = V;
+		}
+	}
+	Scalar const avg_V = total_V / static_cast<Scalar>(mesh.n_cells());
+	// Edge length assuming a regular tetrahedron, divided by a constant.
+	Scalar const epsilon = std::pow(6 * std::sqrt(2.0) * min_V, 1.0 / 3.0) * 1e-5;
+	spdlog::info(
+		"total V = {}; mean V = {}; max V = {}, min V = {} @\n{}\nepsilon = {}",
+		total_V,
+		avg_V,
+		max_V,
+		min_V,
+		min_X,
+		epsilon);
+	return epsilon;
+}
+
+void log_xs(Mesh const & mesh, Attributes const & attrs)
+{
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
+	MeshDecorator interface{mesh, attrs};
+
+	std::string xs_str;
+	for (auto const & x : interface.xs()) xs_str += fmt::format("{}\n", x);
+
+	spdlog::debug(xs_str);
+#else
+	(void)mesh;
+	(void)attrs;
+#endif
+}
+
 namespace Matrix
 {
-std::size_t solve(
-	Mesh & mesh, Attributes & attrib, std::size_t max_steps, std::atomic_uint * counter)
+Scalar solve(Mesh & mesh, Attributes & attrib, Params const params, Stats * stats)
 {
-	constexpr Scalar epsilon = 0.00005;
-	constexpr Scalar penalty = std::numeric_limits<Scalar>::max() / 2;
+	Scalar const epsilon = find_epsilon(mesh, attrib);
+	//	constexpr Scalar penalty = std::numeric_limits<Scalar>::max() / 100;
 
 	EigenFixedDOFs const & mat_fixed_dof = ([&attrib,
 											 rows = static_cast<Eigen::Index>(mesh.n_vertices()),
@@ -53,185 +112,232 @@ std::size_t solve(
 	Eigen::VectorXd mat_R{3 * mesh.n_vertices()};
 	Eigen::MatrixXd mat_K{3 * mesh.n_vertices(), 3 * mesh.n_vertices()};
 	Eigen::VectorXd mat_u{3 * mesh.n_vertices()};
+	// TODO: ideas: incrementing load
 
-	std::size_t step;
-	for (step = 0; step < max_steps; step++)
+	Node::Force const force_increment = attrib.forces->F_by_m / params.num_force_increments;
+	attrib.forces->F_by_m = 0;
+
+	Scalar max_norm = 0;
+
+	for (std::size_t increment_num = 0; increment_num < params.num_force_increments;
+		 increment_num++)
 	{
-		SPDLOG_DEBUG("Matrix solver iteration {}", step);
-		if (counter)
-			(*counter)++;
+		attrib.forces->F_by_m += force_increment;
+		if (stats)
+			stats->force_increment_counter++;
 
-		Solver::update_elements_stiffness_and_residual(mesh, attrib);
-
-		mat_R.setZero();
-		mat_K.setZero();
-
-		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
+		for (std::size_t step = 0; step < params.num_steps; step++)
 		{
-			auto const vtx_idx = vtxh.idx();
-			for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh)))
+			SPDLOG_DEBUG("Matrix solver iteration {}:{}", increment_num, step);
+
+			Solver::update_elements_stiffness_and_residual(mesh, attrib);
+
+			mat_R.setZero();
+			mat_K.setZero();
+
+			for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 			{
-				auto const & cell_vtxhs = attrib.vtxhs[cellh];
-				auto const & cell_vtx_idx = index_of(cell_vtxhs, vtxh);
-				auto const & cell_R = attrib.R[cellh];
+				auto const vtx_idx = vtxh.idx();
+				for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh)))
+				{
+					auto const & cell_vtxhs = attrib.vtxhs[cellh];
+					auto const & cell_vtx_idx = index_of(cell_vtxhs, vtxh);
+					auto const & cell_R = attrib.R[cellh];
 
-				// Forces for node `a`.
-				auto const & Ra = EigenConstTensorMap<4, 3>{cell_R.data()}.block<1, 3>(
-					static_cast<Eigen::Index>(cell_vtx_idx), 0);
+					// Forces for node `a`.
+					auto const & Ra = EigenConstTensorMap<4, 3>{cell_R.data()}.block<1, 3>(
+						static_cast<Eigen::Index>(cell_vtx_idx), 0);
 
-				// Update global residual with difference between internal and external forces.
-				mat_R.block<3, 1>(3 * vtx_idx, 0) += Ra;
+					// Update global residual with difference between internal and external forces.
+					mat_R.block<3, 1>(3 * vtx_idx, 0) += Ra;
+				}
 			}
+
+			// Compute sum to check equilibrium.
+			//		Eigen::Vector3d sum; sum.setZero();
+			//		Eigen::Map<Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>>
+			// mat_R_Nx3{mat_R.data(), mat_R.rows() / 3, 3}; 		for (Eigen::Index const node_idx
+			// : boost::irange(mat_R_Nx3.rows())) 			sum += mat_R_Nx3.row(node_idx);
+
+			auto const update_submatrix =
+				[&mat_K, &attrib](auto const vtxh_src, auto const vtxh_dst, auto const cellh_) {
+					auto const & cell_K = attrib.K[cellh_];
+					auto const & cell_vtxhs = attrib.vtxhs[cellh_];
+					auto const cell_a = index_of(cell_vtxhs, vtxh_src);
+					auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
+					auto const a = vtxh_src.idx();
+					auto const b = vtxh_dst.idx();
+
+					using Tensor::Func::all;
+					Tensor::Matrix<3> const Kab = cell_K(cell_a, all, cell_b, all);
+
+					mat_K.block<3, 3>(3 * a, 3 * b) += EigenConstTensorMap<3, 3>{Kab.data()};
+				};
+
+			for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
+			{
+				for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh)))
+					update_submatrix(vtxh, vtxh, cellh);
+			}
+			for (auto heh : boost::make_iterator_range(mesh.halfedges()))
+			{
+				auto const & halfedge = mesh.halfedge(heh);
+				auto const & vtxh_src = halfedge.from_vertex();
+				auto const & vtxh_dst = halfedge.to_vertex();
+				for (auto cellh : boost::make_iterator_range(mesh.halfedge_cells(heh)))
+					update_submatrix(vtxh_src, vtxh_dst, cellh);
+			}
+			// Inspect matrix to calculate penalty of relative size.
+			Scalar const penalty = std::max(mat_K.lpNorm<Eigen::Infinity>(), 1.0) * 10000;
+			// Zero-out penalised degrees of freedom.
+			mat_K.diagonal() = mat_K.diagonal().cwiseProduct(
+				Eigen::VectorXd::Ones(mat_fixed_dof.size()) - mat_fixed_dof);
+			// Set penalised degrees of freedom to penalty value.
+			mat_K += penalty * mat_fixed_dof.asDiagonal();
+
+			//			SPDLOG_DEBUG("K (constrained)\n{}", mat_K);
+			//			auto const detK = mat_K.determinant();
+			//			if (std::abs(detK) < 0.00001)
+			//				throw std::invalid_argument("Stiffness matrix |K| ~ 0");
+			//		if (!std::isfinite(detK))
+			//			throw std::invalid_argument{fmt::format(
+			//				"Stiffness matrix |K| = {} with max = {}", detK,
+
+			// mat_K.lpNorm<Eigen::Infinity>())};
+			//		mat_u = mat_K.ldlt().solve(-mat_R);
+			//				Eigen::ConjugateGradient< decltype(mat_K), Eigen::Lower|Eigen::Upper>
+			// cg; cg.compute(mat_K); 				mat_u = cg.solve(-mat_R);
+			mat_u = mat_K.partialPivLu().solve(-mat_R);
+
+			//			if (!mat_u.array().isFinite().all())
+			//				throw std::logic_error(
+			//					fmt::format("Resulting displacement is not finite u = \n{}.",
+			// mat_u));
+
+			mat_u.array() *= (Eigen::VectorXd::Ones(mat_u.size()) - mat_fixed_dof).array();
+			//			SPDLOG_DEBUG("u (constrained)\n{}", mat_u);
+
+			for (auto const & vtxh : boost::make_iterator_range(mesh.vertices()))
+				attrib.x[vtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtxh.idx(), 0).data()};
+
+			max_norm = mat_u.lpNorm<Eigen::Infinity>();
+			if (stats)
+			{
+				stats->step_counter++;
+				stats->max_norm = max_norm;
+			}
+			log_xs(mesh, attrib);
+			if (max_norm < epsilon)
+				break;
 		}
-
-		// Compute sum to check equilibrium.
-		//		Eigen::Vector3d sum; sum.setZero();
-		//		Eigen::Map<Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>>
-		// mat_R_Nx3{mat_R.data(), mat_R.rows() / 3, 3}; 		for (Eigen::Index const node_idx :
-		// boost::irange(mat_R_Nx3.rows())) 			sum += mat_R_Nx3.row(node_idx);
-
-		auto const update_submatrix =
-			[&mat_K, &attrib](auto const vtxh_src, auto const vtxh_dst, auto const cellh_) {
-				auto const & cell_K = attrib.K[cellh_];
-				auto const & cell_vtxhs = attrib.vtxhs[cellh_];
-				auto const cell_a = index_of(cell_vtxhs, vtxh_src);
-				auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
-				auto const a = vtxh_src.idx();
-				auto const b = vtxh_dst.idx();
-
-				using Tensor::Func::all;
-				Tensor::Matrix<3> const Kab = cell_K(cell_a, all, cell_b, all);
-
-				mat_K.block<3, 3>(3 * a, 3 * b) += EigenConstTensorMap<3, 3>{Kab.data()};
-			};
-
-		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
-		{
-			for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh)))
-				update_submatrix(vtxh, vtxh, cellh);
-		}
-		for (auto heh : boost::make_iterator_range(mesh.halfedges()))
-		{
-			auto const & halfedge = mesh.halfedge(heh);
-			auto const & vtxh_src = halfedge.from_vertex();
-			auto const & vtxh_dst = halfedge.to_vertex();
-			for (auto cellh : boost::make_iterator_range(mesh.halfedge_cells(heh)))
-				update_submatrix(vtxh_src, vtxh_dst, cellh);
-		}
-
-		//		mat_R.array() *= (Eigen::VectorXd::Ones(mat_R.size()) - mat_fixed_dof).array();
-		SPDLOG_DEBUG("R\n{}", mat_R);
-		mat_K += penalty * mat_fixed_dof.asDiagonal();
-		SPDLOG_DEBUG("K (constrained)\n{}", mat_K);
-
-		assert(std::abs(mat_K.determinant()) > 0.00001);
-
-		//		spdlog::info("Conjugate gradient start {}", step);
-		//		mat_u = mat_K.ldlt().solve(-mat_R);
-		//		Eigen::ConjugateGradient< decltype(mat_K), Eigen::Lower|Eigen::Upper> cg;
-		//		cg.compute(mat_K);
-		//		mat_u = cg.solve(-mat_R);
-		mat_u = mat_K.partialPivLu().solve(-mat_R);
-
-		//		spdlog::info("Conjugate gradient end {}", step);
-
-		mat_u.array() *= (Eigen::VectorXd::Ones(mat_u.size()) - mat_fixed_dof).array();
-		SPDLOG_DEBUG("u (constrained)\n{}", mat_u);
-
-		for (auto const & vtxh : boost::make_iterator_range(mesh.vertices()))
-		{
-			attrib.x[vtxh] += Tensor::Map<3>{mat_u.block<3, 1>(3 * vtxh.idx(), 0).data()};
-			//			SPDLOG_DEBUG("({}, {}, {})\n", attrib.x[vtxh](0), attrib.x[vtxh](1),
-			// attrib.x[vtxh](2));
-		}
-
-		if (mat_u.lpNorm<Eigen::Infinity>() < epsilon)
-			break;
 	}
 
-	return step;
+	return max_norm;
 }
 }  // namespace Matrix
 
 namespace Gauss
 {
-std::size_t solve(
-	Mesh & mesh, Attributes & attrib, std::size_t max_steps, std::atomic_uint * counter)
+Scalar solve(Mesh & mesh, Attributes & attrib, Params const params, Stats * stats)
 {
-	constexpr Scalar epsilon = 0.00001;
+	Scalar const epsilon = find_epsilon(mesh, attrib) / 1000;
 	using Tensor::Func::all;
 
-	std::vector<Node::Pos> u{};
-	u.resize(mesh.n_vertices());
+	std::vector<Node::Pos> u(mesh.n_vertices(), {0, 0, 0});
+	Scalar max_norm = 0;
 
-	std::size_t step;
-	for (step = 0; step < max_steps; step++)
+	Node::Force const force_increment = attrib.forces->F_by_m / params.num_force_increments;
+	attrib.forces->F_by_m = 0;
+
+	if (stats)
+		stats->running.lock();
+
+	for (std::size_t increment_num = 0; increment_num < params.num_force_increments;
+		 increment_num++)
 	{
-		SPDLOG_DEBUG("Gauss iteration {}", step);
-		if (counter)
-			(*counter)++;
+		attrib.forces->F_by_m += force_increment;
+		if (stats)
+			stats->force_increment_counter++;
 
-		Solver::update_elements_stiffness_and_residual(mesh, attrib);
-
-		for (auto & u_a : u) u_a.zeros();
-
-		Scalar max_norm = 0;
-
-#pragma omp parallel for default(none) shared(attrib, mesh, u, index_of) reduction(max : max_norm)
-		for (std::size_t vtx_idx = 0; vtx_idx < mesh.n_vertices(); vtx_idx++)
+		for (std::size_t step = 0; step < params.num_steps; step++)
 		{
-			Vtxh vtxh_src{static_cast<int>(vtx_idx)};
-			auto const a = static_cast<Tensor::Index>(vtxh_src.idx());
-			auto const & fixed_dof = attrib.fixed_dof[vtxh_src];
-
-			Node::Force Ra = 0;
-			Tensor::Matrix<3> Kaa = 0;
-			Node::Force Ka_u = 0;
-			for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh_src)))
+			if (stats && stats->pause.test(boost::memory_order_relaxed))
 			{
-				auto const & cell_vtxhs = attrib.vtxhs[cellh];
-				auto const & cell_a = index_of(cell_vtxhs, vtxh_src);
-				auto const & cell_R = attrib.R[cellh];
-				auto const & cell_K = attrib.K[cellh];
-
-				Ra += cell_R(cell_a, all);
-				Kaa += cell_K(cell_a, all, cell_a, all);
+				stats->running.unlock();
+				stats->pause.wait(true, boost::memory_order_relaxed);
+				stats->running.lock();
 			}
-			//			diag(Kaa) += penalty * fixed_dof;
+			SPDLOG_DEBUG("Gauss iteration {}:{}", increment_num, step);
 
-			for (auto heh : boost::make_iterator_range(mesh.outgoing_halfedges(vtxh_src)))
+			Solver::update_elements_stiffness_and_residual(mesh, attrib);
+
+			max_norm = 0;
+			for (auto & u_a : u) u_a.zeros();
+
+			FE_PARALLEL(shared(mesh, attrib, u, force_increment) reduction(max : max_norm))
+			for (Tensor::Index a = 0; a < mesh.n_vertices(); a++)
 			{
-				Tensor::Multi<Node::dim, Node::dim> Kab = 0;
-				auto const & halfedge = mesh.halfedge(heh);
-				auto const & vtxh_dst = halfedge.to_vertex();
-				auto const b = static_cast<Tensor::Index>(vtxh_dst.idx());
+				Vtxh vtxh_src{static_cast<int>(a)};
+				auto const & fixed_dof = attrib.fixed_dof[vtxh_src];
 
-				for (auto cellh : boost::make_iterator_range(mesh.halfedge_cells(heh)))
+				Node::Force Ra = 0;
+				Tensor::Matrix<3> Kaa = 0;
+				Node::Force Ka_u = 0;
+				for (auto cellh : boost::make_iterator_range(mesh.vertex_cells(vtxh_src)))
 				{
-					auto const & cell_K = attrib.K[cellh];
 					auto const & cell_vtxhs = attrib.vtxhs[cellh];
-					auto const cell_a = index_of(cell_vtxhs, vtxh_src);
-					auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
-					Kab += cell_K(cell_a, all, cell_b, all);
+					auto const & cell_a = index_of(cell_vtxhs, vtxh_src);
+					auto const & cell_R = attrib.R[cellh];
+					auto const & cell_K = attrib.K[cellh];
+
+					Ra += cell_R(cell_a, all);
+					Kaa += cell_K(cell_a, all, cell_a, all);
 				}
-				Ka_u += Kab % u[b];
+				//			diag(Kaa) += penalty * fixed_dof;
+
+				for (auto heh : boost::make_iterator_range(mesh.outgoing_halfedges(vtxh_src)))
+				{
+					Tensor::Multi<Node::dim, Node::dim> Kab = 0;
+					auto const & halfedge = mesh.halfedge(heh);
+					auto const & vtxh_dst = halfedge.to_vertex();
+					auto const b = static_cast<Tensor::Index>(vtxh_dst.idx());
+
+					for (auto cellh : boost::make_iterator_range(mesh.halfedge_cells(heh)))
+					{
+						auto const & cell_K = attrib.K[cellh];
+						auto const & cell_vtxhs = attrib.vtxhs[cellh];
+						auto const cell_a = index_of(cell_vtxhs, vtxh_src);
+						auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
+						Kab += cell_K(cell_a, all, cell_b, all);
+					}
+					Ka_u += Kab % u[b];
+				}
+
+				using Tensor::Func::inv;
+				u[a] = inv(Kaa) % (-Ra - Ka_u) * (1.0 - fixed_dof);
+				attrib.x[vtxh_src] += u[a];
+				using Tensor::Func::abs;
+				using Tensor::Func::max;
+				// Note: double-reduction in case OpenMP disabled.
+				max_norm = std::max(max_norm, max(abs(u[a])));
+				//				SPDLOG_DEBUG("R[{}] = {}", a, Ra);
+				//				SPDLOG_DEBUG("u[{}] = {}", a, u[a]);
 			}
 
-			using Tensor::Func::inv;
-			u[a] = inv(Kaa) % (-Ra - Ka_u) * (1.0 - fixed_dof);
-			attrib.x[vtxh_src] += u[a];
-			using Tensor::Func::abs;
-			using Tensor::Func::max;
-			max_norm = max(abs(u[a]));
-			SPDLOG_DEBUG("R[{}] = {}", a, Ra);
-			SPDLOG_DEBUG("u[{}] = {}", a, u[a]);
+			if (stats)
+			{
+				SPDLOG_DEBUG("Max norm: {}", max_norm);
+				stats->step_counter++;
+				stats->max_norm = max_norm;
+			}
+
+			log_xs(mesh, attrib);
+
+			if (max_norm < epsilon)
+				break;
 		}
-
-		if (max_norm < epsilon)
-			break;
 	}
-
-	return step;
+	return max_norm;
 }
 }  // namespace Gauss
 }  // namespace FeltElements::Solver

@@ -5,22 +5,21 @@
 #include <future>
 #include <iostream>
 
+#include <fmt/chrono.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
-#include <OpenVolumeMesh/FileManager/FileManager.hh>
 #include <boost/algorithm/cxx11/any_of.hpp>
 #include <boost/program_options.hpp>
-#include <boost/range/adaptor/filtered.hpp>
-#include <boost/range/algorithm_ext.hpp>
-#include <boost/timer/progress_display.hpp>
 
 #include <FeltElements/Attributes.hpp>
+#include <FeltElements/MeshDecorator.hpp>
 #include <FeltElements/Solver.hpp>
 #include <FeltElements/internal/Format.hpp>	 // Format vectors
 #include "tap_adaptor.hpp"
 #include "vec_semantic.hpp"
 
-constexpr const char * kVersion = "1.0.0";
+constexpr const char * version = "1.0.0";
+constexpr const std::chrono::seconds::rep secs_per_dump = 300;
 
 // Requirements for range-v3 to loop over OpenVolumeMesh VertexIter:
 // static_assert(ranges::semiregular<OpenVolumeMesh::VertexIter>, "Not semiregular");
@@ -53,76 +52,103 @@ void execute(
 	Body::Forces const & forces,
 	CommandLine::ConstraintPlane const & constraint_plane,
 	std::string_view const solver,
-	std::size_t const max_steps)
+	Solver::Params const params)
 {
 	spdlog::info("Reading mesh file '{}'", input_file_path);
-
-	FeltElements::Mesh mesh;
-	OpenVolumeMesh::IO::FileManager file_manager{};
-	if (!file_manager.readFile(input_file_path, mesh))
-		throw std::filesystem::filesystem_error{
-			fmt::format("Unable to read mesh file '{}", input_file_path),
-			std::make_error_code(std::errc::no_such_file_or_directory)};
+	Mesh mesh = MeshDecorator::fromFile(input_file_path);
 
 	spdlog::info("Constructing initial mesh attributes");
-
-	FeltElements::Attributes attrs{mesh};
+	Attributes attrs{mesh};
 	*attrs.material = material;
 	*attrs.forces = forces;
 
-	spdlog::info("Calculating fixed vertices...");
+	MeshDecorator interface{mesh, attrs};
 
+	spdlog::info("Calculating fixed vertices");
 	auto const norm = constraint_plane(FeltElements::Tensor::Func::fseq<0, 3>());
 	auto const height = constraint_plane(3);
-	auto const num_constrained_vtxs = boost::size(
-		boost::make_iterator_range(mesh.vertices()) |
-		boost::adaptors::filtered([&mesh, norm, height](auto const & vtxh) {
-			using FeltElements::Tensor::ConstMap;
-			using FeltElements::Tensor::Func::inner;
-			ConstMap<3> const vec{mesh.vertex(vtxh).data()};
-			return inner(norm, vec) < height;
-		}) |
-		boost::adaptors::tapped([&attrs](auto const & vtxh) {
-			attrs.fixed_dof[vtxh] = {1, 1, 1};
-		}));
+	std::size_t num_constrained_vtxs = 0;
+	for (auto const & vtxh : interface.vertices)
+	{
+		Tensor::ConstMap<3> const vec{mesh.vertex(vtxh).data()};
+		if (Tensor::Func::inner(norm, vec) > height)
+			continue;
+		attrs.fixed_dof[vtxh] = {1, 1, 1};
+		num_constrained_vtxs++;
+	}
 
-	spdlog::info("...constrained {}/{} vertices", num_constrained_vtxs, mesh.n_vertices());
+	spdlog::info("    constrained {}/{} vertices", num_constrained_vtxs, mesh.n_vertices());
 
 	spdlog::info("Starting {} solver", solver);
 
 	if (solver == CommandLine::kMatrix)
 		spdlog::info("Eigen matrix solver using {} threads", Eigen::nbThreads());
 
-	boost::timer::progress_display progress(max_steps);
 	auto const solver_fn = (solver == CommandLine::kMatrix) ? &FeltElements::Solver::Matrix::solve
 															: &FeltElements::Solver::Gauss::solve;
-	std::atomic_uint num_steps{0};
 
-	auto solver_future = std::async(
-		std::launch::async, solver_fn, std::ref(mesh), std::ref(attrs), max_steps, &num_steps);
+	Solver::Stats stats{};
+
+	auto solver_future =
+		std::async(std::launch::async, solver_fn, std::ref(mesh), std::ref(attrs), params, &stats);
+
+	std::size_t last_step = 0;
+	auto last_dump = std::chrono::system_clock::now();
 
 	while (true)
 	{
-		if (solver_future.wait_for(std::chrono::milliseconds(100)) == std::future_status::ready)
+		if (solver_future.wait_for(std::chrono::milliseconds(1000)) == std::future_status::ready)
 			break;
 
-		progress += num_steps.load() - progress.count();
-	}
-	fmt::print("\n");
+		// Logging.
+		std::size_t curr_step = stats.step_counter.load();
+		if (curr_step > last_step)
+		{
+			spdlog::info(
+				"Step = {}; increment = {}; delta = {:e}",
+				curr_step,
+				stats.force_increment_counter.load(),
+				stats.max_norm.load());
+			last_step = curr_step;
+		}
 
-	std::size_t const num_steps_at_finish = solver_future.get();
-	spdlog::info("Finished in {}/{} steps", num_steps_at_finish, max_steps);
-	if (num_steps_at_finish == max_steps)
-		spdlog::warn("Solution did not converge");
+		// Dump intermediate mesh.
+		auto now = std::chrono::system_clock::now();
+		if (std::chrono::duration_cast<std::chrono::seconds>(now - last_dump).count() >
+			secs_per_dump)
+		{
+			stats.pause.test_and_set(boost::memory_order_acquire);
+			std::scoped_lock lock{stats.running};
+			now = std::chrono::system_clock::now();
+			std::string const file_name = fmt::format(
+				"intermediate_{:%Y-%m-%d_%H.%M.%S}_{}.ovm",
+				fmt::localtime(std::chrono::system_clock::to_time_t(now)),
+				curr_step);
+			spdlog::info("Dumping mesh to '{}'", file_name);
+			interface.toFile(file_name);
+			stats.pause.clear(boost::memory_order_release);
+			stats.pause.notify_one();
+			last_dump = now;
+		}
+	}
+
+	try
+	{
+		Scalar const max_norm = solver_future.get();
+		spdlog::info(
+			"Finished in {}/{} steps with residual = {}",
+			stats.step_counter.load(),
+			params.num_steps,
+			max_norm);
+	}
+	catch (std::exception & e)
+	{
+		spdlog::error("Failed after {} steps: {}", stats.step_counter.load(), e.what());
+	}
 
 	spdlog::info("Writing output to '{}'", output_file_path);
 
-	for (auto const & vtxh : boost::make_iterator_range(mesh.vertices()))
-	{
-		auto const & x = attrs.x[vtxh];
-		mesh.set_vertex(vtxh, {x(0), x(1), x(2)});
-	}
-	file_manager.writeFile(output_file_path, mesh);
+	interface.toFile(output_file_path);
 }
 }  // namespace FeltElements
 
@@ -136,10 +162,10 @@ int main(int argc, char * argv[])
 	std::string input_file_path;
 	std::string output_file_path;
 	std::string solver;
-	std::size_t max_steps;
+	FeltElements::Solver::Params params;
 
 	FeltElements::Body::Material material{};
-	Scalar E;
+	Scalar K;
 	FeltElements::Body::Forces forces{};
 	CommandLine::ConstraintPlane constraint_plane;
 
@@ -165,14 +191,17 @@ int main(int argc, char * argv[])
 		po::value(&solver)->value_name("matrix|gauss")->required(),
 		"Solver to use: Eigen matrix or Gauss-Seidel")(
 		"max-steps,n",
-		po::value(&max_steps)->value_name("NATURAL")->required(),
+		po::value(&params.num_steps)->value_name("NATURAL")->required(),
+		"Maximum number of steps to run the solver")(
+		"force-increments,q",
+		po::value(&params.num_force_increments)->value_name("NATURAL")->default_value(1),
 		"Maximum number of steps to run the solver")(
 		"density,r",
 		po::value(&material.rho)->value_name("REAL")->required(),
 		"Density of the material (kg/m^3)")(
-		"youngs-modulus,E",
-		po::value(&E)->value_name("REAL")->required(),
-		"Young's modulus of the material")(
+		"bulk-modulus,K",
+		po::value(&K)->value_name("REAL")->required(),
+		"Bulk modulus of the material")(
 		"shear-modulus,m",
 		po::value(&material.mu)->value_name("REAL")->required(),
 		"Shear modulus of the material")(
@@ -202,7 +231,7 @@ int main(int argc, char * argv[])
 		}
 		if (vm.count("version"))
 		{
-			std::cout << kVersion << std::endl;
+			std::cout << version << std::endl;
 			return 0;
 		}
 
@@ -222,17 +251,18 @@ int main(int argc, char * argv[])
 		return EX_USAGE;
 	}
 
-	material.lambda = FeltElements::Body::Material::lames_first(E, material.mu);
+	material.lambda = FeltElements::Body::Material::lames_first(K, material.mu);
 
 	spdlog::info(
-		"Arguments:\nmesh = {}\nsolver = {}\nmax steps = {}\n"
-		"rho = {:.5}\nE = {:.5}\nlambda = {:.5}\nmu = {:.5}\np = {:.5}\nf/m = {}\n"
+		"Arguments:\nmesh = {}\nsolver = {}\nmax steps = {}\nforce increments = {}\n"
+		"rho = {:.5}\nK = {:.5}\nlambda = {:.5}\nmu = {:.5}\np = {:.5}\nf/m = {}\n"
 		"constraint plane = {}",
 		input_file_path,
 		solver,
-		max_steps,
+		params.num_steps,
+		params.num_force_increments,
 		material.rho,
-		E,
+		K,
 		material.lambda,
 		material.mu,
 		forces.p,
@@ -242,13 +272,7 @@ int main(int argc, char * argv[])
 	try
 	{
 		FeltElements::execute(
-			input_file_path,
-			output_file_path,
-			material,
-			forces,
-			constraint_plane,
-			solver,
-			max_steps);
+			input_file_path, output_file_path, material, forces, constraint_plane, solver, params);
 	}
 	catch (std::filesystem::filesystem_error & e)
 	{

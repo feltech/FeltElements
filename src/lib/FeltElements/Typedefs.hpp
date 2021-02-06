@@ -121,8 +121,10 @@ struct boost::iterator_difference<
 	using type = FeltElements::Element::BoundaryNodePositions::size_type;
 };
 
-constexpr auto const index_of = [](auto && haystack, auto && needle) {
+template <class Haystack, typename Needle>
+constexpr auto index_of(Haystack && haystack, Needle && needle)
+{
 	auto const & it = boost::range::find(
 		std::forward<decltype(haystack)>(haystack), std::forward<decltype(needle)>(needle));
 	return std::distance(haystack.begin(), it);
-};
+}

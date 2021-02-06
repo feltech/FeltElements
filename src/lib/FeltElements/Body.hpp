@@ -13,11 +13,10 @@ struct Material
 	/// Lame's first parameter.
 	Scalar lambda;
 
-	/// Compute Lame's first parameter from Young's modulus and shear modulus.
-	static constexpr Scalar lames_first(Scalar const E, Scalar const mu)
+	/// Compute Lame's first parameter from bulk modulus and shear modulus.
+	static constexpr Scalar lames_first(Scalar const K, Scalar const mu)
 	{
-		Scalar const lambda = (mu * (E - 2 * mu)) / (3 * mu - E);
-		return lambda;
+		return K - 2 * mu / 3;
 	}
 };
 
