@@ -57,7 +57,7 @@ SCENARIO("Mesh attributes")
 {
 	GIVEN("a two-element mesh")
 	{
-		auto mesh = Test::load_ovm_mesh(file_name_two);
+		auto mesh = MeshIO::fromFile(file_name_two);
 
 		WHEN("material properties attribute is constructed")
 		{
@@ -391,7 +391,7 @@ SCENARIO("Metrics of undeformed mesh")
 {
 	GIVEN("one-element mesh")
 	{
-		FeltElements::Mesh mesh = Test::load_ovm_mesh(file_name_one);
+		FeltElements::Mesh mesh = MeshIO::fromFile(file_name_one);
 		Cellh cellh{0};
 
 		WHEN("vertex index mapping is fetched")
@@ -497,7 +497,7 @@ SCENARIO("Metrics of undeformed mesh")
 
 	GIVEN("two-element mesh")
 	{
-		FeltElements::Mesh mesh = Test::load_ovm_mesh(file_name_two);
+		FeltElements::Mesh mesh = MeshIO::fromFile(file_name_two);
 
 		AND_WHEN("material volume is calculated directly and by local transform")
 		{
@@ -522,7 +522,7 @@ SCENARIO("Metrics of deformed mesh")
 {
 	GIVEN("one-element mesh")
 	{
-		Mesh mesh = Test::load_ovm_mesh(file_name_one);
+		Mesh mesh = MeshIO::fromFile(file_name_one);
 		Attributes attrs{mesh};
 
 		Cellh cellh{0};
@@ -720,7 +720,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 
 	GIVEN("a one-element mesh")
 	{
-		auto mesh = Test::load_ovm_mesh(file_name_one);
+		auto mesh = MeshIO::fromFile(file_name_one);
 		Attributes const attrs{mesh};
 		Cellh const cellh{0};
 		auto const & X = attrs.X.for_element(attrs.vtxhs[cellh]);
@@ -1406,7 +1406,7 @@ SCENARIO("Internal equivalent nodal force")
 {
 	GIVEN("an undeformed one-element mesh")
 	{
-		auto mesh = Test::load_ovm_mesh(file_name_one);
+		auto mesh = MeshIO::fromFile(file_name_one);
 		auto attrs = Attributes{mesh};
 		Cellh const cellh{0};
 		auto const & vtxhs = attrs.vtxhs[cellh];
@@ -1548,7 +1548,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 		AND_GIVEN("an undeformed tetrahedron")
 		{
-			auto mesh = Test::load_ovm_mesh(file_name_one);
+			auto mesh = MeshIO::fromFile(file_name_one);
 			Attributes attrs{mesh};
 			Cellh const cellh{0};
 			auto const & vtxhs = attrs.vtxhs[cellh];
@@ -1848,7 +1848,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 //{
 //	GIVEN("one element mesh and basic material properties")
 //	{
-//		auto mesh = Test::load_ovm_mesh(file_name_one);
+//		auto mesh = MeshLoader::fromFile(file_name_one);
 //		Attributes attrs{mesh};
 //
 //		WHEN("pressure stiffness is solved")
@@ -1924,7 +1924,7 @@ SCENARIO("Solution of a single element")
 		double lambda;	// = (mu * (E - 2 * mu)) / (3 * mu - E);
 		mu = lambda = 4;
 
-		auto mesh = Test::load_ovm_mesh(file_name_one);
+		auto mesh = MeshIO::fromFile(file_name_one);
 		Attributes attrs{mesh};
 		(*attrs.material).lambda = lambda;
 		(*attrs.material).mu = mu;
@@ -2169,7 +2169,7 @@ void check_solvers(
 	};
 
 	auto const material_volume = total_volume();
-	Test::write_ovm_mesh(mesh, attrs.x, fmt::format("{}_initial_deformed", file_name_prefix));
+	MeshIO{mesh, attrs}.toFile(fmt::format("{}_initial_deformed", file_name_prefix));
 
 	CAPTURE(attrs.material->rho, attrs.material->lambda, attrs.material->mu, material_volume);
 
@@ -2205,8 +2205,7 @@ void check_solvers(
 		Solver::Matrix solver(mesh, attrs, {steps_per_increment, num_increments});
 		solver.solve();
 		std::size_t const final_step = solver.stats.step_counter.load();
-		Test::write_ovm_mesh(
-			mesh, attrs.x, fmt::format("{}_matrix_{}", file_name_prefix, final_step));
+		MeshIO{mesh, attrs}.toFile(fmt::format("{}_matrix_{}", file_name_prefix, final_step));
 
 		THEN("solution converges to deformed mesh")
 		{
@@ -2222,8 +2221,7 @@ void check_solvers(
 		Solver::Gauss solver(mesh, attrs, {max_steps + 1, 1});
 		solver.solve();
 		std::size_t const final_step = solver.stats.step_counter.load();
-		Test::write_ovm_mesh(
-			mesh, attrs.x, fmt::format("{}_gauss_{}", file_name_prefix, final_step));
+		MeshIO{mesh, attrs}.toFile(fmt::format("{}_gauss_{}", file_name_prefix, final_step));
 
 		THEN("solution converges to deformed mesh")
 		{
@@ -2238,7 +2236,7 @@ void check_solvers(
 //{
 //	GIVEN("one element mesh and basic material properties")
 //	{
-//		auto mesh = Test::load_ovm_mesh(file_name_one);
+//		auto mesh = MeshLoader::fromFile(file_name_one);
 //		Attributes attrs{mesh};
 //		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
 //		constexpr Scalar E = 0.01 * 1e9;   // Young's modulus: 0.001 - 0.05 GPa
@@ -2276,7 +2274,7 @@ SCENARIO("Solution of two elements")
 {
 	GIVEN("two element mesh and basic material properties")
 	{
-		auto mesh = Test::load_ovm_mesh(file_name_two);
+		auto mesh = MeshIO::fromFile(file_name_two);
 		Attributes attrs{mesh};
 		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
 		constexpr Scalar K = 1.5e9;		// Bulk modulus: 1.5 - 2 GPa

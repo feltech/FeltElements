@@ -36,7 +36,7 @@ struct MeshIters
 	CellRng cells{boost::make_iterator_range(mesh.cells())};
 };
 
-struct MeshLoader
+struct MeshIO
 {
 	static Mesh fromFile(std::string const & file_path);
 	void toFile(std::string const & file_path) const;

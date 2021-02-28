@@ -7,7 +7,7 @@
 
 namespace FeltElements
 {
-Mesh MeshLoader::fromFile(std::string const & file_path)
+Mesh MeshIO::fromFile(std::string const & file_path)
 {
 	Mesh mesh{};
 	OpenVolumeMesh::IO::FileManager file_manager{};
@@ -18,7 +18,7 @@ Mesh MeshLoader::fromFile(std::string const & file_path)
 	return mesh;
 }
 
-void MeshLoader::toFile(std::string const & file_path) const
+void MeshIO::toFile(std::string const & file_path) const
 {
 	Mesh out{mesh};
 	OpenVolumeMesh::IO::FileManager file_manager{};

@@ -44,7 +44,7 @@ using ConstraintPlane = FeltElements::Tensor::Vector<4>;
 
 namespace FeltElements
 {
-struct MeshDumper : MeshLoader
+struct MeshDumper : MeshIO
 {
 	using Clock = std::chrono::system_clock;
 	using Period = std::chrono::seconds;
@@ -93,7 +93,7 @@ int execute(
 	Solver::Params const params)
 {
 	spdlog::info("Reading mesh file '{}'", input_file_path);
-	Mesh mesh = MeshLoader::fromFile(input_file_path);
+	Mesh mesh = MeshIO::fromFile(input_file_path);
 
 	spdlog::info("Constructing initial mesh attributes");
 
