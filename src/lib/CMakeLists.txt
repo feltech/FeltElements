@@ -13,8 +13,8 @@ target_link_libraries(
 	OpenMP::OpenMP_CXX
 	PRIVATE
 	project_warnings
+	Boost::headers
 	CONAN_PKG::fmt
-	CONAN_PKG::boost
 	CONAN_PKG::spdlog
 )
 # Library include directories

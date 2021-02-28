@@ -150,7 +150,7 @@ protected:
 		const auto to_tensor = [this, &cell_vtxhs](BoundaryElement::VtxhIdxs const & face_idxs) {
 			BoundaryElement::Vtxhs face_vtxhs;
 			for (auto const & [face_idx, cell_idx] : boost::adaptors::index(face_idxs))
-				face_vtxhs[face_idx] = cell_vtxhs[cell_idx];
+				face_vtxhs[static_cast<std::size_t>(face_idx)] = cell_vtxhs[cell_idx];
 			return for_element(face_vtxhs);
 		};
 

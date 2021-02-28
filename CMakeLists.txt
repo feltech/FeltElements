@@ -43,10 +43,10 @@ conan_cmake_run(
 	eigen/3.3.9
 	fmt/7.1.3
 	spdlog/1.8.2
-	
+
 	OPTIONS
-	# Frustratingly, to avoid linking all static libs (apart from the one we want), we must
-	# explicitly exclude them all one by one.
+	# Frustratingly, to avoid downloading all static libs (apart from the ones we, and other libs,
+	# want), we must explicitly exclude them all one by one.
 	boost:without_atomic=True
 	boost:without_chrono=True
 	boost:without_container=True
@@ -91,6 +91,7 @@ conan_load_buildinfo()
 # Install/configure external libraries
 
 include (vendor/CreateTargets.cmake)
+find_package(Boost 1.75.0 REQUIRED COMPONENTS program_options)
 
 ###################################
 # Configure main FeltElements lib

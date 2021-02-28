@@ -103,28 +103,12 @@ using PerFace = boost::container::static_vector<T, Element::num_faces>;
 using BoundaryVtxhIdxs = PerFace<BoundaryElement::VtxhIdxs>;
 using BoundaryNodePositions = PerFace<BoundaryElement::NodePositions>;
 }  // namespace Element
-}  // namespace FeltElements
 
-// Override index type for ranges to avoid the need to static_cast all over the place.
-// TODO: this is basically for boost::adaptors::index - overriding the difference_type for all
-// 	range_iterators seems a bit extreme, and potentially dangerous.
-template <>
-struct boost::iterator_difference<
-	boost::range_iterator<const FeltElements::BoundaryElement::VtxhIdxs>::type>
-{
-	using type = FeltElements::BoundaryElement::VtxhIdxs::size_type;
-};
-template <>
-struct boost::iterator_difference<
-	boost::range_iterator<const FeltElements::Element::BoundaryNodePositions>::type>
-{
-	using type = FeltElements::Element::BoundaryNodePositions::size_type;
-};
-
-template <class Haystack, typename Needle>
-constexpr auto index_of(Haystack && haystack, Needle && needle)
+template <typename Index = std::size_t, class Haystack, typename Needle>
+constexpr Index index_of(Haystack && haystack, Needle && needle)
 {
 	auto const & it = boost::range::find(
 		std::forward<decltype(haystack)>(haystack), std::forward<decltype(needle)>(needle));
-	return std::distance(haystack.begin(), it);
+	return static_cast<Index>(std::distance(haystack.begin(), it));
 }
+}  // namespace FeltElements

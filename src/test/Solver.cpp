@@ -6,6 +6,7 @@
 
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
+#include <FeltElements/MeshFacade.hpp>
 #include <FeltElements/internal/Format.hpp>	 // For logging
 #include "util/Assert.hpp"
 #include "util/IO.hpp"
@@ -371,7 +372,7 @@ SCENARIO("Mesh attributes")
 
 		WHEN("fixed degree of freedom attributes are constructed")
 		{
-			Attribute::Vertex::FixedDOF const attrib{mesh};
+			Attribute::Vertex::FixedDOF const attrs{mesh};
 
 			THEN("attributes are initialised to zero")
 			{
@@ -379,7 +380,7 @@ SCENARIO("Mesh attributes")
 				{
 					Node::Pos zero;
 					zero.zeros();
-					Test::check_equal(attrib[*itvtxh], "fixed DOFs", zero, "zero");
+					Test::check_equal(attrs[*itvtxh], "fixed DOFs", zero, "zero");
 				}
 			}
 		}
@@ -522,12 +523,12 @@ SCENARIO("Metrics of deformed mesh")
 	GIVEN("one-element mesh")
 	{
 		Mesh mesh = Test::load_ovm_mesh(file_name_one);
-		Attributes attrib{mesh};
+		Attributes attrs{mesh};
 
 		Cellh cellh{0};
-		auto const & vtxh0 = attrib.vtxhs[cellh];
-		auto const & X = attrib.X.for_element(vtxh0);
-		auto x = attrib.x.for_element(vtxh0);
+		auto const & vtxh0 = attrs.vtxhs[cellh];
+		auto const & X = attrs.X.for_element(vtxh0);
+		auto x = attrs.x.for_element(vtxh0);
 
 		INFO("Tetrahedron vertices:")
 		INFO(X)
@@ -720,9 +721,9 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 	GIVEN("a one-element mesh")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_one);
-		Attributes const attrib{mesh};
+		Attributes const attrs{mesh};
 		Cellh const cellh{0};
-		auto const & X = attrib.X.for_element(attrib.vtxhs[cellh]);
+		auto const & X = attrs.X.for_element(attrs.vtxhs[cellh]);
 
 		WHEN("derivative of material wrt local coords is calculated")
 		{
@@ -831,7 +832,7 @@ SCENARIO("Coordinate derivatives in undeformed mesh")
 			using Tensor::Func::last;
 
 			Element::BoundaryNodePositions const & ss =
-				attrib.X.for_elements(attrib.vtxhs[cellh], attrib.boundary_faces_vtxh_idxs[cellh]);
+				attrs.X.for_elements(attrs.vtxhs[cellh], attrs.boundary_faces_vtxh_idxs[cellh]);
 
 			REQUIRE(ss.size() == 4);
 
@@ -1406,11 +1407,11 @@ SCENARIO("Internal equivalent nodal force")
 	GIVEN("an undeformed one-element mesh")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_one);
-		auto attrib = Attributes{mesh};
+		auto attrs = Attributes{mesh};
 		Cellh const cellh{0};
-		auto const & vtxhs = attrib.vtxhs[cellh];
-		auto const & X = attrib.X.for_element(vtxhs);
-		auto x = attrib.x.for_element(vtxhs);
+		auto const & vtxhs = attrs.vtxhs[cellh];
+		auto const & X = attrs.X.for_element(vtxhs);
+		auto x = attrs.x.for_element(vtxhs);
 
 		INFO("Material vertices:")
 		INFO(X)
@@ -1467,7 +1468,7 @@ SCENARIO("Internal equivalent nodal force")
 		{
 			Scalar constexpr p = 10.0;
 			Element::BoundaryNodePositions const & ss =
-				attrib.X.for_elements(attrib.vtxhs[cellh], attrib.boundary_faces_vtxh_idxs[cellh]);
+				attrs.X.for_elements(attrs.vtxhs[cellh], attrs.boundary_faces_vtxh_idxs[cellh]);
 			Node::Force t = Derivatives::t(p, Derivatives::dX_by_dS(ss[0]));
 
 			THEN("pressure component is as expected")
@@ -1548,11 +1549,11 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 		AND_GIVEN("an undeformed tetrahedron")
 		{
 			auto mesh = Test::load_ovm_mesh(file_name_one);
-			Attributes attrib{mesh};
+			Attributes attrs{mesh};
 			Cellh const cellh{0};
-			auto const & vtxhs = attrib.vtxhs[cellh];
-			auto const & X = attrib.X.for_element(vtxhs);
-			auto const & x = attrib.x.for_element(vtxhs);
+			auto const & vtxhs = attrs.vtxhs[cellh];
+			auto const & X = attrs.X.for_element(vtxhs);
+			auto const & x = attrs.x.for_element(vtxhs);
 
 			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
@@ -1637,8 +1638,8 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 			AND_GIVEN("surface shape derivative")
 			{
-				Element::BoundaryVtxhIdxs const & S_to_Vs = attrib.boundary_faces_vtxh_idxs[cellh];
-				Element::BoundaryNodePositions const & Ss = attrib.X.for_elements(vtxhs, S_to_Vs);
+				Element::BoundaryVtxhIdxs const & S_to_Vs = attrs.boundary_faces_vtxh_idxs[cellh];
+				Element::BoundaryNodePositions const & Ss = attrs.X.for_elements(vtxhs, S_to_Vs);
 
 				AND_GIVEN("pressure is zero")
 				{
@@ -1848,15 +1849,15 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 //	GIVEN("one element mesh and basic material properties")
 //	{
 //		auto mesh = Test::load_ovm_mesh(file_name_one);
-//		Attributes attrib{mesh};
+//		Attributes attrs{mesh};
 //
 //		WHEN("pressure stiffness is solved")
 //		{
 //			Cellh cellh{0};
 //			Scalar const p = 1;
-//			auto const & cell_vtxhs = attrib.vtxhs[cellh];
-//			auto const & boundary_faces_idxs = attrib.boundary_faces_vtxh_idxs[cellh];
-//			auto const & boundary_faces_x = attrib.x.for_elements(cell_vtxhs, boundary_faces_idxs);
+//			auto const & cell_vtxhs = attrs.vtxhs[cellh];
+//			auto const & boundary_faces_idxs = attrs.boundary_faces_vtxh_idxs[cellh];
+//			auto const & boundary_faces_x = attrs.x.for_elements(cell_vtxhs, boundary_faces_idxs);
 //
 //			auto const & Kp = Derivatives::Kp(boundary_faces_x, boundary_faces_idxs, p);
 //
@@ -1899,6 +1900,14 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 //	}
 //}
 
+struct MockSolver : FeltElements::Solver::Base
+{
+	using Base = FeltElements::Solver::Base;
+	using Base::Base;
+	void solve() final {}
+	using Base::update_elements_stiffness_and_residual;
+};
+
 SCENARIO("Solution of a single element")
 {
 	GIVEN("single element mesh and material properties")
@@ -1916,13 +1925,13 @@ SCENARIO("Solution of a single element")
 		mu = lambda = 4;
 
 		auto mesh = Test::load_ovm_mesh(file_name_one);
-		Attributes attrib{mesh};
-		(*attrib.material).lambda = lambda;
-		(*attrib.material).mu = mu;
-		auto const & vtxhs = attrib.vtxhs[Cellh{0}];
-		auto const & X = attrib.X.for_element(vtxhs);
+		Attributes attrs{mesh};
+		(*attrs.material).lambda = lambda;
+		(*attrs.material).mu = mu;
+		auto const & vtxhs = attrs.vtxhs[Cellh{0}];
+		auto const & X = attrs.X.for_element(vtxhs);
 		// Push top-most node to the right slightly.
-		attrib.x[Vtxh{3}](0) += 0.5;
+		attrs.x[Vtxh{3}](0) += 0.5;
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
@@ -1930,16 +1939,18 @@ SCENARIO("Solution of a single element")
 		INFO("Material vertices:")
 		INFO(X)
 
+		MockSolver solver{mesh, attrs, {}};
+
 		WHEN("element stiffness and internal force tensor attributes are constructed")
 		{
-			Solver::update_elements_stiffness_and_residual(mesh, attrib);
+			solver.update_elements_stiffness_and_residual();
 
 			THEN("attributes hold correct solutions")
 			{
 				Cellh const cellh{0};
-				auto const & x = attrib.x.for_element(attrib.vtxhs[cellh]);
+				auto const & x = attrs.x.for_element(attrs.vtxhs[cellh]);
 				Scalar const v = Derivatives::V(x);
-				auto const & dN_by_dX = attrib.dN_by_dX[cellh];
+				auto const & dN_by_dX = attrs.dN_by_dX[cellh];
 
 				auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
 				auto const FFt = Derivatives::b(F);
@@ -1958,8 +1969,8 @@ SCENARIO("Solution of a single element")
 				auto const & Ks = Derivatives::Ks(dN_by_dx, v, sigma);
 				Element::Stiffness const & K = Kc + Ks;
 
-				Test::check_equal(attrib.R[cellh], "T (attribute)", T, "T (check)");
-				Test::check_equal(attrib.K[cellh], "K (attribute)", K, "K (check)");
+				Test::check_equal(attrs.R[cellh], "T (attribute)", T, "T (check)");
+				Test::check_equal(attrs.K[cellh], "K (attribute)", K, "K (check)");
 			}
 		}
 
@@ -1969,8 +1980,8 @@ SCENARIO("Solution of a single element")
 			std::size_t constexpr max_steps = 10;
 			std::string log;
 
-			auto x = attrib.x.for_element(vtxhs);
-			auto const & dN_by_dX = attrib.dN_by_dX[Cellh{0}];
+			auto x = attrs.x.for_element(vtxhs);
+			auto const & dN_by_dX = attrs.dN_by_dX[Cellh{0}];
 
 			for (step = 0; step < max_steps; step++)
 			{
@@ -2055,8 +2066,8 @@ SCENARIO("Solution of a single element")
 			std::size_t constexpr max_steps = 10;
 			std::string log;
 
-			auto x = attrib.x.for_element(vtxhs);
-			auto const & dN_by_dX = attrib.dN_by_dX[Cellh{0}];
+			auto x = attrs.x.for_element(vtxhs);
+			auto const & dN_by_dX = attrs.dN_by_dX[Cellh{0}];
 
 			for (step = 0; step < max_steps; step++)
 			{
@@ -2144,23 +2155,23 @@ SCENARIO("Solution of a single element")
 void check_solvers(
 	std::string_view const & file_name_prefix,
 	Mesh & mesh,
-	Attributes & attrib,
+	Attributes & attrs,
 	std::size_t const max_matrix_steps,
 	std::size_t const max_guass_steps,
 	Scalar const expected_volume,
 	std::vector<Scalar> const & expected_positions)
 {
-	auto const total_volume = [&attrib, &mesh]() {
-		auto const add = [&attrib](auto const total, auto const & cellh) {
-			return total + Derivatives::V(attrib.x.for_element(attrib.vtxhs[cellh]));
+	auto const total_volume = [&attrs, &mesh]() {
+		auto const add = [&attrs](auto const total, auto const & cellh) {
+			return total + Derivatives::V(attrs.x.for_element(attrs.vtxhs[cellh]));
 		};
-		return boost::accumulate(boost::make_iterator_range(mesh.cells()), 0.0, add);
+		return boost::accumulate(FeltElements::MeshIters{mesh, attrs}.cells, 0.0, add);
 	};
 
 	auto const material_volume = total_volume();
-	Test::write_ovm_mesh(mesh, attrib.x, fmt::format("{}_initial_deformed", file_name_prefix));
+	Test::write_ovm_mesh(mesh, attrs.x, fmt::format("{}_initial_deformed", file_name_prefix));
 
-	CAPTURE(attrib.material->rho, attrib.material->lambda, attrib.material->mu, material_volume);
+	CAPTURE(attrs.material->rho, attrs.material->lambda, attrs.material->mu, material_volume);
 
 	auto const rows = static_cast<Eigen::Index>(mesh.n_vertices());
 	Eigen::Index constexpr cols = 3;
@@ -2170,7 +2181,7 @@ void check_solvers(
 	INFO(mat_vtxs)
 
 	INFO("Mesh initial spatial vertices")
-	Solver::Matrix::EigenMapTensorVertices const & mat_x{attrib.x[Vtxh{0}].data(), rows, cols};
+	Solver::Matrix::EigenMapTensorVertices const & mat_x{attrs.x[Vtxh{0}].data(), rows, cols};
 	INFO(mat_x)
 
 	auto const check_converges = [&mat_x, &total_volume, expected_volume, &expected_positions](
@@ -2189,11 +2200,13 @@ void check_solvers(
 	WHEN("displacement is solved using Eigen matrix solver")
 	{
 		auto const max_steps = max_matrix_steps;
-		Solver::Stats stats{};
-		Solver::Matrix::solve(mesh, attrib, {max_steps + 1}, &stats);
-		std::size_t const final_step = stats.step_counter.load();
+		std::size_t const steps_per_increment = max_steps;	// std::min(20ul, max_steps);
+		std::size_t const num_increments = 1;  // std::max(max_steps / steps_per_increment, 1ul);
+		Solver::Matrix solver(mesh, attrs, {steps_per_increment, num_increments});
+		solver.solve();
+		std::size_t const final_step = solver.stats.step_counter.load();
 		Test::write_ovm_mesh(
-			mesh, attrib.x, fmt::format("{}_matrix_{}", file_name_prefix, final_step));
+			mesh, attrs.x, fmt::format("{}_matrix_{}", file_name_prefix, final_step));
 
 		THEN("solution converges to deformed mesh")
 		{
@@ -2206,11 +2219,11 @@ void check_solvers(
 	WHEN("displacement is solved Gauss-Seidel style")
 	{
 		auto const max_steps = max_guass_steps;
-		Solver::Stats stats{};
-		Solver::Gauss::solve(mesh, attrib, {max_steps + 1}, &stats);
-		std::size_t const final_step = stats.step_counter.load();
+		Solver::Gauss solver(mesh, attrs, {max_steps + 1, 1});
+		solver.solve();
+		std::size_t const final_step = solver.stats.step_counter.load();
 		Test::write_ovm_mesh(
-			mesh, attrib.x, fmt::format("{}_gauss_{}", file_name_prefix, final_step));
+			mesh, attrs.x, fmt::format("{}_gauss_{}", file_name_prefix, final_step));
 
 		THEN("solution converges to deformed mesh")
 		{
@@ -2226,24 +2239,24 @@ void check_solvers(
 //	GIVEN("one element mesh and basic material properties")
 //	{
 //		auto mesh = Test::load_ovm_mesh(file_name_one);
-//		Attributes attrib{mesh};
+//		Attributes attrs{mesh};
 //		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
 //		constexpr Scalar E = 0.01 * 1e9;   // Young's modulus: 0.001 - 0.05 GPa
-//		attrib.material->rho = 2 * 1e3;	   // Density: 1.1 - 2.3 Mg/m3
-//		attrib.material->mu = 0.01 * 1e9;  // Shear modulus: 0.0003 - 0.02 GPa
+//		attrs.material->rho = 2 * 1e3;	   // Density: 1.1 - 2.3 Mg/m3
+//		attrs.material->mu = 0.01 * 1e9;  // Shear modulus: 0.0003 - 0.02 GPa
 //		// -- Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-//		attrib.material->lambda =
-//			(attrib.material->mu * (E - 2 * attrib.material->mu)) / (3 * attrib.material->mu - E);
+//		attrs.material->lambda =
+//			(attrs.material->mu * (E - 2 * attrs.material->mu)) / (3 * attrs.material->mu - E);
 //
 //		AND_GIVEN("no constraints but pressure")
 //		{
 ////			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
-//			attrib.forces->p = -1;
+//			attrs.forces->p = -1;
 //
 //			check_solvers(
 //				"single_no_constraint",
 //				mesh,
-//				attrib,
+//				attrs,
 //				100,
 //				100,
 //				1.0 / 6.0,
@@ -2264,34 +2277,34 @@ SCENARIO("Solution of two elements")
 	GIVEN("two element mesh and basic material properties")
 	{
 		auto mesh = Test::load_ovm_mesh(file_name_two);
-		Attributes attrib{mesh};
+		Attributes attrs{mesh};
 		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		constexpr Scalar K = 1.5e9;		 // Bulk modulus: 1.5 - 2 GPa
-		attrib.material->rho = 2e3;		 // Density: 1.1 - 2.3 Mg/m3
-		attrib.material->mu = 0.0003e9;	 // Shear modulus: 0.0003 - 0.02 GPa
+		constexpr Scalar K = 1.5e9;		// Bulk modulus: 1.5 - 2 GPa
+		attrs.material->rho = 2e3;		// Density: 1.1 - 2.3 Mg/m3
+		attrs.material->mu = 0.0003e9;	// Shear modulus: 0.0003 - 0.02 GPa
 		// -- Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		attrib.material->lambda = Body::Material::lames_first(K, attrib.material->mu);
-		attrib.forces->p = 0;					  // Normal pressure
-		attrib.forces->F_by_m = {0.0, 0.0, 0.0};  // Force per unit mass.
+		attrs.material->lambda = Body::Material::lames_first(K, attrs.material->mu);
+		attrs.forces->p = 0;					 // Normal pressure
+		attrs.forces->F_by_m = {0.0, 0.0, 0.0};	 // Force per unit mass.
 		// Set boundary condition.
 		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
 			Vtx const & vtx = mesh.vertex(vtxh);
 			if (vtx == Vtx{0, 0, 0} || vtx == Vtx{1, 0, 0} || vtx == Vtx{0, 0, 1})
-				attrib.fixed_dof[vtxh] = Node::Pos{1.0, 1.0, 1.0};
+				attrs.fixed_dof[vtxh] = Node::Pos{1.0, 1.0, 1.0};
 		}
 
 		AND_GIVEN("high density material under self-weight")
 		{
-			attrib.material->rho *= 80;					// Density.
-			attrib.forces->F_by_m = {0.0, -9.81, 0.0};	// Force per unit mass.
+			attrs.material->rho *= 80;				   // Density.
+			attrs.forces->F_by_m = {0.0, -9.81, 0.0};  // Force per unit mass.
 
 			check_solvers(
 				"self_weight",
 				mesh,
-				attrib,
+				attrs,
 				17,
-				100000,
+				1688,  // TODO: this takes far too long
 				0.1666411123,
 				{
 					// clang-format off
@@ -2306,12 +2319,12 @@ SCENARIO("Solution of two elements")
 
 		AND_GIVEN("a free vertex is displaced")
 		{
-			attrib.x[Vtxh{2}] += Node::Pos{0.2, 0.2, 0.2};
+			attrs.x[Vtxh{2}] += Node::Pos{0.2, 0.2, 0.2};
 
 			check_solvers(
 				"displaced_vertex",
 				mesh,
-				attrib,
+				attrs,
 				2,
 				2,
 				1.0 / 6.0,
@@ -2330,12 +2343,12 @@ SCENARIO("Solution of two elements")
 		{
 			// Set boundary condition.
 			for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
-				attrib.fixed_dof[vtxh] = Node::Pos{0.0, 0.0, 0.0};
+				attrs.fixed_dof[vtxh] = Node::Pos{0.0, 0.0, 0.0};
 
 			check_solvers(
 				"no_constraint",
 				mesh,
-				attrib,
+				attrs,
 				1,
 				1,
 				1.0 / 6.0,
@@ -2350,17 +2363,17 @@ SCENARIO("Solution of two elements")
 				});
 		}
 
-		AND_GIVEN("atmospheric pressure")
+		AND_GIVEN("atmospheric pressure")  // TODO: fails badly
 		{
 			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
-			attrib.forces->p = -10 * atm;
+			attrs.forces->p = -30 * atm;
 
 			check_solvers(
 				"pressure",
 				mesh,
-				attrib,
-				10,
-				10,
+				attrs,
+				2000,
+				5000,
 				0.1484595104,
 				{
 					// clang-format off
@@ -2372,31 +2385,5 @@ SCENARIO("Solution of two elements")
 					// clang-format on
 				});
 		}
-
-		//		AND_GIVEN("no constraints but pressure")
-		//		{
-		//			// Set boundary condition.
-		//			for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
-		//				attrib.fixed_dof[vtxh] = Node::Pos{0.0, 0.0, 0.0};
-		//			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
-		//			attrib.forces->p = -10 * atm;
-		//
-		//			check_solvers(
-		//				"no_constraint",
-		//				mesh,
-		//				attrib,
-		//				100,
-		//				100,
-		//				1.0 / 6.0,
-		//				{
-		//					// clang-format off
-		//					0,         0,         0,
-		//					1,         0,         0,
-		//					0,         1,         0,
-		//					0,         0,         1,
-		//					0,       0.5,       0.5
-		//					// clang-format on
-		//				});
-		//		}
 	}
 }

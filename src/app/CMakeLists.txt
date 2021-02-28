@@ -8,7 +8,8 @@ target_link_libraries(
 	project_warnings
 	feltelements.lib
 
-	CONAN_PKG::boost
+	Boost::headers
+	Boost::program_options
 	CONAN_PKG::fmt
 	CONAN_PKG::spdlog
 )

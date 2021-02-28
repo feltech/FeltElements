@@ -1,4 +1,4 @@
-#include "MeshDecorator.hpp"
+#include "MeshFacade.hpp"
 
 #include <filesystem>
 
@@ -7,7 +7,7 @@
 
 namespace FeltElements
 {
-Mesh MeshDecorator::fromFile(std::string const & file_path)
+Mesh MeshLoader::fromFile(std::string const & file_path)
 {
 	Mesh mesh{};
 	OpenVolumeMesh::IO::FileManager file_manager{};
@@ -18,12 +18,12 @@ Mesh MeshDecorator::fromFile(std::string const & file_path)
 	return mesh;
 }
 
-void MeshDecorator::toFile(std::string const & file_path)
+void MeshLoader::toFile(std::string const & file_path) const
 {
 	Mesh out{mesh};
 	OpenVolumeMesh::IO::FileManager file_manager{};
 
-	for (auto const & vtxh : vertices)
+	for (auto const & vtxh : MeshIters{mesh, attrs}.vertices)
 	{
 		auto const & x = attrs.x[vtxh];
 		out.set_vertex(vtxh, {x(0), x(1), x(2)});

@@ -12,14 +12,13 @@
 #include <boost/program_options.hpp>
 
 #include <FeltElements/Attributes.hpp>
-#include <FeltElements/MeshDecorator.hpp>
+#include <FeltElements/MeshFacade.hpp>
 #include <FeltElements/Solver.hpp>
 #include <FeltElements/internal/Format.hpp>	 // Format vectors
-#include "tap_adaptor.hpp"
 #include "vec_semantic.hpp"
 
 constexpr const char * version = "1.0.0";
-constexpr const std::chrono::seconds::rep secs_per_dump = 300;
+constexpr const std::chrono::seconds secs_per_dump{5};
 
 // Requirements for range-v3 to loop over OpenVolumeMesh VertexIter:
 // static_assert(ranges::semiregular<OpenVolumeMesh::VertexIter>, "Not semiregular");
@@ -45,30 +44,70 @@ using ConstraintPlane = FeltElements::Tensor::Vector<4>;
 
 namespace FeltElements
 {
-void execute(
+struct MeshDumper : MeshLoader
+{
+	using Clock = std::chrono::system_clock;
+	using Period = std::chrono::seconds;
+	using Time = std::chrono::time_point<Clock>;
+
+	Solver::Base & solver;
+	std::string final_path;
+	Period period_secs;
+
+	Time last{Clock::now()};
+
+	void maybe_dump(std::size_t const curr_step)
+	{
+		Time now = Clock::now();
+		if (std::chrono::duration_cast<Period>(now - last) < period_secs)
+			return;
+
+		Solver::Base::Unpauser pause_lock = solver.pauser.scoped_pause();
+
+		now = Clock::now();
+		std::string const file_name = fmt::format(
+			"intermediate_{:%Y-%m-%d_%H.%M.%S}_{}.ovm",
+			fmt::localtime(Clock::to_time_t(now)),
+			curr_step);
+		spdlog::info("Dumping mesh to '{}'", file_name);
+
+		toFile(file_name);
+
+		last = now;
+	}
+
+	~MeshDumper()
+	{
+		spdlog::info("Writing final output to '{}'", final_path);
+		toFile(final_path);
+	}
+};
+
+int execute(
 	std::string const & input_file_path,
 	std::string const & output_file_path,
 	Body::Material const & material,
 	Body::Forces const & forces,
 	CommandLine::ConstraintPlane const & constraint_plane,
-	std::string_view const solver,
+	std::string_view const solver_type,
 	Solver::Params const params)
 {
 	spdlog::info("Reading mesh file '{}'", input_file_path);
-	Mesh mesh = MeshDecorator::fromFile(input_file_path);
+	Mesh mesh = MeshLoader::fromFile(input_file_path);
 
 	spdlog::info("Constructing initial mesh attributes");
+
 	Attributes attrs{mesh};
 	*attrs.material = material;
 	*attrs.forces = forces;
 
-	MeshDecorator interface{mesh, attrs};
-
 	spdlog::info("Calculating fixed vertices");
-	auto const norm = constraint_plane(FeltElements::Tensor::Func::fseq<0, 3>());
+
+	auto const norm = constraint_plane(Tensor::Func::fseq<0, 3>());
 	auto const height = constraint_plane(3);
 	std::size_t num_constrained_vtxs = 0;
-	for (auto const & vtxh : interface.vertices)
+	// TODO: add to FixedDOF as a method
+	for (auto const & vtxh : MeshIters{mesh, attrs}.vertices)
 	{
 		Tensor::ConstMap<3> const vec{mesh.vertex(vtxh).data()};
 		if (Tensor::Func::inner(norm, vec) > height)
@@ -76,79 +115,64 @@ void execute(
 		attrs.fixed_dof[vtxh] = {1, 1, 1};
 		num_constrained_vtxs++;
 	}
-
 	spdlog::info("    constrained {}/{} vertices", num_constrained_vtxs, mesh.n_vertices());
 
-	spdlog::info("Starting {} solver", solver);
+	spdlog::info("Starting {} solver", solver_type);
 
-	if (solver == CommandLine::kMatrix)
+	if (solver_type == CommandLine::kMatrix)
 		spdlog::info("Eigen matrix solver using {} threads", Eigen::nbThreads());
 
-	auto const solver_fn = (solver == CommandLine::kMatrix) ? &FeltElements::Solver::Matrix::solve
-															: &FeltElements::Solver::Gauss::solve;
+	std::unique_ptr<Solver::Base> solver;
+	if (solver_type == CommandLine::kMatrix)
+		solver = std::make_unique<Solver::Matrix>(mesh, attrs, params);
+	else
+		solver = std::make_unique<Solver::Gauss>(mesh, attrs, params);
 
-	Solver::Stats stats{};
+	// RAII dump mesh file even if we die with an exception.
+	MeshDumper dumper{{mesh, attrs}, *solver, output_file_path, secs_per_dump};
 
-	auto solver_future =
-		std::async(std::launch::async, solver_fn, std::ref(mesh), std::ref(attrs), params, &stats);
+	auto solver_future = std::async(std::launch::async, &Solver::Base::solve, solver.get());
 
 	std::size_t last_step = 0;
-	auto last_dump = std::chrono::system_clock::now();
 
-	while (true)
+	while (solver_future.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
 	{
-		if (solver_future.wait_for(std::chrono::milliseconds(1000)) == std::future_status::ready)
-			break;
-
 		// Logging.
-		std::size_t curr_step = stats.step_counter.load();
+		std::size_t const curr_step = solver->stats.step_counter.load();
 		if (curr_step > last_step)
 		{
 			spdlog::info(
 				"Step = {}; increment = {}; delta = {:e}",
 				curr_step,
-				stats.force_increment_counter.load(),
-				stats.max_norm.load());
+				solver->stats.force_increment_counter.load(std::memory_order_relaxed),
+				solver->stats.max_norm.load(std::memory_order_relaxed));
 			last_step = curr_step;
 		}
 
 		// Dump intermediate mesh.
-		auto now = std::chrono::system_clock::now();
-		if (std::chrono::duration_cast<std::chrono::seconds>(now - last_dump).count() >
-			secs_per_dump)
-		{
-			stats.pause.test_and_set(boost::memory_order_acquire);
-			std::scoped_lock lock{stats.running};
-			now = std::chrono::system_clock::now();
-			std::string const file_name = fmt::format(
-				"intermediate_{:%Y-%m-%d_%H.%M.%S}_{}.ovm",
-				fmt::localtime(std::chrono::system_clock::to_time_t(now)),
-				curr_step);
-			spdlog::info("Dumping mesh to '{}'", file_name);
-			interface.toFile(file_name);
-			stats.pause.clear(boost::memory_order_release);
-			stats.pause.notify_one();
-			last_dump = now;
-		}
+		dumper.maybe_dump(curr_step);
 	}
 
 	try
 	{
-		Scalar const max_norm = solver_future.get();
+		solver_future.get();  // Will throw any held exception
 		spdlog::info(
 			"Finished in {}/{} steps with residual = {}",
-			stats.step_counter.load(),
+			solver->stats.step_counter.load(),
 			params.num_steps,
-			max_norm);
+			solver->stats.max_norm);
+		return EX_OK;
 	}
 	catch (std::exception & e)
 	{
-		spdlog::error("Failed after {} steps: {}", stats.step_counter.load(), e.what());
+		spdlog::error(
+			"Failed after {}/{} steps with residual {}: {}",
+			solver->stats.step_counter.load(),
+			params.num_steps,
+			solver->stats.max_norm.load(),
+			e.what());
+		return EX_SOFTWARE;
 	}
-
-	spdlog::info("Writing output to '{}'", output_file_path);
-
-	interface.toFile(output_file_path);
 }
 }  // namespace FeltElements
 
@@ -271,7 +295,7 @@ int main(int argc, char * argv[])
 
 	try
 	{
-		FeltElements::execute(
+		return FeltElements::execute(
 			input_file_path, output_file_path, material, forces, constraint_plane, solver, params);
 	}
 	catch (std::filesystem::filesystem_error & e)
@@ -279,6 +303,4 @@ int main(int argc, char * argv[])
 		spdlog::error(e.what());
 		return e.code().value();
 	}
-
-	return EX_OK;
 }

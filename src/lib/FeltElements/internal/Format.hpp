@@ -4,6 +4,7 @@
 #endif
 #include <fmt/format.h>
 #include <fmt/ostream.h>
+#include <spdlog/fmt/ostr.h>
 
 #include <FeltElements/Typedefs.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -16,11 +17,14 @@ namespace
 auto const to_string = [](auto const f) { return fmt::format("{:f}", f); };
 }  // namespace
 
+namespace Fastor
+{
 template <std::size_t dim0, std::size_t dim1, std::size_t dim2, std::size_t dim3>
 std::ostream & operator<<(
 	std::ostream & os, FeltElements::Tensor::Multi<dim0, dim1, dim2, dim3> value)
 {
-	using namespace FeltElements::Tensor;
+	using FeltElements::Tensor::Index;
+	using FeltElements::Tensor::Vector;
 	using boost::algorithm::join;
 
 	std::array<std::string, value.dimension(0)> is{};
@@ -52,8 +56,9 @@ std::ostream & operator<<(
 template <std::size_t dim0, std::size_t dim1, std::size_t dim2>
 std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Multi<dim0, dim1, dim2> value)
 {
-	using namespace FeltElements::Tensor;
 	using boost::algorithm::join;
+	using FeltElements::Tensor::Index;
+	using FeltElements::Tensor::Vector;
 
 	std::array<std::string, value.dimension(0)> is{};
 	std::array<std::string, value.dimension(1)> js{};
@@ -80,14 +85,14 @@ std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Multi<dim0, d
 template <std::size_t dim0, std::size_t dim1>
 std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Matrix<dim0, dim1> value)
 {
-	using namespace FeltElements::Tensor;
 	using boost::algorithm::join;
+	using FeltElements::Tensor::Func::all;
+	using FeltElements::Tensor::Index;
 
 	std::array<std::string, value.dimension(0)> is{};
 	for (Index i = 0; i < value.dimension(0); i++)
 	{
-		using FeltElements::Tensor::Func::all;
-		using Vec = Vector<value.dimension(1)>;
+		using Vec = FeltElements::Tensor::Vector<value.dimension(1)>;
 		Vec const & vec = value(i, all);
 		is[i] = join(
 			boost::make_iterator_range(vec.data(), vec.data() + Vec::size()) |
@@ -97,6 +102,7 @@ std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Matrix<dim0, 
 	os << "{\n\t{" << join(is, "},\n\t{") << "}\n}";
 	return os;
 }
+}  // namespace Fastor
 
 inline std::ostream & operator<<(
 	std::ostream & os, std::vector<OpenVolumeMesh::VertexHandle> const & vtxhs)

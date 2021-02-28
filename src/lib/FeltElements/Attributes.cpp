@@ -93,8 +93,7 @@ Boundary::Boundary(Mesh & mesh, VertexHandles const & vtxhs) : CellBase(mesh)
 				Vtxh const & vtxh = mesh.halfedge(heh).from_vertex();
 				using VtxhIdx = decltype(vtxh_idxs)::size_type;
 				// Face vertex's index within cell's list of vertex handles.
-				vtxh_idxs[static_cast<VtxhIdx>(vtx_idx)] =
-					static_cast<Tensor::Index>(index_of(cell_vtxhs, vtxh));
+				vtxh_idxs[static_cast<VtxhIdx>(vtx_idx)] = index_of(cell_vtxhs, vtxh);
 			}
 
 			(*this)[cellh].push_back(vtxh_idxs);

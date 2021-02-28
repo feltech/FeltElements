@@ -123,11 +123,11 @@ Element::StiffnessResidual KR(
 	Scalar const J = Derivatives::det_dx_by_dX(dx_by_dX);
 	if (J < 0)
 	{
-		std::string const msg = fmt::format("J < 0:\nJ = {}\nF = {}\nb = {}", J, dx_by_dX, b);
+		std::string const msg =
+			fmt::format("Error: J < 0:\nJ = {}\nF = {}\nb = {}", J, dx_by_dX, b);
 		spdlog::error(msg);
 		throw std::invalid_argument{msg};
 	}
-//	spdlog::info("J={}", J);
 	Scalar const v = Derivatives::v(x);	 // TODO: but also v = J*V
 
 	auto const & dx_by_dL = ex::dX_by_dL(x);
@@ -168,27 +168,27 @@ Element::StiffnessResidual KR(
 			(1.0 / BoundaryElement::num_nodes) * Derivatives::t(forces.p, Derivatives::dX_by_dS(s));
 		for (Tensor::Index const node_idx : idxs) R(node_idx, all) -= t;
 	}
-/*
-	if (!Tensor::Func::all_of(R == R))	// Assert no NaNs
-	{
-		std::string const & msg = fmt::format(
-			"Residual is NaN because: v={}; T_by_v={}; dN_by_dx={}; sigma={}; J={}; b={}; "
-			"dx_by_dX={}.  Where J={}; dx_by_dX=\n{}",
-			std::isnan(v),
-			!Tensor::Func::all_of(T_by_v == T_by_v),
-			!Tensor::Func::all_of(dN_by_dx == dN_by_dx),
-			!Tensor::Func::all_of(sigma == sigma),
-			std::isnan(J),
-			!Tensor::Func::all_of(b == b),
-			!Tensor::Func::all_of(dx_by_dX == dx_by_dX),
-			J,
-			dx_by_dX);
+	/*
+		if (!Tensor::Func::all_of(R == R))	// Assert no NaNs
+		{
+			std::string const & msg = fmt::format(
+				"Residual is NaN because: v={}; T_by_v={}; dN_by_dx={}; sigma={}; J={}; b={}; "
+				"dx_by_dX={}.  Where J={}; dx_by_dX=\n{}",
+				std::isnan(v),
+				!Tensor::Func::all_of(T_by_v == T_by_v),
+				!Tensor::Func::all_of(dN_by_dx == dN_by_dx),
+				!Tensor::Func::all_of(sigma == sigma),
+				std::isnan(J),
+				!Tensor::Func::all_of(b == b),
+				!Tensor::Func::all_of(dx_by_dX == dx_by_dX),
+				J,
+				dx_by_dX);
 
-		spdlog::error(msg);
+			spdlog::error(msg);
 
-		throw std::logic_error{msg};
-	};
-*/
+			throw std::logic_error{msg};
+		};
+	*/
 	return {K, R};
 }
 
