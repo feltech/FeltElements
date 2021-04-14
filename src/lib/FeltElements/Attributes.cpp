@@ -65,6 +65,11 @@ NodalForces::NodalForces(Mesh & mesh) : ThisBase{mesh}
 	for (auto cellh : boost::make_iterator_range(mesh.cells())) (*this)[cellh] = 0;
 }
 
+NodalResidual::NodalResidual(Mesh & mesh) : ThisBase{mesh}
+{
+	for (auto cellh : boost::make_iterator_range(mesh.cells())) (*this)[cellh] = 0;
+}
+
 Stiffness::Stiffness(Mesh & mesh) : ThisBase(mesh)
 {
 	for (auto cellh : boost::make_iterator_range(mesh.cells())) (*this)[cellh] = 0;
@@ -112,6 +117,7 @@ Attributes::Attributes(Mesh & mesh)
 	  vtxhs{mesh},
 	  boundary_faces_vtxh_idxs{mesh, vtxhs},
 	  dN_by_dX{mesh, vtxhs, X},
+	  F{mesh},
 	  R{mesh},
 	  K{mesh}
 {

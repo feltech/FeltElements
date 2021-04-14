@@ -83,7 +83,7 @@ using Stress = Gradient;
 using Stiffness = Tensor::Multi<num_nodes, Node::dim, num_nodes, Node::dim>;
 using NodePositions = Fastor::Tensor<Scalar, num_nodes, Node::dim>;
 using Forces = Fastor::Tensor<Scalar, num_nodes, Node::dim>;
-using StiffnessResidual = std::tuple<Stiffness, Forces>;
+using StiffnessResidual = std::tuple<Stiffness, Forces, Forces>;
 }  // namespace Element
 
 namespace BoundaryElement

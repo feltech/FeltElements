@@ -80,7 +80,7 @@ protected:
 		std::scoped_lock<std::mutex> m_running{lock};
 	};
 
-	void update_elements_stiffness_and_residual();
+	void update_elements_stiffness_and_residual(Scalar lambda = 1.0);
 	Scalar find_epsilon() const;
 
 public:
@@ -101,17 +101,52 @@ class Matrix : public Base
 	using EigenConstTensorMap =
 		Eigen::Map<Eigen::Matrix<Scalar, rows, cols, Eigen::RowMajor> const, EIGEN_FASTOR_ALIGN>;
 	using VerticesMatrix = Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
-	using EigenFixedDOFs = Eigen::VectorXd;
 
 public:
 	using EigenMapOvmVertices = Eigen::Map<VerticesMatrix const>;
-	using EigenMapTensorVertices = Eigen::Map<
+	using EigenMapTensorVerticesConst = Eigen::Map<
 		VerticesMatrix const,
+		Eigen::Unaligned,
+		Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
+	using EigenMapTensorVertices = Eigen::Map<
+		VerticesMatrix,
 		Eigen::Unaligned,
 		Eigen::Stride<(FASTOR_MEMORY_ALIGNMENT_VALUE / sizeof(Scalar)), 1>>;
 
 	using Base::Base;
 	void solve() final;
+
+private:
+	void assemble(
+		Eigen::MatrixXd & mat_K,
+		Eigen::VectorXd & vec_R,
+		Eigen::VectorXd & vec_F,
+		Eigen::VectorXd const & one_minus_fixed_dof) const;
+
+	std::tuple<Scalar, Scalar> arc_length(
+		Eigen::VectorXd const & vec_uF,
+		Eigen::VectorXd const & vec_uR,
+		Eigen::VectorXd const & vec_delta_x,
+		Eigen::VectorXd const & vec_F,
+		Scalar const delta_lambda,
+		Scalar const s2,
+		Scalar const psi2);
+
+	template <typename T>
+	static std::enable_if_t<
+		std::is_member_function_pointer_v<decltype(&T::data_vector)>,
+		EigenMapTensorVertices>
+	as_matrix(T & prop)
+	{
+		auto & vec = prop.data_vector();
+		return {vec[0].data(), static_cast<Eigen::Index>(vec.size()), Node::dim};
+	}
+
+	static Eigen::Map<VerticesMatrix const> as_matrix(Eigen::VectorXd const & vec)
+	{
+		return {vec.data(), vec.size() / static_cast<Eigen::Index>(Node::dim), Node::dim};
+	}
+
 };	// namespace Matrix
 
 class Gauss : public Base

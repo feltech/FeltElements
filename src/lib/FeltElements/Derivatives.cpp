@@ -114,7 +114,8 @@ Element::StiffnessResidual KR(
 	Element::BoundaryNodePositions const & boundary_faces_x,
 	Element::ShapeDerivative const & dN_by_dX,
 	Body::Material const & material,
-	Body::Forces const & forces)
+	Body::Forces const & forces,
+	Scalar const lambda)
 {
 	using Tensor::Func::all;
 
@@ -141,33 +142,37 @@ Element::StiffnessResidual KR(
 	auto const & Kc = ex::Kc(dN_by_dx, c);
 	// Initial stress component.
 	auto const & Ks = ex::Ks(dN_by_dx, sigma);
-	// Constitutive (traction) component.
-	auto const & Kp = Derivatives::Kp(boundary_faces_x, boundary_faces_idxs, forces.p);
+	// External traction component.
+	auto const & Kp = Derivatives::Kp(boundary_faces_x, boundary_faces_idxs, lambda * forces.p);
 
 	// Tangent stiffness matrix.
-	Element::Stiffness K = v * (Kc + Ks) + Kp;
+	Element::Stiffness K = v * (Kc + Ks) - Kp;
 
 	// Internal forces.
 	auto const & T_by_v = ex::T(dN_by_dx, sigma);
 
-	// Residual
-	Element::Forces R = v * T_by_v;
-
 	// Body force.
-	auto const & F_by_V = forces.F_by_m * material.rho;
+	Element::Forces F = 0;
+	auto const & F_by_V = lambda * forces.F_by_m * material.rho;
 	auto const & F_by_v = F_by_V / J;
 	auto const & F_by_v_per_node = (1.0 / Element::num_nodes) * F_by_v;
 	Node::Force const F_per_node = v * F_by_v_per_node;
 
-	for (const auto node_idx : boost::irange(Element::num_nodes)) R(node_idx, all) -= F_per_node;
+	for (const auto node_idx : boost::irange(Element::num_nodes)) F(node_idx, all) += F_per_node;
 
 	// Traction force.
 	for (const auto & [s, idxs] : boost::range::combine(boundary_faces_x, boundary_faces_idxs))
 	{
-		const Node::Force & t =
-			(1.0 / BoundaryElement::num_nodes) * Derivatives::t(forces.p, Derivatives::dX_by_dS(s));
-		for (Tensor::Index const node_idx : idxs) R(node_idx, all) -= t;
+		const Node::Force & t = (1.0 / BoundaryElement::num_nodes) *
+			Derivatives::t(lambda * forces.p, Derivatives::dX_by_dS(s));
+		for (Tensor::Index const node_idx : idxs) F(node_idx, all) += t;
 	}
+
+	// Residual
+//	SPDLOG_DEBUG("T/v = \n{}\n", T_by_v);
+	Element::Forces const R = v * T_by_v - F;
+
+
 	/*
 		if (!Tensor::Func::all_of(R == R))	// Assert no NaNs
 		{
@@ -189,7 +194,7 @@ Element::StiffnessResidual KR(
 			throw std::logic_error{msg};
 		};
 	*/
-	return {K, R};
+	return {K, F, R};
 }
 
 Element::Stiffness Kc(

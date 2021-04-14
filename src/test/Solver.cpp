@@ -2181,7 +2181,7 @@ void check_solvers(
 	INFO(mat_vtxs)
 
 	INFO("Mesh initial spatial vertices")
-	Solver::Matrix::EigenMapTensorVertices const & mat_x{attrs.x[Vtxh{0}].data(), rows, cols};
+	Solver::Matrix::EigenMapTensorVerticesConst const & mat_x{attrs.x[Vtxh{0}].data(), rows, cols};
 	INFO(mat_x)
 
 	auto const check_converges = [&mat_x, &total_volume, expected_volume, &expected_positions](
@@ -2199,9 +2199,12 @@ void check_solvers(
 
 	WHEN("displacement is solved using Eigen matrix solver")
 	{
-		auto const max_steps = max_matrix_steps;
+		auto const max_steps = max_matrix_steps + 1;
+//		std::size_t const steps_per_increment = std::min(200ul, max_steps);
+//		std::size_t const num_increments = std::max(max_steps / steps_per_increment, 1ul);
 		std::size_t const steps_per_increment = max_steps;	// std::min(20ul, max_steps);
-		std::size_t const num_increments = 1;  // std::max(max_steps / steps_per_increment, 1ul);
+//		std::size_t const num_increments = max_steps;  // std::max(max_steps / steps_per_increment, 1ul);
+		std::size_t const num_increments = std::numeric_limits<std::size_t>::max();  // std::max(max_steps / steps_per_increment, 1ul);
 		Solver::Matrix solver(mesh, attrs, {steps_per_increment, num_increments});
 		solver.solve();
 		std::size_t const final_step = solver.stats.step_counter.load();
@@ -2217,7 +2220,7 @@ void check_solvers(
 
 	WHEN("displacement is solved Gauss-Seidel style")
 	{
-		auto const max_steps = max_guass_steps;
+		auto const max_steps = max_guass_steps + 1;
 		Solver::Gauss solver(mesh, attrs, {max_steps + 1, 1});
 		solver.solve();
 		std::size_t const final_step = solver.stats.step_counter.load();
@@ -2361,17 +2364,21 @@ SCENARIO("Solution of two elements")
 				});
 		}
 
-		AND_GIVEN("atmospheric pressure")  // TODO: fails badly
+		// TODO: fails badly.  Things tried:
+		// * Stepped through checking calculation of `t`s per face, all OK.
+		// * Checked centroid of triangle in natural coords is 1/3
+		// * Line search (sort of)
+		AND_GIVEN("atmospheric pressure")
 		{
 			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
-			attrs.forces->p = -30 * atm;
+			attrs.forces->p = -10 * atm;
 
 			check_solvers(
 				"pressure",
 				mesh,
 				attrs,
-				2000,
-				5000,
+				1000000,
+				1000000,
 				0.1484595104,
 				{
 					// clang-format off

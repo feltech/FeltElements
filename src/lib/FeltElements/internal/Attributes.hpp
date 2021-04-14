@@ -157,6 +157,11 @@ protected:
 		boost::transform(faces_vtxh_idxs, std::back_inserter(faces_x), to_tensor);
 		return faces_x;
 	}
+
+	[[nodiscard]] auto & data_vector() const
+	{
+		return this->m_prop->data_vector();
+	}
 };
 
 template <typename TData>

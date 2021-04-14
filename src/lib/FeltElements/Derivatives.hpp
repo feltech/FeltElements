@@ -23,7 +23,7 @@ namespace Derivatives
 	Element::BoundaryNodePositions const & boundary_faces_x,
 	Element::ShapeDerivative const & dN_by_dX,
 	Body::Material const & material,
-	Body::Forces const & forces);
+	Body::Forces const & forces, Scalar lambda = 1.0);
 
 [[nodiscard]] Element::Stiffness Kc(
 	Element::ShapeDerivative const & dN_by_dx, Scalar v, Element::Elasticity const & c);

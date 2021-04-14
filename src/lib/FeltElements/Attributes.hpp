@@ -30,6 +30,7 @@ namespace Cell
 class VertexHandles;
 class MaterialShapeDerivative;
 class NodalForces;
+class NodalResidual;
 class Stiffness;
 class Boundary;
 }  // namespace Cell
@@ -75,6 +76,11 @@ template <>
 struct Traits<Cell::NodalForces> : public CellTraits<Element::Forces>
 {
 	static constexpr std::string_view prop_name = "nodal_forces";
+};
+template <>
+struct Traits<Cell::NodalResidual> : public CellTraits<Element::Forces>
+{
+	static constexpr std::string_view prop_name = "nodal_residual";
 };
 template <>
 struct Traits<Cell::Stiffness> : public CellTraits<Element::Stiffness>
@@ -139,6 +145,7 @@ public:
 	using ThisBase::operator[];
 	using ThisBase::for_element;
 	using ThisBase::for_elements;
+	using ThisBase::data_vector;
 };
 
 class SpatialPosition final : private internal::VertexPositionBase<SpatialPosition>
@@ -150,6 +157,7 @@ public:
 	using ThisBase::operator[];
 	using ThisBase::for_element;
 	using ThisBase::for_elements;
+	using ThisBase::data_vector;
 };
 
 class FixedDOF final : private internal::VertexBase<FixedDOF>
@@ -192,6 +200,15 @@ public:
 	using ThisBase::operator[];
 };
 
+class NodalResidual final : private internal::CellBase<NodalResidual>
+{
+	using ThisBase = internal::CellBase<NodalResidual>;
+
+public:
+	explicit NodalResidual(Mesh & mesh);
+	using ThisBase::operator[];
+};
+
 class Stiffness final : private internal::CellBase<Stiffness>
 {
 	using ThisBase = internal::CellBase<Stiffness>;
@@ -223,7 +240,8 @@ struct Attributes final
 	Attribute::Cell::VertexHandles const vtxhs;
 	Attribute::Cell::Boundary const boundary_faces_vtxh_idxs;
 	Attribute::Cell::MaterialShapeDerivative const dN_by_dX;
-	Attribute::Cell::NodalForces R;
+	Attribute::Cell::NodalForces F;
+	Attribute::Cell::NodalResidual R;
 	Attribute::Cell::Stiffness K;
 };
 
