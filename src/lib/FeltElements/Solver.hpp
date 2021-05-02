@@ -126,11 +126,11 @@ private:
 	std::tuple<Scalar, Scalar> arc_length(
 		Eigen::VectorXd const & vec_uF,
 		Eigen::VectorXd const & vec_uR,
-		Eigen::VectorXd const & vec_delta_x,
 		Eigen::VectorXd const & vec_F,
-		Scalar const delta_lambda,
-		Scalar const s2,
-		Scalar const psi2);
+		Eigen::VectorXd const & vec_delta_x,
+		Scalar delta_lambda,
+		Scalar s2,
+		Scalar psi2);
 
 	template <typename T>
 	static std::enable_if_t<

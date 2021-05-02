@@ -97,6 +97,11 @@ void log_xs(Mesh const & mesh, Attributes const & attrs)
 	//#endif
 }
 
+template <typename T>
+int sgn(T val)
+{
+	return (T(0) < val) - (val < T(0));
+}
 }  // namespace
 
 void Matrix::solve()
@@ -122,81 +127,72 @@ void Matrix::solve()
 	Eigen::VectorXd vec_R{num_dofs};
 	Eigen::MatrixXd mat_K{num_dofs, num_dofs};
 	Eigen::VectorXd vec_u{num_dofs};
-	//	Eigen::VectorXd vec_u1{num_dofs};
-	//	Eigen::VectorXd vec_u2{num_dofs};
 	Eigen::VectorXd vec_uF{num_dofs};
 	Eigen::VectorXd vec_uR{num_dofs};
 	Eigen::VectorXd vec_delta_x{num_dofs};
 	Scalar delta_lambda = 0.0;
 	Scalar const lambda_inc = 1e-1;
-	//	Eigen::VectorXd vec_s2{vec_delta_x.size() + vec_F_bar.size()};
-	Scalar lambda = 0.0;
+	Scalar lambda = 0.01;
 	Scalar gamma = 0;
 	Scalar max_norm;
 	std::size_t step = 0;
-	Scalar s2 = 1e-8;
+	Scalar const s20 = 1e-3;
+	Scalar s2 = s20;
 	Scalar psi2 = 0;
 	epsilon = 1e-6;
+	auto mat_x = as_matrix(m_attrs.x);
 
 	VerticesMatrix mat_X = as_matrix(m_attrs.X);
 
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
 		 increment_num++)
 	{
-		if (lambda == 1.0)
-			break;
 		stats.force_increment_counter++;
 
-		log_xs(m_mesh, m_attrs);
-
-		vec_delta_x.setZero();
 		delta_lambda = 0;
-		lambda = std::clamp(lambda + lambda_inc, lambda_inc, 1.0);
 
-		auto mat_x = as_matrix(m_attrs.x);
 		VerticesMatrix const mat_x0 = mat_x;
 
 		// Pre-increment solution
-		if (false)
 		{
-			//			update_elements_stiffness_and_residual(1.0);
-			//			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
-			//			auto mat_K_LU = mat_K.partialPivLu();
-			//			vec_uR = mat_K_LU.solve(-vec_R);
-			//			delta_lambda = (mat_K.partialPivLu().determinant() < 0 ? -1 : 1) *
-			// lambda_inc; 			lambda += delta_lambda; 			lambda += lambda_inc;
-
 			update_elements_stiffness_and_residual(lambda);
 			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+			vec_F /= lambda;
 			auto mat_K_LU = mat_K.partialPivLu();
-			vec_uF = mat_K_LU.solve(vec_F);
 			vec_uR = mat_K_LU.solve(-vec_R);
-			psi2 = vec_uR.squaredNorm() / (lambda * lambda * vec_F.squaredNorm());
-			//			vec_uR.setZero();
+			vec_uF = mat_K_LU.solve(vec_F);
 
-			//			epsilon = vec_F.lpNorm<Eigen::Infinity>() * 1e-5;
+			auto const det_K = mat_K_LU.determinant();
+			const auto choose_correction = [&]
+			{
+				auto [gamma1, gamma2] =
+					arc_length(vec_uF, vec_uR, vec_F, vec_delta_x, delta_lambda, s2, psi2);
+				gamma = (gamma1 * det_K > 0) ? gamma1 : gamma2;
+			};
+//			const auto choose_correction = [&]
+//			{
+//				Scalar const sign = increment_num == 0 ? 1.0 : sgn(vec_delta_x.dot(vec_uF));
+//				gamma = sign * sqrt(s2 / vec_uF.squaredNorm());
+//			};
 
-			//			//			vec_delta_x = vec_uR + delta_lambda * vec_uF;
-			//
-			//			auto const [gamma1, gamma2] =
-			//				arc_length(vec_uF, vec_uR, vec_delta_x, vec_F, delta_lambda, s2, psi2);
-			//
-			//			auto const det_K = mat_K_LU.determinant();
-			//			gamma = (gamma1 * det_K > 0) ? gamma1 : gamma2;
-			//			delta_lambda = gamma;
-			//			lambda += gamma;
-			//			vec_delta_x = vec_uR + gamma * vec_uF;
+			choose_correction();
+			while (std::abs(gamma) != std::numeric_limits<Scalar>::infinity() && std::abs(gamma) > lambda_inc)
+			{
+				s2 /= 2;
+				assert(s2 > 0);
+				choose_correction();
+			}
+			while (std::abs(gamma) == std::numeric_limits<Scalar>::infinity())
+			{
+				s2 *= 1.1;
+				choose_correction();
+			}
 
-			vec_delta_x = vec_uR;
-
+			delta_lambda += gamma;
+			lambda += gamma;
+			vec_delta_x = vec_uR + gamma * vec_uF;
+			vec_delta_x.array() *= one_minus_fixed_dof.array();
 			mat_x += as_matrix(vec_delta_x);
-
-			//			update_elements_stiffness_and_residual(lambda);
-			//			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
-
-			//			max_norm = vec_R.squaredNorm();
-			//			if (max_norm < epsilon)
-			//				break;
 		}
 
 		spdlog::info(
@@ -210,16 +206,13 @@ void Matrix::solve()
 			epsilon,
 			psi2);
 
-		std::size_t converge_counter = 0;
-
 		for (step = 0; step < m_params.num_steps; ++step)
 		{
 			++stats.step_counter;
-			++converge_counter;
-			//			SPDLOG_DEBUG("Matrix solver iteration {}:{}", increment_num, step);
 
-			update_elements_stiffness_and_residual(lambda + delta_lambda);
+			update_elements_stiffness_and_residual(lambda);
 			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+			vec_F /= lambda;
 
 			max_norm = vec_R.squaredNorm();
 			stats.max_norm = max_norm;
@@ -228,64 +221,21 @@ void Matrix::solve()
 
 			auto const & mat_K_LU = mat_K.partialPivLu();
 			vec_uR = mat_K_LU.solve(-vec_R);
-
-			mat_x += as_matrix(vec_uR);
-
-			if (step % 1000 == 0)
-				spdlog::info(
-					"step = {}; lambda = {}; delta_lambda = {}; gamma = {}; norm = {}",
-					step,
-					lambda,
-					delta_lambda,
-					gamma,
-					max_norm);
-
-			continue;
-
-			//			Scalar const l2 =
-			//				(vec_delta_x + vec_uR).squaredNorm() + psi2 * delta_lambda *
-			//vec_F.squaredNorm();
-			//
-			//			if (l2 <= s2 && converge_counter < 20)
-			//			{
-			//				mat_x += as_matrix(vec_uR);
-			//				continue;
-			//			}
-			//			converge_counter = 0;
-
 			vec_uF = mat_K_LU.solve(vec_F);
-			/*
-			 * NOTES:
-			 * * Try reverting arc-length and plotting displacement vs. force
-			 * * s2 too low causes quadratic to have no solutions.
-			 */
-			auto [gamma1, gamma2] =
-				arc_length(vec_uF, vec_uR, vec_delta_x, vec_F, delta_lambda, s2, psi2);
-			//			Scalar s2_mult = 1.0;
-			//
-			//			while (gamma1 == std::numeric_limits<Scalar>::infinity() ||
-			//				   std::max(gamma1, gamma2) > lambda_inc || lambda + std::min(gamma1, gamma2)
-			//< 0)
-			//			{
-			//				if (gamma1 == std::numeric_limits<Scalar>::infinity())
-			//				{
-			//					s2_mult *= 2;
-			//				}
-			//				else if (
-			//					std::max(gamma1, gamma2) > lambda_inc || lambda + std::min(gamma1, gamma2) <
-			//0)
-			//				{
-			//					s2_mult /= 2;
-			//				}
-			//				std::tie(gamma1, gamma2) = arc_length(
-			//					vec_uF, vec_uR, vec_delta_x, vec_F, delta_lambda, s2_mult * s2,
-			//psi2);
-			//			}
 
-			auto const & vec_u1 = vec_uR + gamma1 * vec_uF;
-			auto const & vec_u2 = vec_uR + gamma2 * vec_uF;
-			auto const & vec_delta_x1 = vec_delta_x + vec_u1;
-			auto const & vec_delta_x2 = vec_delta_x + vec_u2;
+			auto [gamma1, gamma2] =
+				arc_length(vec_uF, vec_uR, vec_F, vec_delta_x, delta_lambda, s2, psi2);
+
+			if (gamma1 == std::numeric_limits<Scalar>::infinity())
+			{
+				s2 /= 2;
+				break;
+			}
+
+			auto const vec_u1 = vec_uR + gamma1 * vec_uF;
+			auto const vec_u2 = vec_uR + gamma2 * vec_uF;
+			auto const vec_delta_x1 = vec_delta_x + vec_u1;
+			auto const vec_delta_x2 = vec_delta_x + vec_u2;
 
 			if (vec_delta_x.dot(vec_delta_x1) > vec_delta_x.dot(vec_delta_x2))
 				gamma = gamma1;
@@ -293,46 +243,35 @@ void Matrix::solve()
 				gamma = gamma2;
 
 			if (gamma == gamma1)
-			{
 				vec_delta_x = vec_delta_x1;
-				vec_u = vec_u1;
-			}
 			else
-			{
 				vec_delta_x = vec_delta_x2;
-				vec_u = vec_u2;
-			}
-
-			delta_lambda += gamma;
-			vec_u.array() *= one_minus_fixed_dof.array();
 			vec_delta_x.array() *= one_minus_fixed_dof.array();
 
+			delta_lambda += gamma;
+			lambda += gamma;
+
 			mat_x = mat_x0 + as_matrix(vec_delta_x);
-			log_xs(m_mesh, m_attrs);
 
 			max_norm = vec_R.squaredNorm();
 			stats.max_norm = max_norm;
 
-			if (step % 1000 == 0)
 			spdlog::info(
-				"step = {}; lambda = {}; delta_lambda = {}; gamma = {}; norm = {}; u =\n{}",
+				"step = {}; lambda = {}; delta_lambda = {}; gamma = {}; norm = {}",
 				step,
 				lambda,
 				delta_lambda,
 				gamma,
-				max_norm,
-				vec_u);
+				max_norm);
 
+			log_xs(m_mesh, m_attrs);
 			if (max_norm < epsilon)
 				break;
 		}
 
-		VerticesMatrix mat_x1 = mat_x;
-		Eigen::VectorXd d =
-			Eigen::Map<Eigen::VectorXd>(mat_x1.data(), mat_x1.rows() * mat_x1.cols()) -
-			Eigen::Map<Eigen::VectorXd>(mat_X.data(), mat_X.rows() * mat_X.cols());
-
-		numbers << increment_num << "\t" << vec_F.norm() << "\t" << (d.norm()) << std::endl;
+		numbers << increment_num << "\t" << lambda << "\t" << mat_x(2, 1) << "\n" << std::flush;
+		if (max_norm < epsilon)
+			s2 = s20;
 	}
 }
 
@@ -405,20 +344,24 @@ void Matrix::assemble(
 	vec_F.array() *= one_minus_fixed_dof.array();
 	mat_K.array().colwise() *= one_minus_fixed_dof.array();
 	mat_K.array().rowwise() *= one_minus_fixed_dof.transpose().array();
+	Eigen::VectorXd const fixed_dof =
+		Eigen::VectorXd::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof;
+	mat_K += fixed_dof.asDiagonal();
 
-	// Inspect matrix to calculate penalty of relative size.
-	Scalar const penalty = pow(10, std::floor(std::log10(mat_K.lpNorm<Eigen::Infinity>()))) * 1e1;
-	// Set penalised degrees of freedom to penalty value.
-	mat_K += penalty *
-		(Eigen::VectorXd::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof)
-			.asDiagonal();
+	//	// Inspect matrix to calculate penalty of relative size.
+	//	Scalar const penalty = pow(10, std::floor(std::log10(mat_K.lpNorm<Eigen::Infinity>()))) *
+	// 1e1;
+	//	// Set penalised degrees of freedom to penalty value.
+	//	mat_K += penalty *
+	//		(Eigen::VectorXd::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof)
+	//			.asDiagonal();
 }
 
 std::tuple<Scalar, Scalar> Matrix::arc_length(
 	Eigen::VectorXd const & vec_uF,
 	Eigen::VectorXd const & vec_uR,
-	Eigen::VectorXd const & vec_delta_x,
 	Eigen::VectorXd const & vec_F,
+	Eigen::VectorXd const & vec_delta_x,
 	Scalar const delta_lambda,
 	Scalar s2,
 	Scalar const psi2)
@@ -428,6 +371,7 @@ std::tuple<Scalar, Scalar> Matrix::arc_length(
 	b = 2 * vec_uF.dot(vec_delta_x + vec_uR) + 2 * delta_lambda * psi2 * vec_F.squaredNorm();
 	c = (vec_delta_x + vec_uR).squaredNorm() +
 		psi2 * delta_lambda * delta_lambda * vec_F.squaredNorm() - s2;
+	//	c = vec_uR.dot(2 * vec_delta_x + vec_uR) + vec_delta_x.squaredNorm() - s2;
 
 	discriminant = b * b - 4 * a * c;
 

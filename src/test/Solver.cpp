@@ -2371,7 +2371,7 @@ SCENARIO("Solution of two elements")
 		AND_GIVEN("atmospheric pressure")
 		{
 			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
-			attrs.forces->p = -10 * atm;
+			attrs.forces->p = -100 * atm;
 
 			check_solvers(
 				"pressure",
