@@ -134,8 +134,9 @@ void Matrix::solve()
 	Scalar lambda = 0.01;
 	Scalar gamma = 0;
 	Scalar max_norm;
-	std::size_t step = 0;
-	Scalar const s20 = 1e-3;
+	constexpr std::size_t step_target = 30;
+	std::size_t step = step_target;
+	Scalar const s20 = 1e-13;
 	Scalar s2 = s20;
 	Scalar const psi2 = 0;
 	epsilon = 1e-6;
@@ -146,6 +147,8 @@ void Matrix::solve()
 //	Scalar const gamma_max = 0.01;
 	auto mat_x = as_matrix(m_attrs.x);
 
+	constexpr Scalar s2_search = 1e-2;
+
 	VerticesMatrix mat_X = as_matrix(m_attrs.X);
 
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
@@ -153,10 +156,12 @@ void Matrix::solve()
 	{
 		stats.force_increment_counter++;
 
-		s2 = s20;
+		s2 = (step < step_target) ? s2 * (1.0 + s2_search) : s2 * (1.0 - s2_search);
 		VerticesMatrix const mat_x0 = mat_x;
 		delta_lambda = 0;
 		s2_mult = 1e6;
+
+		Scalar const lambda0 = lambda;
 
 		// Pre-increment solution
 		{
@@ -180,8 +185,9 @@ void Matrix::solve()
 				gamma = sqrt(s2 / vec_uF.squaredNorm());
 			};
 
-			calc_s2();
-			while (gamma > gamma_max && s2_min < s2)
+//			calc_s2();
+			gamma = sqrt(s2 / vec_uF.squaredNorm());
+			while (gamma > gamma_max && s2 > s2_min)
 			{
 				s2_mult /= 2;
 				calc_s2();
@@ -209,7 +215,7 @@ void Matrix::solve()
 			vec_delta_x.array() *= one_minus_fixed_dof.array();
 			mat_x += as_matrix(vec_delta_x);
 		}
-		Eigen::VectorXd vec_delta_x0 = vec_delta_x;
+//		Eigen::VectorXd vec_delta_x0 = vec_delta_x;
 
 		spdlog::info(
 			"increment = {}; total steps = {}; lambda = {}; gamma = {}; s2 = {}",
@@ -221,23 +227,29 @@ void Matrix::solve()
 
 		for (step = 0; step < m_params.num_steps; ++step)
 		{
+			if (step > step_target * 30)
+			{
+				lambda = lambda0;
+				mat_x = mat_x0;
+				break;
+			}
 			++stats.step_counter;
-			log_xs(m_mesh, m_attrs);
+//			log_xs(m_mesh, m_attrs);
 
 			update_elements_stiffness_and_residual(lambda);
 			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
 			vec_F /= lambda;
 			max_norm = vec_R.squaredNorm();
 
-			spdlog::info(
-				"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = {}; norm = {}",
-				increment_num,
-				step,
-				lambda,
-				delta_lambda,
-				gamma,
-				s2,
-				max_norm);
+//			spdlog::info(
+//				"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = {}; norm = {}",
+//				increment_num,
+//				step,
+//				lambda,
+//				delta_lambda,
+//				gamma,
+//				s2,
+//				max_norm);
 
 			stats.max_norm = max_norm;
 			if (max_norm < epsilon)
@@ -254,7 +266,13 @@ void Matrix::solve()
 
 //			s2_min = (vec_delta_x + vec_uR).squaredNorm() * 1.001;
 			if (s2 < s2_min)
+			{
 				s2 = s2_min;
+//				lambda = lambda0;
+//				mat_x = mat_x0;
+//				step = 0;
+//				break;
+			}
 
 			Scalar gamma1, gamma2;
 			Eigen::VectorXd vec_delta_x1, vec_delta_x2;
