@@ -140,14 +140,8 @@ void Matrix::solve()
 	Scalar s2 = s20;
 	Scalar const psi2 = 0;
 	epsilon = 1e-6;
-	Scalar s2_mult = 1e3;
 	Scalar s2_min;
-	Scalar s2_max = 0.01;
-	Scalar const gamma_max = 0.01;
-//	Scalar const gamma_max = 0.01;
 	auto mat_x = as_matrix(m_attrs.x);
-
-	constexpr Scalar s2_search = 1e-2;
 
 	VerticesMatrix mat_X = as_matrix(m_attrs.X);
 
@@ -156,12 +150,8 @@ void Matrix::solve()
 	{
 		stats.force_increment_counter++;
 
-		s2 = (step < step_target) ? s2 * (1.0 + s2_search) : s2 * (1.0 - s2_search);
 		VerticesMatrix const mat_x0 = mat_x;
 		delta_lambda = 0;
-		s2_mult = 1e6;
-
-		Scalar const lambda0 = lambda;
 
 		// Pre-increment solution
 		{
@@ -172,51 +162,16 @@ void Matrix::solve()
 			vec_uR = mat_K_LU.solve(-vec_R);
 			vec_uF = mat_K_LU.solve(vec_F);
 
-//			s2 = gamma_max * gamma_max * vec_uF.squaredNorm();
-
-
-			Eigen::VectorXd const n = vec_uF.normalized();
-			Eigen::VectorXd const vec_s_min = vec_uR - n * n.dot(vec_uR);
-			s2_min = vec_s_min.squaredNorm() * 1.001;
-
-			auto const calc_s2 = [&]
-			{
-				s2 = vec_uR.squaredNorm() * s2_mult;
-				gamma = sqrt(s2 / vec_uF.squaredNorm());
-			};
-
-//			calc_s2();
-			gamma = sqrt(s2 / vec_uF.squaredNorm());
-			while (gamma > gamma_max && s2 > s2_min)
-			{
-				s2_mult /= 2;
-				calc_s2();
-			}
-			s2 = std::clamp(s2, s2_min, s2_max);
-
-			//			auto const det_K = mat_K_LU.determinant();
-//			const auto choose_correction = [&]
-//			{
-//				auto [gamma1, gamma2] =
-//					arc_length(vec_uF, vec_uR, vec_F, Eigen::VectorXd::Zero(vec_delta_x.size()), 0, s2, psi2);
-//				Scalar const sign = increment_num == 0 ? 1.0 : sgn(vec_delta_x.dot(vec_uF));
-//				gamma = (gamma1 * sign > 0) ? gamma1 : gamma2;
-//			};
-//			choose_correction();
-//			while (std::abs(gamma) > gamma_max && s2 / 2 > s2_min)
-//			{
-//				s2 /= 2;
-//				choose_correction();
-//			}
+			s2 = vec_uR.squaredNorm();
+			gamma = 0;
 
 			delta_lambda = gamma;
 			lambda += gamma;
 			vec_delta_x = vec_uR + gamma * vec_uF;
 			vec_delta_x.array() *= one_minus_fixed_dof.array();
 			mat_x += as_matrix(vec_delta_x);
-		}
-//		Eigen::VectorXd vec_delta_x0 = vec_delta_x;
 
+		}
 		spdlog::info(
 			"increment = {}; total steps = {}; lambda = {}; gamma = {}; s2 = {}",
 			increment_num,
@@ -225,14 +180,15 @@ void Matrix::solve()
 			gamma,
 			s2);
 
+		max_norm = vec_R.squaredNorm();
+		if (max_norm < epsilon)
+		{
+			lambda += 1e-3;
+			continue;
+		}
+
 		for (step = 0; step < m_params.num_steps; ++step)
 		{
-			if (step > step_target * 30)
-			{
-				lambda = lambda0;
-				mat_x = mat_x0;
-				break;
-			}
 			++stats.step_counter;
 //			log_xs(m_mesh, m_attrs);
 
@@ -241,15 +197,15 @@ void Matrix::solve()
 			vec_F /= lambda;
 			max_norm = vec_R.squaredNorm();
 
-//			spdlog::info(
-//				"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = {}; norm = {}",
-//				increment_num,
-//				step,
-//				lambda,
-//				delta_lambda,
-//				gamma,
-//				s2,
-//				max_norm);
+			spdlog::info(
+				"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = {}; norm = {}",
+				increment_num,
+				step,
+				lambda,
+				delta_lambda,
+				gamma,
+				s2,
+				max_norm);
 
 			stats.max_norm = max_norm;
 			if (max_norm < epsilon)
@@ -263,16 +219,8 @@ void Matrix::solve()
 			Eigen::VectorXd const n = vec_uF.normalized();
 			Eigen::VectorXd const vec_s_min = delta_xu - n * n.dot(delta_xu);
 			s2_min = vec_s_min.squaredNorm() * 1.001;
-
-//			s2_min = (vec_delta_x + vec_uR).squaredNorm() * 1.001;
 			if (s2 < s2_min)
-			{
 				s2 = s2_min;
-//				lambda = lambda0;
-//				mat_x = mat_x0;
-//				step = 0;
-//				break;
-			}
 
 			Scalar gamma1, gamma2;
 			Eigen::VectorXd vec_delta_x1, vec_delta_x2;
@@ -302,28 +250,10 @@ void Matrix::solve()
 
 			choose_correction();
 
-			while (std::abs(gamma) > gamma_max && s2 / 2 > s2_min)
-			{
-				s2 /= 2;
-				choose_correction();
-			}
-			if (std::abs(gamma) == std::numeric_limits<Scalar>::infinity())
-			{
-				s2 = (vec_delta_x + vec_uR).squaredNorm();
-				choose_correction();
-			}
-
 			if (gamma == gamma1)
 				vec_delta_x = vec_delta_x1;
 			else
 				vec_delta_x = vec_delta_x2;
-
-//			gamma = -vec_delta_x0.dot(vec_uR) / vec_delta_x0.dot(vec_uF);
-//			Eigen::VectorXd u = vec_uR + gamma * vec_uF;
-//			u.array() *= one_minus_fixed_dof.array();
-//			vec_delta_x += u;
-//			Scalar const alpha = sqrt(s2 / vec_delta_x.squaredNorm());
-//			vec_delta_x *= alpha;
 
 			delta_lambda += gamma;
 			lambda += gamma;
@@ -332,7 +262,6 @@ void Matrix::solve()
 		}
 
 		numbers << increment_num << "\t" << lambda << "\t" << mat_x(2, 1) << "\n" << std::flush;
-//		if (max_norm < epsilon)
 	}
 }
 
