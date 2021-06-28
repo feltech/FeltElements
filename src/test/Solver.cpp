@@ -1538,7 +1538,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
 		Scalar const mu = scalar(0.4);	// Shear modulus: 0.0003 - 0.02
-		Scalar const K = 1;		// Bulk modulus: 1.5 - 2
+		Scalar const K = 1;				// Bulk modulus: 1.5 - 2
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		Scalar lambda = Body::Material::lames_first(K, mu);
 
@@ -2205,19 +2205,22 @@ void check_solvers(
 		//		std::size_t const num_increments = std::max(max_steps / steps_per_increment, 1ul);
 		std::size_t const steps_per_increment = max_steps;	// std::min(20ul, max_steps);
 		//		std::size_t const num_increments = max_steps;  // std::max(max_steps /
-		//steps_per_increment, 1ul);
+		// steps_per_increment, 1ul);
 		std::size_t const num_increments =
 			std::numeric_limits<std::size_t>::max();  // std::max(max_steps / steps_per_increment,
 													  // 1ul);
 		Solver::Matrix solver(mesh, attrs, {steps_per_increment, num_increments});
 		solver.solve();
+		std::size_t const final_increment = solver.stats.force_increment_counter.load();
 		std::size_t const final_step = solver.stats.step_counter.load();
-		MeshIO{mesh, attrs}.toFile(fmt::format("{}_matrix_{}", file_name_prefix, final_step));
+		MeshIO{mesh, attrs}.toFile(
+			fmt::format("{}_matrix_{}_{}", file_name_prefix, final_increment, final_step));
 
 		THEN("solution converges to deformed mesh")
 		{
 			if (final_step < max_steps)
-				WARN(fmt::format("Matrix converged in {} steps", final_step));
+				WARN(fmt::format(
+					"Matrix converged in {} increments / {} steps", final_increment, final_step));
 			check_converges(max_steps, final_step);
 		}
 	}  // WHEN("displacement is solved")
@@ -2281,7 +2284,7 @@ SCENARIO("Solution of two elements")
 {
 	GIVEN("two element mesh and basic material properties")
 	{
-		auto mesh = MeshIO::fromFile(file_name_two, 1e-2);  // cm scale
+		auto mesh = MeshIO::fromFile(file_name_two, 1e-2);	// cm scale
 		Attributes attrs{mesh};
 		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
 		constexpr Scalar K = 1.5e9;		// Bulk modulus: 1.5 - 2 GPa

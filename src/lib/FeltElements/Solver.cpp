@@ -108,7 +108,7 @@ int sgn(T val)
 void Matrix::solve()
 {
 	std::ofstream numbers("feltelements.tsv");
-	Scalar epsilon = find_epsilon();
+	Scalar residual_epsilon = find_epsilon();
 
 	VectorX const & mat_fixed_dof = ([&attrs = m_attrs,
 											  rows = static_cast<Eigen::Index>(m_mesh.n_vertices()),
@@ -131,18 +131,15 @@ void Matrix::solve()
 	VectorX vec_uR{num_dofs};
 	VectorX vec_delta_x{num_dofs};
 	Scalar delta_lambda = 0;
-	Scalar lambda = scalar( 1e-2);
+	Scalar lambda = scalar(1e-1);
 	Scalar gamma = 0;
-	Scalar max_norm;
-	constexpr std::size_t step_target = 30;
-	std::size_t step = step_target;
-	auto const s20 = scalar(1e-5);
-	Scalar s2 = s20;
+	constexpr std::size_t step_target = 5;
+	std::size_t step = 0;
+	Scalar s2 = scalar(1);
 	Scalar const psi2 = 0;
-	epsilon = scalar(1e-6);
-	Scalar s2_min = 0;
+	residual_epsilon = scalar(1e-6);
+	constexpr Scalar s2_epsilon = 1e-8;
 	auto mat_x = as_matrix(m_attrs.x);
-	Scalar rcond = 1;
 
 	VerticesMatrix mat_X = as_matrix(m_attrs.X);
 
@@ -151,141 +148,153 @@ void Matrix::solve()
 	{
 		stats.force_increment_counter++;
 
-		lambda = std::min(lambda, scalar(1));
-
-		update_elements_stiffness_and_residual(lambda);
-		assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
-
-		auto mat_K_LU = mat_K.partialPivLu();
-
+		enum class State
 		{
+			arc,
+			increment,
+			done
+		};
+
+		State const state = [&]
+		{
+			lambda = std::min(lambda, scalar(1));
+
+			update_elements_stiffness_and_residual(lambda);
+			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+			vec_F /= lambda;
+
 			s2 *= 2 * scalar(step_target) / scalar(step + step_target);
 			step = 0;
 
+			auto const mat_K_LU = mat_K.partialPivLu();
 			vec_uR = mat_K_LU.solve(-vec_R);
-
-			vec_F /= lambda;
 			vec_uF = mat_K_LU.solve(vec_F);
+			Scalar const uF2 = vec_uF.squaredNorm();
 
-			gamma = std::sqrt(s2 / vec_uF.squaredNorm());
+			gamma = std::sqrt(s2 / uF2);
 			while (lambda + gamma > 1)
 			{
-				s2 /= 2;
-				gamma = std::sqrt(s2 / vec_uF.squaredNorm());
+				s2 *= 1e-1;
+				gamma = std::sqrt(s2 / uF2);
 			}
+			gamma = 0;
 
 			delta_lambda = gamma;
 			lambda += gamma;
 			vec_delta_x = vec_uR + gamma * vec_uF;
 			vec_delta_x.array() *= one_minus_fixed_dof.array();
 			mat_x += as_matrix(vec_delta_x);
-		}
 
-		rcond = mat_K_LU.rcond();
-		max_norm = vec_R.squaredNorm();
-
-		spdlog::info(
-			"increment = {}; total steps = {}; lambda = {}; gamma = {}; s2 = {}; max_norm = {}; rcond = {}",
-			increment_num,
-			stats.step_counter.load(),
-			lambda,
-			gamma,
-			s2, max_norm,
-			rcond);
-		log_xs(m_mesh, m_attrs);
-		numbers << increment_num << "\t" << lambda << "\t" << mat_x(2, 1) << "\n" << std::flush;
-
-		stats.max_norm = max_norm;
-		if (max_norm < epsilon)
-		{
-			if (lambda == 1.0)
-				break;
-			continue;
-		}
-
-		for (step = 0; step < m_params.num_steps; ++step)
-		{
-			++stats.step_counter;
-			//			log_xs(m_mesh, m_attrs);
-
-			update_elements_stiffness_and_residual(lambda);
-
-			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
-			vec_F /= lambda;
-
-			mat_K_LU = mat_K.partialPivLu();
-			vec_uR = mat_K_LU.solve(-vec_R);
-			vec_uF = mat_K_LU.solve(vec_F);
-
-			rcond = mat_K_LU.rcond();
-			max_norm = vec_R.squaredNorm();
+			Scalar const rcond = mat_K_LU.rcond();
+			Scalar const residual_norm = vec_R.squaredNorm();
 
 			spdlog::info(
-				"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = {}; "
-				"norm = {}; rcond = {}",
+				"increment = {}; total steps = {}; lambda = {}; gamma = {}; s2 = {}; max_norm = "
+				"{}; rcond = {}",
 				increment_num,
-				step,
+				stats.step_counter.load(),
 				lambda,
-				delta_lambda,
 				gamma,
 				s2,
-				max_norm,
+				residual_norm,
 				rcond);
+			log_xs(m_mesh, m_attrs);
+			numbers << increment_num << "\t" << lambda << "\t" << mat_x(2, 1) << "\n" << std::flush;
 
-			stats.max_norm = max_norm;
-			if (max_norm < epsilon)
-				break;
+			stats.residual_norm = residual_norm;
 
-			VectorX const delta_xu = vec_delta_x + vec_uR;
-			VectorX const n = vec_uF.normalized();
-			VectorX const vec_s_min = delta_xu - n * n.dot(delta_xu);
-			s2_min = vec_s_min.squaredNorm() * scalar(1.001);
-			if (s2 < s2_min)
-				s2 = s2_min;
-
-			auto const choose_correction = [&]
+			if (residual_norm > residual_epsilon)
 			{
-				auto [gamma1, gamma2] =
-					arc_length(vec_uF, vec_uR, vec_F, vec_delta_x, delta_lambda, s2, psi2);
-
-				auto const vec_u1 = vec_uR + gamma1 * vec_uF;
-				auto const vec_u2 = vec_uR + gamma2 * vec_uF;
-				auto const vec_delta_x1 = vec_delta_x + vec_u1;
-				auto const vec_delta_x2 = vec_delta_x + vec_u2;
-
-				auto vec_delta_x_norm = vec_delta_x.normalized();
-				auto vec_delta_x1_norm = vec_delta_x1.normalized();
-				auto vec_delta_x2_norm = vec_delta_x2.normalized();
-
-				auto x1_proj = vec_delta_x_norm.dot(vec_delta_x1_norm);
-				auto x2_proj = vec_delta_x_norm.dot(vec_delta_x2_norm);
-
-				if (x1_proj > x2_proj)
-				{
-					gamma = gamma1;
-					vec_u = vec_u1;
-					vec_delta_x = vec_delta_x1;
-				}
-				else
-				{
-					gamma = gamma2;
-					vec_u = vec_u2;
-					vec_delta_x = vec_delta_x2;
-				}
-			};
-
-			choose_correction();
-
-			if (lambda + gamma > 1)
-			{
-				s2 /= 2;
-				continue;
+				if (s2 > s2_epsilon)
+					return State::arc;
 			}
+			else if (lambda == 1)
+				return State::done;
 
-			delta_lambda += gamma;
-			lambda += gamma;
-			mat_x += as_matrix(vec_u);
-		}
+			gamma = std::sqrt(s2 / uF2);
+			lambda = std::min(lambda + gamma, scalar(1));
+			return State::increment;
+		}();
+
+		if (state == State::increment)
+			continue;
+
+		if (state == State::done)
+			break;
+
+		[&]
+		{
+			for (step = 0; step < m_params.num_steps; ++step)
+			{
+				++stats.step_counter;
+
+				update_elements_stiffness_and_residual(lambda);
+				assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+				vec_F /= lambda;
+
+				auto const mat_K_LU = mat_K.partialPivLu();
+				vec_uR = mat_K_LU.solve(-vec_R);
+				vec_uF = mat_K_LU.solve(vec_F);
+
+				Scalar const rcond = mat_K_LU.rcond();
+				Scalar const residual_norm = vec_R.squaredNorm();
+
+				spdlog::info(
+					"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
+					"{}; "
+					"norm = {}; rcond = {}",
+					increment_num,
+					step,
+					lambda,
+					delta_lambda,
+					gamma,
+					s2,
+					residual_norm,
+					rcond);
+
+				stats.residual_norm = residual_norm;
+				if (residual_norm < residual_epsilon)
+					return;
+
+				{
+					VectorX const delta_xu = vec_delta_x + vec_uR;
+					VectorX const n = vec_uF.normalized();
+					VectorX const vec_s_min = delta_xu - n * n.dot(delta_xu);
+					Scalar const s2_min = vec_s_min.squaredNorm() * scalar(1.0 + 1e-5);
+					if (s2 < s2_min)
+						s2 = s2_min;
+				}
+
+				{
+					auto [gamma1, gamma2] =
+						arc_length(vec_uF, vec_uR, vec_F, vec_delta_x, delta_lambda, s2, psi2);
+
+					auto const vec_u1 = vec_uR + gamma1 * vec_uF;
+					auto const vec_u2 = vec_uR + gamma2 * vec_uF;
+					auto const vec_delta_x1 = vec_delta_x + vec_u1;
+					auto const vec_delta_x2 = vec_delta_x + vec_u2;
+					auto const x1_proj = vec_delta_x.dot(vec_delta_x1);
+					auto const x2_proj = vec_delta_x.dot(vec_delta_x2);
+
+					if (x1_proj > x2_proj)
+					{
+						gamma = gamma1;
+						vec_u = vec_u1;
+						vec_delta_x = vec_delta_x1;
+					}
+					else
+					{
+						gamma = gamma2;
+						vec_u = vec_u2;
+						vec_delta_x = vec_delta_x2;
+					}
+				};
+
+				delta_lambda += gamma;
+				lambda += gamma;
+				mat_x += as_matrix(vec_u);
+			}
+		}();
 	}
 }
 
@@ -501,7 +510,7 @@ void Gauss::solve()
 			}
 
 			SPDLOG_DEBUG("Max norm: {}", max_norm);
-			stats.max_norm = max_norm;
+			stats.residual_norm = max_norm;
 
 			log_xs(m_mesh, m_attrs);
 

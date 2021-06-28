@@ -145,7 +145,7 @@ int execute(
 				"Step = {}; increment = {}; delta = {:e}",
 				curr_step,
 				solver->stats.force_increment_counter.load(std::memory_order_relaxed),
-				solver->stats.max_norm.load(std::memory_order_relaxed));
+				solver->stats.residual_norm.load(std::memory_order_relaxed));
 			last_step = curr_step;
 		}
 
@@ -160,7 +160,7 @@ int execute(
 			"Finished in {}/{} steps with residual = {}",
 			solver->stats.step_counter.load(),
 			params.num_steps,
-			solver->stats.max_norm);
+			solver->stats.residual_norm);
 		return EX_OK;
 	}
 	catch (std::exception & e)
@@ -169,7 +169,7 @@ int execute(
 			"Failed after {}/{} steps with residual {}: {}",
 			solver->stats.step_counter.load(),
 			params.num_steps,
-			solver->stats.max_norm.load(),
+			solver->stats.residual_norm.load(),
 			e.what());
 		return EX_SOFTWARE;
 	}

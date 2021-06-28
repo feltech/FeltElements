@@ -26,7 +26,7 @@ struct Stats
 {
 	std::atomic_uint step_counter{0};
 	std::atomic_uint force_increment_counter{0};
-	std::atomic<Scalar> max_norm{0};
+	std::atomic<Scalar> residual_norm{0};
 };
 
 class Base
