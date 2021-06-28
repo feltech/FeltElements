@@ -10,11 +10,18 @@ namespace FeltElements
 {
 using Mesh = OpenVolumeMesh::GeometricTetrahedralMeshV3d;
 using Vtxh = OpenVolumeMesh::VertexHandle;
+using Coord = Mesh::PointT::value_type;
 using Vtx = Mesh::PointT;
 template <std::size_t dim>
 using Vtxhs = std::array<Vtxh, dim>;
 using Cellh = OpenVolumeMesh::CellHandle;
-using Scalar = Mesh::PointT::value_type;
+using Scalar = double;
+
+template <typename Real>
+constexpr Scalar scalar(Real&& real)
+{
+	return static_cast<Scalar>(real);
+}
 
 namespace Tensor
 {
@@ -54,6 +61,8 @@ template <Index... indices>
 using Map = BaseMap<Scalar, indices...>;
 template <Index... indices>
 using ConstMap = BaseMap<Scalar const, indices...>;
+
+using ConstVtxMap = Tensor::BaseMap<Coord const, 3>;
 }  // namespace Tensor
 
 namespace Node

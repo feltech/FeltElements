@@ -101,9 +101,12 @@ class Matrix : public Base
 	using EigenConstTensorMap =
 		Eigen::Map<Eigen::Matrix<Scalar, rows, cols, Eigen::RowMajor> const, EIGEN_FASTOR_ALIGN>;
 	using VerticesMatrix = Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
+	using VtxMatrix = Eigen::Matrix<Mesh::PointT::value_type, Eigen::Dynamic, 3, Eigen::RowMajor>;
 
 public:
-	using EigenMapOvmVertices = Eigen::Map<VerticesMatrix const>;
+	using VectorX = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+	using MatrixX = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+	using EigenMapOvmVertices = Eigen::Map<VtxMatrix const>;
 	using EigenMapTensorVerticesConst = Eigen::Map<
 		VerticesMatrix const,
 		Eigen::Unaligned,
@@ -118,16 +121,16 @@ public:
 
 private:
 	void assemble(
-		Eigen::MatrixXd & mat_K,
-		Eigen::VectorXd & vec_R,
-		Eigen::VectorXd & vec_F,
-		Eigen::VectorXd const & one_minus_fixed_dof) const;
+		MatrixX & mat_K,
+		VectorX & vec_R,
+		VectorX & vec_F,
+		VectorX const & one_minus_fixed_dof) const;
 
 	std::tuple<Scalar, Scalar> arc_length(
-		Eigen::VectorXd const & vec_uF,
-		Eigen::VectorXd const & vec_uR,
-		Eigen::VectorXd const & vec_F,
-		Eigen::VectorXd const & vec_delta_x,
+		VectorX const & vec_uF,
+		VectorX const & vec_uR,
+		VectorX const & vec_F,
+		VectorX const & vec_delta_x,
 		Scalar delta_lambda,
 		Scalar s2,
 		Scalar psi2);
@@ -142,7 +145,7 @@ private:
 		return {vec[0].data(), static_cast<Eigen::Index>(vec.size()), Node::dim};
 	}
 
-	static Eigen::Map<VerticesMatrix const> as_matrix(Eigen::VectorXd const & vec)
+	static Eigen::Map<VerticesMatrix const> as_matrix(VectorX const & vec)
 	{
 		return {vec.data(), vec.size() / static_cast<Eigen::Index>(Node::dim), Node::dim};
 	}

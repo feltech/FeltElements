@@ -16,6 +16,7 @@ target_link_libraries(
 	Boost::headers
 	CONAN_PKG::fmt
 	CONAN_PKG::spdlog
+	atomic
 )
 # Library include directories
 target_include_directories(feltelements.lib PUBLIC .)

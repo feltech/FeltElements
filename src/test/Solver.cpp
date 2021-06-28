@@ -175,7 +175,7 @@ SCENARIO("Mesh attributes")
 			{
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
-					Tensor::ConstMap<3> const vtx{mesh.vertex(*itvtxh).data()};
+					Tensor::ConstVtxMap const vtx{mesh.vertex(*itvtxh).data()};
 					Test::check_equal(attrib_x[*itvtxh], "x", vtx, "X");
 				}
 			}
@@ -216,7 +216,7 @@ SCENARIO("Mesh attributes")
 			{
 				for (auto itvtxh = mesh.vertices_begin(); itvtxh != mesh.vertices_end(); itvtxh++)
 				{
-					Tensor::ConstMap<3> const vtx{mesh.vertex(*itvtxh).data()};
+					Tensor::ConstVtxMap const vtx{mesh.vertex(*itvtxh).data()};
 					Test::check_equal(attrib_x[*itvtxh], "x", vtx, "X");
 				}
 			}
@@ -485,10 +485,10 @@ SCENARIO("Metrics of undeformed mesh")
 
 					THEN("areas of boundary faces are calculated correctly")
 					{
-						CHECK(Derivatives::A(s[0]) == 0.5);
-						CHECK(Derivatives::A(s[1]) == Approx(0.8660254038));
-						CHECK(Derivatives::A(s[2]) == 0.5);
-						CHECK(Derivatives::A(s[3]) == 0.5);
+						CHECK(Derivatives::A(s[0]) == scalar(0.5));
+						CHECK(Derivatives::A(s[1]) == Approx(scalar(0.8660254038)));
+						CHECK(Derivatives::A(s[2]) == scalar(0.5));
+						CHECK(Derivatives::A(s[3]) == scalar(0.5));
 					}
 				}
 			}  // AND_WHEN("material node position tensor is constructed")
@@ -535,7 +535,7 @@ SCENARIO("Metrics of deformed mesh")
 
 		WHEN("a node is deformed")
 		{
-			x(0, 0) += 0.5;
+			x(0, 0) += scalar(0.5);
 
 			THEN("spatial position is updated")
 			{
@@ -570,7 +570,7 @@ SCENARIO("Metrics of deformed mesh")
 
 				AND_WHEN("another node is deformed")
 				{
-					x(1, 2) += 0.1;
+					x(1, 2) += scalar(0.1);
 
 					THEN("spatial volume calculated from local transform equals naive calculation")
 					{
@@ -1121,7 +1121,7 @@ SCENARIO("Coordinate derivatives in deformed mesh")
 
 		WHEN("a node is deformed")
 		{
-			x(0, 0) += 0.5;
+			x(0, 0) += scalar(0.5);
 			INFO("Spatial vertices:")
 			INFO(x)
 
@@ -1223,10 +1223,10 @@ SCENARIO("Deformation gradient of undeformed element")
 
 		WHEN("element is translated")
 		{
-			x(0, 0) += 0.5;
-			x(1, 0) += 0.5;
-			x(2, 0) += 0.5;
-			x(3, 0) += 0.5;
+			x(0, 0) += scalar(0.5);
+			x(1, 0) += scalar(0.5);
+			x(2, 0) += scalar(0.5);
+			x(3, 0) += scalar(0.5);
 
 			INFO("Spatial vertices:")
 			INFO(x)
@@ -1263,7 +1263,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 		WHEN("a node is deformed")
 		{
-			x(0, 0) += 0.5;
+			x(0, 0) += scalar(0.5);
 			INFO("Spatial vertices:")
 			INFO(x)
 
@@ -1304,7 +1304,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 					THEN("value is correct")
 					{
-						CHECK(J == 0.5);
+						CHECK(J == scalar(0.5));
 					}
 				}
 
@@ -1338,7 +1338,7 @@ SCENARIO("Deformation gradient of deformed element")
 
 		WHEN("a node is deformed")
 		{
-			x(0, 0) += 0.5;
+			x(0, 0) += scalar(0.5);
 
 			AND_WHEN("derivative of shape function wrt spatial coords is calculated")
 			{
@@ -1374,11 +1374,11 @@ SCENARIO("Deformation gradient of deformed element")
 
 				AND_WHEN("Jacobian of deformation gradient is calculated")
 				{
-					double const J = Derivatives::det_dx_by_dX(F);
+					Scalar const J = Derivatives::det_dx_by_dX(F);
 
 					THEN("value is correct")
 					{
-						CHECK(J == 0.5);
+						CHECK(J == scalar(0.5));
 					}
 				}
 
@@ -1420,10 +1420,10 @@ SCENARIO("Internal equivalent nodal force")
 		//		Tetrahedron::Scalar const lambda = 1;
 		//		Tetrahedron::Scalar const mu = 1;
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double const mu = 0.0003e9;	 // Shear modulus: 0.0003 - 0.02
-		double const K = 1.5e9;		 // Bulk modulus: 1.5 - 2
+		Scalar const mu = scalar(0.0003e9);	 // Shear modulus: 0.0003 - 0.02
+		Scalar const K = scalar(1.5e9);		 // Bulk modulus: 1.5 - 2
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		double lambda = Body::Material::lames_first(K, mu);
+		Scalar lambda = Body::Material::lames_first(K, mu);
 
 		WHEN("neo-hookean stress is calculated")
 		{
@@ -1479,7 +1479,7 @@ SCENARIO("Internal equivalent nodal force")
 
 		WHEN("a node is deformed")
 		{
-			x(0, 0) += 0.5;
+			x(0, 0) += scalar(0.5);
 			INFO("Spatial vertices:")
 			INFO(x)
 
@@ -1537,10 +1537,10 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 		using namespace FeltElements;
 
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double const mu = 0.4;	// Shear modulus: 0.0003 - 0.02
-		double const K = 1;		// Bulk modulus: 1.5 - 2
+		Scalar const mu = scalar(0.4);	// Shear modulus: 0.0003 - 0.02
+		Scalar const K = 1;		// Bulk modulus: 1.5 - 2
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		double lambda = Body::Material::lames_first(K, mu);
+		Scalar lambda = Body::Material::lames_first(K, mu);
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
@@ -1723,7 +1723,7 @@ SCENARIO("Neo-hookian tangent stiffness tensor")
 		AND_GIVEN("a deformed tetrahedron")
 		{
 			auto [X, x] = Test::load_tet(file_name_one);
-			x(0, 0) += 0.5;
+			x(0, 0) += scalar(0.5);
 
 			auto const & dN_by_dX = Derivatives::dN_by_dX(X);
 			auto const & F = Derivatives::dx_by_dX(x, dN_by_dX);
@@ -1918,10 +1918,10 @@ SCENARIO("Solution of a single element")
 		using Tensor::Func::seq;
 
 		// Material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		double mu;	// = 0.4;	 // Shear modulus: 0.0003 - 0.02
+		Scalar mu;	// = 0.4;	 // Shear modulus: 0.0003 - 0.02
 					//		double const E = 1;	 // Young's modulus: 0.001 - 0.05
 		// Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
-		double lambda;	// = (mu * (E - 2 * mu)) / (3 * mu - E);
+		Scalar lambda;	// = (mu * (E - 2 * mu)) / (3 * mu - E);
 		mu = lambda = 4;
 
 		auto mesh = MeshIO::fromFile(file_name_one);
@@ -1931,7 +1931,7 @@ SCENARIO("Solution of a single element")
 		auto const & vtxhs = attrs.vtxhs[Cellh{0}];
 		auto const & X = attrs.X.for_element(vtxhs);
 		// Push top-most node to the right slightly.
-		attrs.x[Vtxh{3}](0) += 0.5;
+		attrs.x[Vtxh{3}](0) += scalar(0.5);
 
 		std::stringstream s;
 		s << "Lambda = " << lambda << "; mu = " << mu;
@@ -2018,13 +2018,13 @@ SCENARIO("Solution of a single element")
 				K(2, 1, 2, 1) = 10e4;
 				log += fmt::format("\nK (constrained)\n{}", K);
 
-				using Displacements = Eigen::Matrix<double, 12, 1>;
+				using Displacements = Eigen::Matrix<Scalar, 12, 1>;
 				Eigen::Map<Displacements> T_vec{T.data(), 12, 1};
 
 				using StiffnessMatrix = Eigen::Matrix<Scalar, 12, 12>;
 				StiffnessMatrix K_mat = Eigen::Map<StiffnessMatrix>{K.data(), 12, 12};
 				log += fmt::format("\nK (matrix)\n{}", K_mat);
-				REQUIRE(K_mat.determinant() != Approx(0).margin(0.00001));
+				REQUIRE(K_mat.determinant() != Approx(0).margin(scalar(0.00001)));
 
 				Displacements u_vec = K_mat.ldlt().solve(-T_vec);
 				log += fmt::format("\nu (vector)\n{}", u_vec);
@@ -2039,7 +2039,7 @@ SCENARIO("Solution of a single element")
 
 				x += u;
 
-				if (norm(u) < 0.00001)
+				if (norm(u) < scalar(0.00001))
 					break;
 			}
 
@@ -2129,7 +2129,7 @@ SCENARIO("Solution of a single element")
 
 				x += u;
 
-				if (norm(u) < 0.00001)
+				if (norm(u) < scalar(0.00001))
 					break;
 			}
 
@@ -2159,13 +2159,13 @@ void check_solvers(
 	std::size_t const max_matrix_steps,
 	std::size_t const max_guass_steps,
 	Scalar const expected_volume,
-	std::vector<Scalar> const & expected_positions)
+	std::vector<Coord> const & expected_positions)
 {
-	auto const total_volume = [&attrs, &mesh]() {
-		auto const add = [&attrs](auto const total, auto const & cellh) {
-			return total + Derivatives::V(attrs.x.for_element(attrs.vtxhs[cellh]));
-		};
-		return boost::accumulate(FeltElements::MeshIters{mesh, attrs}.cells, 0.0, add);
+	auto const total_volume = [&attrs, &mesh]()
+	{
+		auto const add = [&attrs](auto const total, auto const & cellh)
+		{ return total + Derivatives::V(attrs.x.for_element(attrs.vtxhs[cellh])); };
+		return boost::accumulate(FeltElements::MeshIters{mesh, attrs}.cells, scalar(0.0), add);
 	};
 
 	auto const material_volume = total_volume();
@@ -2185,7 +2185,8 @@ void check_solvers(
 	INFO(mat_x)
 
 	auto const check_converges = [&mat_x, &total_volume, expected_volume, &expected_positions](
-									 auto const max_step, auto const final_step) {
+									 auto const max_step, auto const final_step)
+	{
 		CHECK(final_step <= max_step);
 		Test::check_equal(
 			mat_x,
@@ -2200,11 +2201,14 @@ void check_solvers(
 	WHEN("displacement is solved using Eigen matrix solver")
 	{
 		auto const max_steps = max_matrix_steps + 1;
-//		std::size_t const steps_per_increment = std::min(200ul, max_steps);
-//		std::size_t const num_increments = std::max(max_steps / steps_per_increment, 1ul);
+		//		std::size_t const steps_per_increment = std::min(200ul, max_steps);
+		//		std::size_t const num_increments = std::max(max_steps / steps_per_increment, 1ul);
 		std::size_t const steps_per_increment = max_steps;	// std::min(20ul, max_steps);
-//		std::size_t const num_increments = max_steps;  // std::max(max_steps / steps_per_increment, 1ul);
-		std::size_t const num_increments = std::numeric_limits<std::size_t>::max();  // std::max(max_steps / steps_per_increment, 1ul);
+		//		std::size_t const num_increments = max_steps;  // std::max(max_steps /
+		//steps_per_increment, 1ul);
+		std::size_t const num_increments =
+			std::numeric_limits<std::size_t>::max();  // std::max(max_steps / steps_per_increment,
+													  // 1ul);
 		Solver::Matrix solver(mesh, attrs, {steps_per_increment, num_increments});
 		solver.solve();
 		std::size_t const final_step = solver.stats.step_counter.load();
@@ -2277,7 +2281,7 @@ SCENARIO("Solution of two elements")
 {
 	GIVEN("two element mesh and basic material properties")
 	{
-		auto mesh = MeshIO::fromFile(file_name_two);
+		auto mesh = MeshIO::fromFile(file_name_two, 1e-2);  // cm scale
 		Attributes attrs{mesh};
 		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
 		constexpr Scalar K = 1.5e9;		// Bulk modulus: 1.5 - 2 GPa
@@ -2306,7 +2310,7 @@ SCENARIO("Solution of two elements")
 				attrs,
 				17,
 				1688,  // TODO: this takes far too long
-				0.1666411123,
+				scalar(0.1666411123),
 				{
 					// clang-format off
 				0,         0,         0,
@@ -2328,7 +2332,7 @@ SCENARIO("Solution of two elements")
 				attrs,
 				2,
 				2,
-				1.0 / 6.0,
+				scalar(1.0 / 6.0),
 				{
 					// clang-format off
 					0,         0,         0,
@@ -2352,7 +2356,7 @@ SCENARIO("Solution of two elements")
 				attrs,
 				1,
 				1,
-				1.0 / 6.0,
+				scalar(1.0 / 6.0),
 				{
 					// clang-format off
 					0,         0,         0,
@@ -2371,7 +2375,7 @@ SCENARIO("Solution of two elements")
 		AND_GIVEN("atmospheric pressure")
 		{
 			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
-			attrs.forces->p = -100 * atm;
+			attrs.forces->p = -10000 * atm;
 
 			check_solvers(
 				"pressure",
@@ -2379,7 +2383,7 @@ SCENARIO("Solution of two elements")
 				attrs,
 				1000000,
 				1000000,
-				0.1484595104,
+				scalar(0.1484595104),
 				{
 					// clang-format off
 				0,            0,            0,

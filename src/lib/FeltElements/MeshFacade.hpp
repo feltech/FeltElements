@@ -38,7 +38,7 @@ struct MeshIters
 
 struct MeshIO
 {
-	static Mesh fromFile(std::string const & file_path);
+	static Mesh fromFile(std::string const & file_path, Scalar scale = 1);
 	void toFile(std::string const & file_path) const;
 	Mesh& mesh;
 	Attributes& attrs;

@@ -7,7 +7,7 @@
 
 namespace FeltElements
 {
-Mesh MeshIO::fromFile(std::string const & file_path)
+Mesh MeshIO::fromFile(std::string const & file_path, Scalar scale)
 {
 	Mesh mesh{};
 	OpenVolumeMesh::IO::FileManager file_manager{};
@@ -15,6 +15,10 @@ Mesh MeshIO::fromFile(std::string const & file_path)
 		throw std::filesystem::filesystem_error{
 			fmt::format("Unable to read mesh file '{}'", file_path),
 			std::make_error_code(std::errc::no_such_file_or_directory)};
+
+	for (auto const & vtxh : boost::make_iterator_range(mesh.vertices()))
+		mesh.set_vertex(vtxh, mesh.vertex(vtxh) * scale);
+
 	return mesh;
 }
 

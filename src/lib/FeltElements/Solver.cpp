@@ -1,5 +1,6 @@
 #include "Solver.hpp"
 
+#include <cmath>
 #include <iostream>
 
 #include <spdlog/spdlog.h>
@@ -69,7 +70,7 @@ Scalar Base::find_epsilon() const
 	}
 	Scalar const avg_V = total_V / static_cast<Scalar>(m_mesh.n_cells());
 	// Edge length assuming a regular tetrahedron, divided by a constant.
-	Scalar const epsilon = std::pow(6 * std::sqrt(2.0) * min_V, 1.0 / 3.0);
+	Scalar const epsilon = scalar(std::pow(6 * std::sqrt(Scalar{2.0}) * min_V, 1.0 / 3.0));
 	spdlog::info(
 		"total V = {}; mean V = {}; max V = {}, min V = {} @\n{}\nepsilon = {}",
 		total_V,
@@ -109,39 +110,39 @@ void Matrix::solve()
 	std::ofstream numbers("feltelements.tsv");
 	Scalar epsilon = find_epsilon();
 
-	Eigen::VectorXd const & mat_fixed_dof = ([&attrs = m_attrs,
+	VectorX const & mat_fixed_dof = ([&attrs = m_attrs,
 											  rows = static_cast<Eigen::Index>(m_mesh.n_vertices()),
 											  cols = static_cast<Eigen::Index>(Node::dim)]() {
 		EigenMapTensorVerticesConst const & map{attrs.fixed_dof[Vtxh{0}].data(), rows, cols};
 		// Copy to remove per-row alignment.
-		Eigen::VectorXd vec = Eigen::Map<Eigen::VectorXd>{VerticesMatrix{map}.data(), rows * cols};
+		VectorX vec = Eigen::Map<VectorX>{VerticesMatrix{map}.data(), rows * cols};
 		return vec;
 	})();
-	Eigen::VectorXd const one_minus_fixed_dof =
-		Eigen::VectorXd::Ones(mat_fixed_dof.size()) - mat_fixed_dof;
+	VectorX const one_minus_fixed_dof = VectorX::Ones(mat_fixed_dof.size()) - mat_fixed_dof;
 
 	auto const num_vertices = static_cast<Eigen::Index>(m_mesh.n_vertices());
 	auto const num_dofs = static_cast<Eigen::Index>(Node::dim) * num_vertices;
 
-	Eigen::VectorXd vec_F{num_dofs};
-	Eigen::VectorXd vec_R{num_dofs};
-	Eigen::MatrixXd mat_K{num_dofs, num_dofs};
-	Eigen::VectorXd vec_u{num_dofs};
-	Eigen::VectorXd vec_uF{num_dofs};
-	Eigen::VectorXd vec_uR{num_dofs};
-	Eigen::VectorXd vec_delta_x{num_dofs};
-	Scalar delta_lambda = 0.0;
-	Scalar lambda = 0.01;
+	VectorX vec_F{num_dofs};
+	VectorX vec_R{num_dofs};
+	MatrixX mat_K{num_dofs, num_dofs};
+	VectorX vec_u{num_dofs};
+	VectorX vec_uF{num_dofs};
+	VectorX vec_uR{num_dofs};
+	VectorX vec_delta_x{num_dofs};
+	Scalar delta_lambda = 0;
+	Scalar lambda = scalar( 1e-2);
 	Scalar gamma = 0;
 	Scalar max_norm;
 	constexpr std::size_t step_target = 30;
 	std::size_t step = step_target;
-	Scalar const s20 = 1e-13;
+	auto const s20 = scalar(1e-5);
 	Scalar s2 = s20;
 	Scalar const psi2 = 0;
-	epsilon = 1e-6;
-	Scalar s2_min;
+	epsilon = scalar(1e-6);
+	Scalar s2_min = 0;
 	auto mat_x = as_matrix(m_attrs.x);
+	Scalar rcond = 1;
 
 	VerticesMatrix mat_X = as_matrix(m_attrs.X);
 
@@ -150,90 +151,107 @@ void Matrix::solve()
 	{
 		stats.force_increment_counter++;
 
-		VerticesMatrix const mat_x0 = mat_x;
-		delta_lambda = 0;
+		lambda = std::min(lambda, scalar(1));
 
-		// Pre-increment solution
+		update_elements_stiffness_and_residual(lambda);
+		assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+
+		auto mat_K_LU = mat_K.partialPivLu();
+
 		{
-			update_elements_stiffness_and_residual(lambda);
-			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
-			vec_F /= lambda;
-			auto mat_K_LU = mat_K.partialPivLu();
+			s2 *= 2 * scalar(step_target) / scalar(step + step_target);
+			step = 0;
+
 			vec_uR = mat_K_LU.solve(-vec_R);
+
+			vec_F /= lambda;
 			vec_uF = mat_K_LU.solve(vec_F);
 
-			s2 = vec_uR.squaredNorm();
-			gamma = 0;
+			gamma = std::sqrt(s2 / vec_uF.squaredNorm());
+			while (lambda + gamma > 1)
+			{
+				s2 /= 2;
+				gamma = std::sqrt(s2 / vec_uF.squaredNorm());
+			}
 
 			delta_lambda = gamma;
 			lambda += gamma;
 			vec_delta_x = vec_uR + gamma * vec_uF;
 			vec_delta_x.array() *= one_minus_fixed_dof.array();
 			mat_x += as_matrix(vec_delta_x);
-
 		}
+
+		rcond = mat_K_LU.rcond();
+		max_norm = vec_R.squaredNorm();
+
 		spdlog::info(
-			"increment = {}; total steps = {}; lambda = {}; gamma = {}; s2 = {}",
+			"increment = {}; total steps = {}; lambda = {}; gamma = {}; s2 = {}; max_norm = {}; rcond = {}",
 			increment_num,
 			stats.step_counter.load(),
 			lambda,
 			gamma,
-			s2);
+			s2, max_norm,
+			rcond);
+		log_xs(m_mesh, m_attrs);
+		numbers << increment_num << "\t" << lambda << "\t" << mat_x(2, 1) << "\n" << std::flush;
 
-		max_norm = vec_R.squaredNorm();
+		stats.max_norm = max_norm;
 		if (max_norm < epsilon)
 		{
-			lambda += 1e-3;
+			if (lambda == 1.0)
+				break;
 			continue;
 		}
 
 		for (step = 0; step < m_params.num_steps; ++step)
 		{
 			++stats.step_counter;
-//			log_xs(m_mesh, m_attrs);
+			//			log_xs(m_mesh, m_attrs);
 
 			update_elements_stiffness_and_residual(lambda);
+
 			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
 			vec_F /= lambda;
+
+			mat_K_LU = mat_K.partialPivLu();
+			vec_uR = mat_K_LU.solve(-vec_R);
+			vec_uF = mat_K_LU.solve(vec_F);
+
+			rcond = mat_K_LU.rcond();
 			max_norm = vec_R.squaredNorm();
 
 			spdlog::info(
-				"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = {}; norm = {}",
+				"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = {}; "
+				"norm = {}; rcond = {}",
 				increment_num,
 				step,
 				lambda,
 				delta_lambda,
 				gamma,
 				s2,
-				max_norm);
+				max_norm,
+				rcond);
 
 			stats.max_norm = max_norm;
 			if (max_norm < epsilon)
 				break;
 
-			auto const & mat_K_LU = mat_K.partialPivLu();
-			vec_uR = mat_K_LU.solve(-vec_R);
-			vec_uF = mat_K_LU.solve(vec_F);
-
-			Eigen::VectorXd const delta_xu = vec_delta_x + vec_uR;
-			Eigen::VectorXd const n = vec_uF.normalized();
-			Eigen::VectorXd const vec_s_min = delta_xu - n * n.dot(delta_xu);
-			s2_min = vec_s_min.squaredNorm() * 1.001;
+			VectorX const delta_xu = vec_delta_x + vec_uR;
+			VectorX const n = vec_uF.normalized();
+			VectorX const vec_s_min = delta_xu - n * n.dot(delta_xu);
+			s2_min = vec_s_min.squaredNorm() * scalar(1.001);
 			if (s2 < s2_min)
 				s2 = s2_min;
 
-			Scalar gamma1, gamma2;
-			Eigen::VectorXd vec_delta_x1, vec_delta_x2;
-
 			auto const choose_correction = [&]
 			{
-				std::tie(gamma1, gamma2) =
+				auto [gamma1, gamma2] =
 					arc_length(vec_uF, vec_uR, vec_F, vec_delta_x, delta_lambda, s2, psi2);
 
 				auto const vec_u1 = vec_uR + gamma1 * vec_uF;
 				auto const vec_u2 = vec_uR + gamma2 * vec_uF;
-				vec_delta_x1 = vec_delta_x + vec_u1;
-				vec_delta_x2 = vec_delta_x + vec_u2;
+				auto const vec_delta_x1 = vec_delta_x + vec_u1;
+				auto const vec_delta_x2 = vec_delta_x + vec_u2;
 
 				auto vec_delta_x_norm = vec_delta_x.normalized();
 				auto vec_delta_x1_norm = vec_delta_x1.normalized();
@@ -243,33 +261,36 @@ void Matrix::solve()
 				auto x2_proj = vec_delta_x_norm.dot(vec_delta_x2_norm);
 
 				if (x1_proj > x2_proj)
+				{
 					gamma = gamma1;
+					vec_u = vec_u1;
+					vec_delta_x = vec_delta_x1;
+				}
 				else
+				{
 					gamma = gamma2;
+					vec_u = vec_u2;
+					vec_delta_x = vec_delta_x2;
+				}
 			};
 
 			choose_correction();
 
-			if (gamma == gamma1)
-				vec_delta_x = vec_delta_x1;
-			else
-				vec_delta_x = vec_delta_x2;
+			if (lambda + gamma > 1)
+			{
+				s2 /= 2;
+				continue;
+			}
 
 			delta_lambda += gamma;
 			lambda += gamma;
-
-			mat_x = mat_x0 + as_matrix(vec_delta_x);
+			mat_x += as_matrix(vec_u);
 		}
-
-		numbers << increment_num << "\t" << lambda << "\t" << mat_x(2, 1) << "\n" << std::flush;
 	}
 }
 
 void Matrix::assemble(
-	Eigen::MatrixXd & mat_K,
-	Eigen::VectorXd & vec_R,
-	Eigen::VectorXd & vec_F,
-	Eigen::VectorXd const & one_minus_fixed_dof) const
+	MatrixX & mat_K, VectorX & vec_R, VectorX & vec_F, VectorX const & one_minus_fixed_dof) const
 {
 	vec_R.setZero();
 	vec_F.setZero();
@@ -334,8 +355,8 @@ void Matrix::assemble(
 	vec_F.array() *= one_minus_fixed_dof.array();
 	mat_K.array().colwise() *= one_minus_fixed_dof.array();
 	mat_K.array().rowwise() *= one_minus_fixed_dof.transpose().array();
-	Eigen::VectorXd const fixed_dof =
-		Eigen::VectorXd::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof;
+	VectorX const fixed_dof =
+		VectorX::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof;
 	mat_K += fixed_dof.asDiagonal();
 
 	//	// Inspect matrix to calculate penalty of relative size.
@@ -343,15 +364,15 @@ void Matrix::assemble(
 	// 1e1;
 	//	// Set penalised degrees of freedom to penalty value.
 	//	mat_K += penalty *
-	//		(Eigen::VectorXd::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof)
+	//		(VectorX::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof)
 	//			.asDiagonal();
 }
 
 std::tuple<Scalar, Scalar> Matrix::arc_length(
-	Eigen::VectorXd const & vec_uF,
-	Eigen::VectorXd const & vec_uR,
-	Eigen::VectorXd const & vec_F,
-	Eigen::VectorXd const & vec_delta_x,
+	VectorX const & vec_uF,
+	VectorX const & vec_uR,
+	VectorX const & vec_F,
+	VectorX const & vec_delta_x,
 	Scalar const delta_lambda,
 	Scalar s2,
 	Scalar const psi2)
@@ -383,8 +404,10 @@ std::tuple<Scalar, Scalar> Matrix::arc_length(
 	// * c;
 	//	}
 
-	auto const gamma1 = (-b + sqrt(discriminant)) / (2 * a);
-	auto const gamma2 = (-b - sqrt(discriminant)) / (2 * a);
+	Scalar const sqrt_discriminant = std::sqrt(discriminant);
+
+	auto const gamma1 = (-b + sqrt_discriminant) / (2 * a);
+	auto const gamma2 = (-b - sqrt_discriminant) / (2 * a);
 
 	//	auto const error1 = (vec_delta_x + vec_uR + gamma1 * vec_uF).squaredNorm() +
 	//		(delta_lambda + gamma1) * (delta_lambda + gamma1) * vec_F.squaredNorm();

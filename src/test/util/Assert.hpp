@@ -3,7 +3,7 @@
 
 namespace FeltElements::Test
 {
-constexpr Scalar epsilon = 0.00005;
+constexpr Scalar epsilon = scalar(0.00005);
 
 auto equal = [](auto const & a, auto const & b) {
 	using Tensor::Func::all_of;
@@ -33,7 +33,8 @@ void check_equal(
 	INFO(expected)
 	if constexpr (std::is_base_of_v<Eigen::MatrixBase<In>, In>)
 	{
-		CHECK(in.isApprox(expected, epsilon));
+//		Eigen::Matrix<typename In::value_type, Eigen::Dynamic, Eigen::Dynamic> const expected_conv = expected;
+		CHECK(in.isApprox(expected.template cast<typename In::value_type>(), epsilon));
 	}
 	else
 	{

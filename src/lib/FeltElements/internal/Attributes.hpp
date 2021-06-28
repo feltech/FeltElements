@@ -125,7 +125,8 @@ protected:
 		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
 			Vtx const & vtx = mesh.vertex(vtxh);
-			(*this)[vtxh] = Tensor::BaseMap<Vtx::value_type const, Vtx::size()>{vtx.data()};
+			(*this)[vtxh] = Tensor::BaseMap<Vtx::value_type const, Vtx::size()>{vtx.data()}
+								.template cast<Scalar>();
 		}
 	}
 
@@ -147,7 +148,8 @@ protected:
 	{
 		Element::BoundaryNodePositions faces_x;
 
-		const auto to_tensor = [this, &cell_vtxhs](BoundaryElement::VtxhIdxs const & face_idxs) {
+		const auto to_tensor = [this, &cell_vtxhs](BoundaryElement::VtxhIdxs const & face_idxs)
+		{
 			BoundaryElement::Vtxhs face_vtxhs;
 			for (auto const & [face_idx, cell_idx] : boost::adaptors::index(face_idxs))
 				face_vtxhs[static_cast<std::size_t>(face_idx)] = cell_vtxhs[cell_idx];

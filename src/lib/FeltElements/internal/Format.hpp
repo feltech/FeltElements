@@ -14,7 +14,7 @@
 namespace
 {
 // std::to_string has non-configurable precision of too many decimal places.
-auto const to_string = [](auto const f) { return fmt::format("{:f}", f); };
+auto const to_string = [](auto const f) { return fmt::format("{:.15f}", f); };
 }  // namespace
 
 namespace Fastor
