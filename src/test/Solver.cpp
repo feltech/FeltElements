@@ -2201,13 +2201,9 @@ void check_solvers(
 	WHEN("displacement is solved using Eigen matrix solver")
 	{
 		auto const max_steps = max_matrix_steps + 1;
-		//		std::size_t const steps_per_increment = std::min(200ul, max_steps);
-		//		std::size_t const num_increments = std::max(max_steps / steps_per_increment, 1ul);
 		std::size_t const steps_per_increment = max_steps;	// std::min(20ul, max_steps);
-		//		std::size_t const num_increments = max_steps;  // std::max(max_steps /
-		// steps_per_increment, 1ul);
 		std::size_t const num_increments =
-			std::numeric_limits<std::size_t>::max();  // std::max(max_steps / steps_per_increment,
+			std::numeric_limits<std::size_t>::max();
 													  // 1ul);
 		Solver::Matrix solver(mesh, attrs, {steps_per_increment, num_increments});
 		solver.solve();
