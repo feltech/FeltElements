@@ -80,7 +80,7 @@ protected:
 	};
 
 	void update_elements_stiffness_and_residual(Scalar lambda = 1.0);
-	Scalar find_epsilon() const;
+	Scalar find_approx_min_edge_length() const;
 
 public:
 	using Unpauser = Pauser::Unpauser;

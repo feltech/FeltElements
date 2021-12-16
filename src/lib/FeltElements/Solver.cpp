@@ -49,7 +49,7 @@ void Base::update_elements_stiffness_and_residual(Scalar const lambda)
 	}
 }
 
-Scalar Base::find_epsilon() const
+Scalar Base::find_approx_min_edge_length() const
 {
 	Scalar total_V = 0;
 	Scalar min_V = std::numeric_limits<Scalar>::max();
@@ -104,7 +104,7 @@ int sgn(T val)
 
 void Matrix::solve()
 {
-	Scalar residual_epsilon = find_epsilon();
+	Scalar residual_epsilon = find_approx_min_edge_length();
 
 	VectorX const & mat_fixed_dof = ([&attrs = m_attrs,
 											  rows = static_cast<Eigen::Index>(m_mesh.n_vertices()),
@@ -425,7 +425,7 @@ std::tuple<Scalar, Scalar> Matrix::arc_length(
 
 void Gauss::solve()
 {
-	Scalar const epsilon = find_epsilon() / 1000;
+	Scalar const epsilon = find_approx_min_edge_length() * 1e-3;
 	using Tensor::Func::all;
 
 	std::vector<Node::Pos> u(m_mesh.n_vertices(), {0, 0, 0});
