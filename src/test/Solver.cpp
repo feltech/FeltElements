@@ -2159,7 +2159,7 @@ void check_solvers(
 	std::size_t const max_matrix_steps,
 	std::size_t const max_guass_steps,
 	Scalar const expected_volume,
-	std::vector<Coord> const & expected_positions)
+	std::vector<OvmScalar> const & expected_positions)
 {
 	auto const total_volume = [&attrs, &mesh]()
 	{

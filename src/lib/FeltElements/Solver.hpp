@@ -100,12 +100,12 @@ class Matrix : public Base
 	using EigenConstTensorMap =
 		Eigen::Map<Eigen::Matrix<Scalar, rows, cols, Eigen::RowMajor> const, EIGEN_FASTOR_ALIGN>;
 	using VerticesMatrix = Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
-	using VtxMatrix = Eigen::Matrix<Mesh::PointT::value_type, Eigen::Dynamic, 3, Eigen::RowMajor>;
+	using OvmVtxMatrix = Eigen::Matrix<OvmScalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
 
 public:
 	using VectorX = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
 	using MatrixX = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
-	using EigenMapOvmVertices = Eigen::Map<VtxMatrix const>;
+	using EigenMapOvmVertices = Eigen::Map<OvmVtxMatrix const>;
 	using EigenMapTensorVerticesConst = Eigen::Map<
 		VerticesMatrix const,
 		Eigen::Unaligned,
