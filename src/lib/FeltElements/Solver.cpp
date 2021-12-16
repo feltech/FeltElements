@@ -68,34 +68,31 @@ Scalar Base::find_epsilon() const
 			min_V = V;
 		}
 	}
-	Scalar const avg_V = total_V / static_cast<Scalar>(m_mesh.n_cells());
 	// Edge length assuming a regular tetrahedron, divided by a constant.
-	Scalar const epsilon = scalar(std::pow(6 * std::sqrt(Scalar{2.0}) * min_V, 1.0 / 3.0));
-	spdlog::info(
-		"total V = {}; mean V = {}; max V = {}, min V = {} @\n{}\nepsilon = {}",
+	Scalar const edge_length = scalar(std::pow(6 * std::sqrt(Scalar{2.0}) * min_V, 1.0 / 3.0));
+	SPDLOG_DEBUG(
+		"edge_length = {}, since total V = {}; mean V = {}; max V = {}; min V = {}; min X = \n{}",
+		edge_length,
 		total_V,
-		avg_V,
+		total_V / scalar(m_mesh.n_cells()),
 		max_V,
 		min_V,
-		min_X,
-		epsilon);
-	return epsilon;
+		min_X);
+	return edge_length;
 }
 
 namespace
 {
 void log_xs(Mesh const & mesh, Attributes const & attrs)
 {
-	//#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
 	std::string xs_str;
 	for (auto const & x : MeshIters{mesh, attrs}.xs()) xs_str += fmt::format("{}\n", x);
-
-	spdlog::info(xs_str);
-	//	spdlog::debug(xs_str);
-	//#else
-	//	(void)mesh;
-	//	(void)attrs;
-	//#endif
+		spdlog::debug(xs_str);
+#else
+	(void)mesh;
+	(void)attrs;
+#endif
 }
 
 template <typename T>
@@ -107,7 +104,6 @@ int sgn(T val)
 
 void Matrix::solve()
 {
-	std::ofstream numbers("feltelements.tsv");
 	Scalar residual_epsilon = find_epsilon();
 
 	VectorX const & mat_fixed_dof = ([&attrs = m_attrs,
@@ -188,18 +184,17 @@ void Matrix::solve()
 			Scalar const rcond = mat_K_LU.rcond();
 			Scalar const residual_norm = vec_R.squaredNorm();
 
-			spdlog::info(
-				"increment = {}; total steps = {}; lambda = {}; gamma = {}; s2 = {}; max_norm = "
-				"{}; rcond = {}",
+			SPDLOG_DEBUG(
+				"increment = {}; total steps = {}; lambda = {}; s2 = {}; max_norm = "
+				"{}; rcond = {}; det(K) = {}",
 				increment_num,
 				stats.step_counter.load(),
 				lambda,
-				gamma,
 				s2,
 				residual_norm,
-				rcond);
+				mat_K_LU.rcond(),
+				mat_K_LU.determinant());
 			log_xs(m_mesh, m_attrs);
-			numbers << increment_num << "\t" << lambda << "\t" << mat_x(2, 1) << "\n" << std::flush;
 
 			stats.residual_norm = residual_norm;
 
@@ -236,13 +231,11 @@ void Matrix::solve()
 				vec_uR = mat_K_LU.solve(-vec_R);
 				vec_uF = mat_K_LU.solve(vec_F);
 
-				Scalar const rcond = mat_K_LU.rcond();
 				Scalar const residual_norm = vec_R.squaredNorm();
 
-				spdlog::info(
+				SPDLOG_DEBUG(
 					"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
-					"{}; "
-					"norm = {}; rcond = {}",
+					"{}; norm = {}; rcond = {}; det(K) = {}; delta_x2 = {}",
 					increment_num,
 					step,
 					lambda,
@@ -250,7 +243,9 @@ void Matrix::solve()
 					gamma,
 					s2,
 					residual_norm,
-					rcond);
+					mat_K_LU.rcond(),
+					mat_K_LU.determinant(),
+					vec_delta_x.squaredNorm());
 
 				stats.residual_norm = residual_norm;
 				if (residual_norm < residual_epsilon)
