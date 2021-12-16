@@ -2110,7 +2110,7 @@ SCENARIO("Solution of a single element")
 
 				Element::NodePositions u = 0;
 
-				for (Tensor::Index a = 0; a < Element::NodePositions::dimension(0); a++)
+				for (Tensor::Index a = 0; a < u.dimension(0); a++)
 				{
 					using namespace Tensor;
 					using Func::einsum;

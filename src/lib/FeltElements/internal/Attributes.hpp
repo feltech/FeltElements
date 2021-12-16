@@ -137,7 +137,7 @@ protected:
 		using Tensor::Func::all;
 		using NodePositions = Tensor::Matrix<num_nodes, Node::dim>;
 		NodePositions x;
-		for (Tensor::Index node_idx = 0; node_idx < NodePositions::dimension(0); node_idx++)
+		for (Tensor::Index node_idx = 0; node_idx < x.dimension(0); node_idx++)
 			x(node_idx, all) = (*this)[vtxhs[node_idx]];
 
 		return x;

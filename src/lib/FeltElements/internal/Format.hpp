@@ -27,17 +27,17 @@ std::ostream & operator<<(
 	using FeltElements::Tensor::Vector;
 	using boost::algorithm::join;
 
-	std::array<std::string, value.dimension(0)> is{};
-	std::array<std::string, value.dimension(1)> js{};
-	std::array<std::string, value.dimension(2)> ks{};
-	for (Index i = 0; i < value.dimension(0); i++)
+	std::array<std::string, dim0> is{};
+	std::array<std::string, dim1> js{};
+	std::array<std::string, dim2> ks{};
+	for (Index i = 0; i < dim0; i++)
 	{
-		for (Index j = 0; j < value.dimension(1); j++)
+		for (Index j = 0; j < dim1; j++)
 		{
-			for (Index k = 0; k < value.dimension(2); k++)
+			for (Index k = 0; k < dim2; k++)
 			{
 				using FeltElements::Tensor::Func::all;
-				using Vec = Vector<value.dimension(3)>;
+				using Vec = Vector<dim3>;
 				Vec const & vec = value(i, j, k, all);
 
 				ks[k] = join(
@@ -60,15 +60,15 @@ std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Multi<dim0, d
 	using FeltElements::Tensor::Index;
 	using FeltElements::Tensor::Vector;
 
-	std::array<std::string, value.dimension(0)> is{};
-	std::array<std::string, value.dimension(1)> js{};
-	std::array<std::string, value.dimension(2)> ks{};
-	for (Index i = 0; i < value.dimension(0); i++)
+	std::array<std::string, dim0> is{};
+	std::array<std::string, dim1> js{};
+	std::array<std::string, dim2> ks{};
+	for (Index i = 0; i < dim0; i++)
 	{
-		for (Index j = 0; j < value.dimension(1); j++)
+		for (Index j = 0; j < dim1; j++)
 		{
 			using FeltElements::Tensor::Func::all;
-			using Vec = Vector<value.dimension(2)>;
+			using Vec = Vector<dim2>;
 			Vec const & vec = value(i, j, all);
 
 			js[j] = join(
@@ -89,10 +89,10 @@ std::ostream & operator<<(std::ostream & os, FeltElements::Tensor::Matrix<dim0, 
 	using FeltElements::Tensor::Func::all;
 	using FeltElements::Tensor::Index;
 
-	std::array<std::string, value.dimension(0)> is{};
-	for (Index i = 0; i < value.dimension(0); i++)
+	std::array<std::string, dim0> is{};
+	for (Index i = 0; i < dim0; i++)
 	{
-		using Vec = FeltElements::Tensor::Vector<value.dimension(1)>;
+		using Vec = FeltElements::Tensor::Vector<dim1>;
 		Vec const & vec = value(i, all);
 		is[i] = join(
 			boost::make_iterator_range(vec.data(), vec.data() + Vec::size()) |
