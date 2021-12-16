@@ -77,7 +77,6 @@ protected:
 	private:
 		std::mutex lock{};
 		boost::atomic_flag flag{};
-		std::scoped_lock<std::mutex> m_running{lock};
 	};
 
 	void update_elements_stiffness_and_residual(Scalar lambda = 1.0);
