@@ -144,8 +144,8 @@ int execute(
 			spdlog::info(
 				"Step = {}; increment = {}; delta = {:e}",
 				curr_step,
-				solver->stats.force_increment_counter.load(std::memory_order_relaxed),
-				solver->stats.residual_norm.load(std::memory_order_relaxed));
+				solver->stats.force_increment_counter.load(),
+				solver->stats.residual_norm.load());
 			last_step = curr_step;
 		}
 

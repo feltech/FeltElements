@@ -51,7 +51,7 @@ protected:
 			void operator=(Unpauser &&) = delete;
 			~Unpauser()
 			{
-				pause.flag.clear(boost::memory_order_release);
+				pause.flag.clear();
 				pause.flag.notify_one();
 				pause.lock.unlock();
 			}
@@ -60,17 +60,17 @@ protected:
 
 		Unpauser scoped_pause() noexcept
 		{
-			flag.test_and_set(boost::memory_order_acquire);
+			flag.test_and_set();
 			lock.lock();
 			return Unpauser{*this};
 		}
 
 		void wait_while_paused() noexcept
 		{
-			if (!flag.test(boost::memory_order_relaxed))
+			if (!flag.test())
 				return;
 			lock.unlock();
-			flag.wait(true, boost::memory_order_relaxed);
+			flag.wait(true);
 			lock.lock();
 		}
 
