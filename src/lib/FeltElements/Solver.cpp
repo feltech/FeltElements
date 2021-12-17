@@ -334,11 +334,6 @@ void Matrix::assemble(
 			vec_F.block<3, 1>(3 * vtx_idx, 0) += Fa;
 		}
 	}
-	// Compute sum to check equilibrium.
-	//		Eigen::Vector3d sum; sum.setZero();
-	//		Eigen::Map<Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>>
-	// mat_R_Nx3{mat_R.data(), mat_R.rows() / 3, 3}; 		for (Eigen::Index const node_idx
-	// : boost::irange(mat_R_Nx3.rows())) 			sum += mat_R_Nx3.row(node_idx);
 
 	auto const update_submatrix =
 		[&mat_K, &attrs = m_attrs](auto const vtxh_src, auto const vtxh_dst, auto const cellh_)
@@ -409,32 +404,10 @@ std::tuple<Scalar, Scalar> Matrix::arc_length_multipliers(
 	if (discriminant < 0)
 		return {std::numeric_limits<Scalar>::infinity(), std::numeric_limits<Scalar>::infinity()};
 
-	//	while (discriminant < 0)
-	//	{
-	//		// TODO: decompose perpendicular component
-	//		spdlog::debug(
-	//			"uF = \n{}\nDx+uR = \n{}", vec_uF.normalized(), (vec_delta_x +
-	// vec_uR).normalized()); 		c += s2; 		s2 *= 1.1; 		c -= s2; 		discriminant = b
-	// *
-	// b
-	// -
-	// 4
-	// *
-	// a
-	// * c;
-	//	}
-
 	Scalar const sqrt_discriminant = std::sqrt(discriminant);
 
 	auto const gamma1 = (-b + sqrt_discriminant) / (2 * a);
 	auto const gamma2 = (-b - sqrt_discriminant) / (2 * a);
-
-	//	auto const error1 = (vec_delta_x + vec_uR + gamma1 * vec_uF).squaredNorm() +
-	//		(delta_lambda + gamma1) * (delta_lambda + gamma1) * vec_F.squaredNorm();
-	//	auto const error2 = (vec_delta_x + vec_uR + gamma2 * vec_uF).squaredNorm() +
-	//		(delta_lambda + gamma2) * (delta_lambda + gamma2) * vec_F.squaredNorm();
-	//	assert(abs(error1 - s2) < 0.000001);
-	//	assert(abs(error2 - s2) < 0.000001);
 
 	return {gamma1, gamma2};
 }
@@ -516,8 +489,6 @@ void Gauss::solve()
 				using Tensor::Func::max;
 				// Note: double-reduction in case OpenMP disabled.
 				max_norm = std::max(max_norm, max(abs(u[a])));
-				//				SPDLOG_DEBUG("R[{}] = {}", a, Ra);
-				//				SPDLOG_DEBUG("u[{}] = {}", a, u[a]);
 			}
 
 			SPDLOG_DEBUG("Max norm: {}", max_norm);
