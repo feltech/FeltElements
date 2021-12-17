@@ -104,8 +104,6 @@ int sgn(T val)
 
 void Matrix::solve()
 {
-	Scalar residual_epsilon = find_approx_min_edge_length();
-
 	VectorX const & mat_fixed_dof = ([&attrs = m_attrs,
 											  rows = static_cast<Eigen::Index>(m_mesh.n_vertices()),
 											  cols = static_cast<Eigen::Index>(Node::dim)]() {
@@ -119,6 +117,13 @@ void Matrix::solve()
 	auto const num_vertices = static_cast<Eigen::Index>(m_mesh.n_vertices());
 	auto const num_dofs = static_cast<Eigen::Index>(Node::dim) * num_vertices;
 
+	constexpr std::size_t step_target = 5;
+	constexpr Scalar psi2 = 0;
+	Scalar const residual_epsilon = find_approx_min_edge_length() * 1e-3;
+	Scalar const s2_epsilon = std::pow(residual_epsilon, 2) * 1e-1;
+
+	VerticesMatrix const mat_X = as_matrix(m_attrs.X);
+	auto mat_x = as_matrix(m_attrs.x);
 	VectorX vec_F{num_dofs};
 	VectorX vec_R{num_dofs};
 	MatrixX mat_K{num_dofs, num_dofs};
@@ -128,21 +133,14 @@ void Matrix::solve()
 	VectorX vec_delta_x{num_dofs};
 	Scalar delta_lambda = 0;
 	Scalar lambda = scalar(1e-1);
-	Scalar gamma = 0;
-	constexpr std::size_t step_target = 5;
-	std::size_t step = 0;
-	Scalar s2 = scalar(1);
-	Scalar const psi2 = 0;
-	residual_epsilon = scalar(1e-6);
-	constexpr Scalar s2_epsilon = 1e-8;
-	auto mat_x = as_matrix(m_attrs.x);
-
-	VerticesMatrix mat_X = as_matrix(m_attrs.X);
+	std::size_t step = step_target;
+	Scalar s2 = std::pow(residual_epsilon, 2);
 
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
 		 increment_num++)
 	{
-		stats.force_increment_counter++;
+		++stats.force_increment_counter;
+		++stats.step_counter;
 
 		enum class State
 		{
@@ -206,30 +204,26 @@ void Matrix::solve()
 			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
 			vec_F /= lambda;
 
-			s2 *= 2 * scalar(step_target) / scalar(step + step_target);
-			step = 0;
-
 			auto const mat_K_LU = mat_K.partialPivLu();
 			vec_uR = mat_K_LU.solve(-vec_R);
-			vec_uF = mat_K_LU.solve(vec_F);
-			Scalar const uF2 = vec_uF.squaredNorm();
 
-			gamma = std::sqrt(s2 / uF2);
-			while (lambda + gamma > 1)
+			if (lambda != 1)
 			{
-				s2 *= 1e-1;
-				gamma = std::sqrt(s2 / uF2);
+				// Increase/decrease arc length if below/above step target.
+				s2 *= 2 * scalar(step_target) / scalar(step + step_target);
+				// Initial optimistic assumption that next increment needs no arc length refinement.
+				step = step_target;
+				// Initialise displacement to uncorrected solution.
+				vec_delta_x = vec_uR;
+				mat_x += as_matrix(vec_delta_x);
 			}
-			gamma = 0;
+			else
+			{
+				// If lambda is 1 then revert to standard non-arc-length solution.
+				mat_x += as_matrix(vec_uR);
+			}
 
-			delta_lambda = gamma;
-			lambda += gamma;
-			vec_delta_x = vec_uR + gamma * vec_uF;
-			vec_delta_x.array() *= one_minus_fixed_dof.array();
-			mat_x += as_matrix(vec_delta_x);
-
-			Scalar const rcond = mat_K_LU.rcond();
-			Scalar const residual_norm = vec_R.squaredNorm();
+			Scalar const residual_norm = vec_uR.squaredNorm();
 
 			SPDLOG_DEBUG(
 				"increment = {}; total steps = {}; lambda = {}; s2 = {}; max_norm = "
@@ -248,12 +242,18 @@ void Matrix::solve()
 			if (residual_norm > residual_epsilon)
 			{
 				if (s2 > s2_epsilon)
+					// Try next arc direction.
 					return State::arc;
 			}
 			else if (lambda == 1)
+			{
+				// Finished.
 				return State::done;
+			}
 
-			gamma = std::sqrt(s2 / uF2);
+			// Next load increment.
+			Scalar const uF2 = mat_K_LU.solve(vec_F).squaredNorm();
+			Scalar const gamma = std::sqrt(s2 / uF2);
 			lambda = std::min(lambda + gamma, scalar(1));
 			return State::increment;
 		}();
@@ -418,7 +418,7 @@ std::tuple<Scalar, Scalar> Matrix::arc_length_multipliers(
 
 void Gauss::solve()
 {
-	Scalar const epsilon = find_approx_min_edge_length() * 1e-3;
+	Scalar const epsilon = find_approx_min_edge_length() * 1e-5;
 	using Tensor::Func::all;
 
 	std::vector<Node::Pos> u(m_mesh.n_vertices(), {0, 0, 0});

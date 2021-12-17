@@ -1,3 +1,4 @@
+#include <FeltElements/internal/Format.hpp>	 // For logging
 #include <FeltElements/Solver.hpp>
 
 #include <boost/range/combine.hpp>
@@ -7,7 +8,6 @@
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
 #include <FeltElements/MeshFacade.hpp>
-#include <FeltElements/internal/Format.hpp>	 // For logging
 #include "util/Assert.hpp"
 #include "util/IO.hpp"
 
@@ -2195,15 +2195,13 @@ void check_solvers(
 				expected_positions.data(), mat_x.rows(), mat_x.cols()},
 			"expected");
 
-		CHECK(total_volume() == Approx(expected_volume).template margin(Test::epsilon));
+		CHECK(total_volume() == Approx(expected_volume).template epsilon(1e-3));
 	};
 
 	WHEN("displacement is solved using Eigen matrix solver")
 	{
-		auto const max_steps = max_matrix_steps + 1;
-		std::size_t const steps_per_increment = max_steps;	// std::min(20ul, max_steps);
-		std::size_t const num_increments =
-			std::numeric_limits<std::size_t>::max();
+		std::size_t const steps_per_increment = std::numeric_limits<std::size_t>::max();
+		std::size_t const num_increments = std::numeric_limits<std::size_t>::max();
 													  // 1ul);
 		Solver::Matrix solver(mesh, attrs, {steps_per_increment, num_increments});
 		solver.solve();
@@ -2214,26 +2212,25 @@ void check_solvers(
 
 		THEN("solution converges to deformed mesh")
 		{
-			if (final_step < max_steps)
+			if (final_step < max_matrix_steps)
 				WARN(fmt::format(
 					"Matrix converged in {} increments / {} steps", final_increment, final_step));
-			check_converges(max_steps, final_step);
+			check_converges(max_matrix_steps, final_step);
 		}
 	}  // WHEN("displacement is solved")
 
 	WHEN("displacement is solved Gauss-Seidel style")
 	{
-		auto const max_steps = max_guass_steps + 1;
-		Solver::Gauss solver(mesh, attrs, {max_steps + 1, 1});
+		Solver::Gauss solver(mesh, attrs, {max_guass_steps + 1, 1});
 		solver.solve();
 		std::size_t const final_step = solver.stats.step_counter.load();
 		MeshIO{mesh, attrs}.toFile(fmt::format("{}_gauss_{}", file_name_prefix, final_step));
 
 		THEN("solution converges to deformed mesh")
 		{
-			if (final_step < max_steps)
+			if (final_step < max_guass_steps)
 				WARN(fmt::format("Gauss-Seidel converged in {} steps", final_step));
-			check_converges(max_steps, final_step);
+			check_converges(max_guass_steps, final_step);
 		}
 	}
 }
@@ -2278,14 +2275,30 @@ void check_solvers(
 
 SCENARIO("Solution of two elements")
 {
-	GIVEN("two element mesh and basic material properties")
+	GIVEN("two element cm-scale mesh and basic material properties")
 	{
-		auto mesh = MeshIO::fromFile(file_name_two, 1e-2);	// cm scale
+		constexpr Scalar scale = 1e-2;
+		auto mesh = MeshIO::fromFile(file_name_two, scale);
 		Attributes attrs{mesh};
 		// Silicon rubber material properties: https://www.azom.com/properties.aspx?ArticleID=920
-		constexpr Scalar K = 1.5e9;		// Bulk modulus: 1.5 - 2 GPa
-		attrs.material->rho = 2e3;		// Density: 1.1 - 2.3 Mg/m3
-		attrs.material->mu = 0.0003e9;	// Shear modulus: 0.0003 - 0.02 GPa
+		// TODO(DF): Volumetric locking due to Poisson ratio near 0.5 - need quadratic elements with
+		//  Mean Dilation (aka Selective Reduced Integration)
+//		constexpr Scalar K = 1.5e9;		// Bulk modulus: 1.5 - 2 GPa
+//		attrs.material->rho = 2e3;		// Density: 1.1 - 2.3 Mg/m3
+//		attrs.material->mu = 0.0003e9;	// Shear modulus: 0.0003 - 0.02 GPa
+		// Iron material properties: https://www.azom.com/properties.aspx?ArticleID=619
+//		constexpr Scalar K = 170e9;		// Bulk modulus: 160 - 178 GPa
+//		attrs.material->rho = 7.87e3;	// Density: 7.86 - 7.88 Mg/m3
+//		attrs.material->mu = 80e9;		// Shear modulus: 78 - 84 GPa
+		// Magnesium material properties: https://www.azom.com/properties.aspx?ArticleID=618
+		constexpr Scalar K = 35e9;		// Bulk modulus: 33 - 37 GPa
+		attrs.material->rho = 1.74e3;	// Density: 1.73 - 1.75 Mg/m3
+		attrs.material->mu = 17e9;		// Shear modulus: 16 - 18 GPa
+		// Aluminium material properties: https://www.azom.com/properties.aspx?ArticleID=1446
+//		constexpr Scalar K = 80e9;		// Bulk modulus: 62 - 106 GPa
+//		attrs.material->rho = 2.7e3;	// Density: 2.57 - 2.95 Mg/m3
+//		attrs.material->mu = 30e9;		// Shear modulus: 25 - 34 GPa
+
 		// -- Lame's first parameter: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
 		attrs.material->lambda = Body::Material::lames_first(K, attrs.material->mu);
 		attrs.forces->p = 0;					 // Normal pressure
@@ -2294,51 +2307,51 @@ SCENARIO("Solution of two elements")
 		for (auto vtxh : boost::make_iterator_range(mesh.vertices()))
 		{
 			Vtx const & vtx = mesh.vertex(vtxh);
-			if (vtx == Vtx{0, 0, 0} || vtx == Vtx{1, 0, 0} || vtx == Vtx{0, 0, 1})
+			if (vtx == scale*Vtx{0, 0, 0} || vtx == scale*Vtx{1, 0, 0} || vtx == scale*Vtx{0, 0, 1})
 				attrs.fixed_dof[vtxh] = Node::Pos{1.0, 1.0, 1.0};
 		}
 
 		AND_GIVEN("high density material under self-weight")
 		{
-			attrs.material->rho *= 80;				   // Density.
+			attrs.material->rho *= 1e8;				   // Density.
 			attrs.forces->F_by_m = {0.0, -9.81, 0.0};  // Force per unit mass.
 
 			check_solvers(
 				"self_weight",
 				mesh,
 				attrs,
-				17,
-				1688,  // TODO: this takes far too long
-				scalar(0.1666411123),
+				99,
+				35,
+				scalar(0.0000001567),
 				{
 					// clang-format off
-				0,         0,         0,
-				1,         0,         0,
-				0,   0.55051, -0.597132,
-				0,         0,         1,
-				0,  0.499939,  0.365802
+					   0,                  0,                  0,
+					0.01,                  0,                  0,
+					   0,   0.00914011236257, -0.000286574230963,
+					   0,                  0,               0.01,
+					   0,   0.00467004919932,   0.00502946249951
 					// clang-format on
 				});
 		}
 
 		AND_GIVEN("a free vertex is displaced")
 		{
-			attrs.x[Vtxh{2}] += Node::Pos{0.2, 0.2, 0.2};
+			attrs.x[Vtxh{2}] += Node::Pos{0.02, 0.02, 0.02};
 
 			check_solvers(
 				"displaced_vertex",
 				mesh,
 				attrs,
+				4,
 				2,
-				2,
-				scalar(1.0 / 6.0),
+				scalar(scale*scale*scale / 6.0),
 				{
 					// clang-format off
-					0,         0,         0,
-					1,         0,         0,
-					0,         1,         0,
-					0,         0,         1,
-					0,       0.5,       0.5
+					   0,         0,         0,
+					0.01,         0,         0,
+					   0,      0.01,         0,
+					   0,         0,      0.01,
+					   0,     0.005,     0.005
 					// clang-format on
 				});
 		}
@@ -2353,43 +2366,39 @@ SCENARIO("Solution of two elements")
 				"no_constraint",
 				mesh,
 				attrs,
-				1,
-				1,
-				scalar(1.0 / 6.0),
+				3,
+				2,
+				scalar(scale*scale*scale / 6.0),
 				{
 					// clang-format off
-					0,         0,         0,
-					1,         0,         0,
-					0,         1,         0,
-					0,         0,         1,
-					0,       0.5,       0.5
+					   0,         0,         0,
+					0.01,         0,         0,
+					   0,      0.01,         0,
+					   0,         0,      0.01,
+					   0,     0.005,     0.005
 					// clang-format on
 				});
 		}
 
-		// TODO: fails badly.  Things tried:
-		// * Stepped through checking calculation of `t`s per face, all OK.
-		// * Checked centroid of triangle in natural coords is 1/3
-		// * Line search (sort of)
-		AND_GIVEN("atmospheric pressure")
+		AND_GIVEN("high atmospheric pressure")
 		{
 			constexpr Scalar atm = 101325;	// Earth atmospheric pressure (Pa = N/m^2)
-			attrs.forces->p = -10000 * atm;
+			attrs.forces->p = -1e4 * atm;
 
 			check_solvers(
 				"pressure",
 				mesh,
 				attrs,
-				1000000,
-				1000000,
-				scalar(0.1484595104),
+				91,
+				20,
+				scalar(0.0000001632),
 				{
 					// clang-format off
-				0,            0,            0,
-				1,            0,            0,
-				0,            0.929629,     0.0413998,
-				0,            0,            1,
-				0,            0.457987,     0.485926
+					   0,                 0,                 0,
+					0.01,                 0,                 0,
+					   0,  0.00988344145172, 9.00359079728e-05,
+					   0,                 0,              0.01,
+					   0,  0.00490981879154,   0.0049868181526
 					// clang-format on
 				});
 		}
