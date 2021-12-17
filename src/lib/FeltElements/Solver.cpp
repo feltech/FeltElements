@@ -150,6 +150,53 @@ void Matrix::solve()
 			increment,
 			done
 		};
+		auto const arc_length = [this](
+									VectorX & vec_delta_x_,
+									VectorX & vec_u_,
+									Scalar & s2_,
+									VectorX const & vec_uR_,
+									VectorX const & vec_uF_,
+									VectorX const & vec_F_,
+									Scalar const delta_lambda_)
+		{
+			// Clamp arc length to minimum allowed radius.
+			{
+				VectorX const delta_xu = vec_delta_x_ + vec_uR_;
+				VectorX const n = vec_uF_.normalized();
+				VectorX const vec_s_min = delta_xu - n * n.dot(delta_xu);
+				Scalar const s2_min = vec_s_min.squaredNorm() * scalar(2);
+				if (s2_ < s2_min)
+					s2_ = s2_min;
+			}
+
+			Scalar gamma;
+			// Choose arc direction solution most aligned to current displacement direction.
+			{
+				auto [gamma1, gamma2] = arc_length_multipliers(
+					vec_uF_, vec_uR_, vec_F_, vec_delta_x_, delta_lambda_, s2_, psi2);
+
+				auto const vec_u1 = vec_uR_ + gamma1 * vec_uF_;
+				auto const vec_u2 = vec_uR_ + gamma2 * vec_uF_;
+				auto const vec_delta_x1 = vec_delta_x_ + vec_u1;
+				auto const vec_delta_x2 = vec_delta_x_ + vec_u2;
+				auto const x1_proj = vec_delta_x_.dot(vec_delta_x1);
+				auto const x2_proj = vec_delta_x_.dot(vec_delta_x2);
+
+				if (x1_proj > x2_proj)
+				{
+					gamma = gamma1;
+					vec_u_ = vec_u1;
+					vec_delta_x_ = vec_delta_x1;
+				}
+				else
+				{
+					gamma = gamma2;
+					vec_u_ = vec_u2;
+					vec_delta_x_ = vec_delta_x2;
+				}
+			};
+		  	return gamma;
+		};
 
 		State const state = [&]
 		{
@@ -233,6 +280,13 @@ void Matrix::solve()
 
 				Scalar const residual_norm = vec_R.squaredNorm();
 
+				stats.residual_norm = residual_norm;
+				if (residual_norm < residual_epsilon)
+					return;
+
+				Scalar const gamma =
+					arc_length(vec_delta_x, vec_u, s2, vec_uR, vec_uF, vec_F, delta_lambda);
+
 				SPDLOG_DEBUG(
 					"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
 					"{}; norm = {}; rcond = {}; det(K) = {}; delta_x2 = {}",
@@ -246,44 +300,6 @@ void Matrix::solve()
 					mat_K_LU.rcond(),
 					mat_K_LU.determinant(),
 					vec_delta_x.squaredNorm());
-
-				stats.residual_norm = residual_norm;
-				if (residual_norm < residual_epsilon)
-					return;
-
-				{
-					VectorX const delta_xu = vec_delta_x + vec_uR;
-					VectorX const n = vec_uF.normalized();
-					VectorX const vec_s_min = delta_xu - n * n.dot(delta_xu);
-					Scalar const s2_min = vec_s_min.squaredNorm() * scalar(1.0 + 1e-5);
-					if (s2 < s2_min)
-						s2 = s2_min;
-				}
-
-				{
-					auto [gamma1, gamma2] =
-						arc_length(vec_uF, vec_uR, vec_F, vec_delta_x, delta_lambda, s2, psi2);
-
-					auto const vec_u1 = vec_uR + gamma1 * vec_uF;
-					auto const vec_u2 = vec_uR + gamma2 * vec_uF;
-					auto const vec_delta_x1 = vec_delta_x + vec_u1;
-					auto const vec_delta_x2 = vec_delta_x + vec_u2;
-					auto const x1_proj = vec_delta_x.dot(vec_delta_x1);
-					auto const x2_proj = vec_delta_x.dot(vec_delta_x2);
-
-					if (x1_proj > x2_proj)
-					{
-						gamma = gamma1;
-						vec_u = vec_u1;
-						vec_delta_x = vec_delta_x1;
-					}
-					else
-					{
-						gamma = gamma2;
-						vec_u = vec_u2;
-						vec_delta_x = vec_delta_x2;
-					}
-				};
 
 				delta_lambda += gamma;
 				lambda += gamma;
@@ -372,7 +388,7 @@ void Matrix::assemble(
 	//			.asDiagonal();
 }
 
-std::tuple<Scalar, Scalar> Matrix::arc_length(
+std::tuple<Scalar, Scalar> Matrix::arc_length_multipliers(
 	VectorX const & vec_uF,
 	VectorX const & vec_uR,
 	VectorX const & vec_F,
