@@ -394,11 +394,13 @@ std::tuple<Scalar, Scalar> Matrix::arc_length_multipliers(
 	Scalar s2,
 	Scalar const psi2)
 {
+	Scalar const uF2 = vec_uF.squaredNorm();
+	Scalar const F2 = vec_F.squaredNorm();
 	Scalar a, b, c, discriminant;
-	a = vec_uF.squaredNorm() + psi2 * vec_F.squaredNorm();
-	b = 2 * vec_uF.dot(vec_delta_x + vec_uR) + 2 * delta_lambda * psi2 * vec_F.squaredNorm();
-	c = (vec_delta_x + vec_uR).squaredNorm() +
-		psi2 * delta_lambda * delta_lambda * vec_F.squaredNorm() - s2;
+
+	a = uF2 + psi2 * vec_F.squaredNorm();
+	b = 2 * vec_uF.dot(vec_delta_x + vec_uR) + 2 * delta_lambda * psi2 * F2;
+	c = (vec_delta_x + vec_uR).squaredNorm() + psi2 * delta_lambda * delta_lambda * F2 - s2;
 	//	c = vec_uR.dot(2 * vec_delta_x + vec_uR) + vec_delta_x.squaredNorm() - s2;
 
 	discriminant = b * b - 4 * a * c;
