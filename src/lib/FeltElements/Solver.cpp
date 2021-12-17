@@ -368,19 +368,21 @@ void Matrix::assemble(
 	// Zero-out penalised degrees of freedom.
 	vec_R.array() *= one_minus_fixed_dof.array();
 	vec_F.array() *= one_minus_fixed_dof.array();
-	mat_K.array().colwise() *= one_minus_fixed_dof.array();
-	mat_K.array().rowwise() *= one_minus_fixed_dof.transpose().array();
 	VectorX const fixed_dof =
 		VectorX::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof;
-	mat_K += fixed_dof.asDiagonal();
+
+	mat_K.array().colwise() *= one_minus_fixed_dof.array();
+	mat_K.array().rowwise() *= one_minus_fixed_dof.transpose().array();
+	// Set non-zero fixed DOFs on diagonal to absolute row sums, to hopefully ensure K is diagonally
+	// dominant and thus non-singular.
+	mat_K.diagonal() += fixed_dof.transpose() +
+		(fixed_dof.asDiagonal() * mat_K).array().abs().colwise().sum().matrix();
 
 	//	// Inspect matrix to calculate penalty of relative size.
 	//	Scalar const penalty = pow(10, std::floor(std::log10(mat_K.lpNorm<Eigen::Infinity>()))) *
 	// 1e1;
 	//	// Set penalised degrees of freedom to penalty value.
-	//	mat_K += penalty *
-	//		(VectorX::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof)
-	//			.asDiagonal();
+	//	mat_K += penalty * fixed_dof.asDiagonal();
 }
 
 std::tuple<Scalar, Scalar> Matrix::arc_length_multipliers(
