@@ -144,6 +144,24 @@ private:
 		Scalar & lambda,
 		Scalar & s2);
 
+	void correction(
+		VectorX const & one_minus_fixed_dof,
+		Scalar residual_epsilon,
+		std::size_t increment_num,
+		Scalar psi2,
+		std::size_t & step,
+		EigenMapTensorVertices & mat_x,
+		VectorX & vec_u,
+		VectorX & vec_uR,
+		VectorX & vec_uF,
+		VectorX & vec_F,
+		VectorX & vec_delta_x,
+		MatrixX & mat_K,
+		VectorX & vec_R,
+		Scalar & lambda,
+		Scalar & delta_lambda,
+		Scalar & s2);
+
 	void assemble(
 		MatrixX & mat_K,
 		VectorX & vec_R,

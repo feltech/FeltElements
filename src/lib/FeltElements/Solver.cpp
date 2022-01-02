@@ -164,48 +164,23 @@ void Matrix::solve()
 		if (state == IncrementState::done)
 			break;
 
-		[&]
-		{
-			for (step = 0; step < m_params.num_steps; ++step)
-			{
-				++stats.step_counter;
-
-				update_elements_stiffness_and_residual(lambda);
-				assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
-				vec_F /= lambda;
-
-				auto const mat_K_LU = mat_K.partialPivLu();
-				vec_uR = mat_K_LU.solve(-vec_R);
-				vec_uF = mat_K_LU.solve(vec_F);
-
-				Scalar const residual_norm = vec_R.squaredNorm();
-
-				stats.residual_norm = residual_norm;
-				if (residual_norm < residual_epsilon)
-					return;
-
-				Scalar const gamma =
-					arc_length(vec_uF, vec_uR, vec_F, delta_lambda, psi2, vec_delta_x, vec_u, s2);
-
-				SPDLOG_DEBUG(
-					"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
-					"{}; norm = {}; rcond = {}; det(K) = {}; delta_x2 = {}",
-					increment_num,
-					step,
-					lambda,
-					delta_lambda,
-					gamma,
-					s2,
-					residual_norm,
-					mat_K_LU.rcond(),
-					mat_K_LU.determinant(),
-					vec_delta_x.squaredNorm());
-
-				delta_lambda += gamma;
-				lambda += gamma;
-				mat_x += as_matrix(vec_u);
-			}
-		}();
+		correction(
+			one_minus_fixed_dof,
+			residual_epsilon,
+			increment_num,
+			psi2,
+			step,
+			mat_x,
+			vec_u,
+			vec_uR,
+			vec_uF,
+			vec_F,
+			vec_delta_x,
+			mat_K,
+			vec_R,
+			lambda,
+			delta_lambda,
+			s2);
 	}
 }
 
@@ -283,6 +258,65 @@ Matrix::IncrementState Matrix::increment(
 	Scalar const gamma = std::sqrt(s2 / uF2);
 	lambda = std::min(lambda + gamma, scalar(1));
 	return IncrementState::increment;
+}
+
+void Matrix::correction(
+	Matrix::VectorX const & one_minus_fixed_dof,
+	Scalar const residual_epsilon,
+	std::size_t const increment_num,
+	Scalar const psi2,
+	size_t & step,
+	Matrix::EigenMapTensorVertices & mat_x,
+	Matrix::VectorX & vec_u,
+	Matrix::VectorX & vec_uR,
+	Matrix::VectorX & vec_uF,
+	Matrix::VectorX & vec_F,
+	Matrix::VectorX & vec_delta_x,
+	Matrix::MatrixX & mat_K,
+	Matrix::VectorX & vec_R,
+	Scalar & lambda,
+	Scalar & delta_lambda,
+	Scalar & s2)
+{
+	for (step = 0; step < m_params.num_steps; ++step)
+	{
+		++stats.step_counter;
+
+		update_elements_stiffness_and_residual(lambda);
+		assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+		vec_F /= lambda;
+
+		auto const mat_K_LU = mat_K.partialPivLu();
+		vec_uR = mat_K_LU.solve(-vec_R);
+		vec_uF = mat_K_LU.solve(vec_F);
+
+		Scalar const residual_norm = vec_R.squaredNorm();
+
+		stats.residual_norm = residual_norm;
+		if (residual_norm < residual_epsilon)
+			return;
+
+		Scalar const gamma =
+			arc_length(vec_uF, vec_uR, vec_F, delta_lambda, psi2, vec_delta_x, vec_u, s2);
+
+		SPDLOG_DEBUG(
+			"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
+			"{}; norm = {}; rcond = {}; det(K) = {}; delta_x2 = {}",
+			increment_num,
+			step,
+			lambda,
+			delta_lambda,
+			gamma,
+			s2,
+			residual_norm,
+			mat_K_LU.rcond(),
+			mat_K_LU.determinant(),
+			vec_delta_x.squaredNorm());
+
+		delta_lambda += gamma;
+		lambda += gamma;
+		mat_x += as_matrix(vec_u);
+	}
 }
 
 void Matrix::assemble(
