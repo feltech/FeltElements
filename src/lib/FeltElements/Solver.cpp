@@ -26,22 +26,22 @@ namespace FeltElements::Solver
 {
 void Base::update_elements_stiffness_and_residual(Scalar const lambda)
 {
-	auto const num_cells = static_cast<int>(m_mesh.n_cells());
+	auto const num_cells = static_cast<int>(m_mesh_io.mesh.n_cells());
 
-	FE_PARALLEL(shared(num_cells, m_attrs, lambda))
+	FE_PARALLEL(shared(num_cells, m_mesh_io.attrs, lambda))
 	for (int cell_idx = 0; cell_idx < num_cells; cell_idx++)
 	{
 		Cellh cellh{cell_idx};
-		auto const & cell_vtxhs = m_attrs.vtxhs[cellh];
-		auto const & boundary_faces_vtxh_idxs = m_attrs.boundary_faces_vtxh_idxs[cellh];
+		auto const & cell_vtxhs = m_mesh_io.attrs.vtxhs[cellh];
+		auto const & boundary_faces_vtxh_idxs = m_mesh_io.attrs.boundary_faces_vtxh_idxs[cellh];
 
 		auto const & [K, F, R] = Derivatives::KR(
-			m_attrs.x.for_element(cell_vtxhs),
+			m_mesh_io.attrs.x.for_element(cell_vtxhs),
 			boundary_faces_vtxh_idxs,
-			m_attrs.x.for_elements(cell_vtxhs, boundary_faces_vtxh_idxs),
-			m_attrs.dN_by_dX[cellh],
-			*m_attrs.material,
-			*m_attrs.forces,
+			m_mesh_io.attrs.x.for_elements(cell_vtxhs, boundary_faces_vtxh_idxs),
+			m_mesh_io.attrs.dN_by_dX[cellh],
+			*m_mesh_io.attrs.material,
+			*m_mesh_io.attrs.forces,
 			lambda);
 		m_attrs.F[cellh] = F;
 		m_attrs.R[cellh] = R;
@@ -56,7 +56,7 @@ Scalar Base::find_approx_min_edge_length() const
 	Scalar max_V = 0;
 	Element::NodePositions min_X;
 
-	for (auto const & X : MeshIO{m_mesh, m_attrs}.Xs())
+	for (auto const & X : MeshIO{m_mesh_io.mesh, m_mesh_io.attrs}.Xs())
 	{
 		auto const V = Derivatives::V(X);
 		total_V += V;
@@ -74,7 +74,7 @@ Scalar Base::find_approx_min_edge_length() const
 		"edge_length = {}, since total V = {}; mean V = {}; max V = {}; min V = {}; min X = \n{}",
 		edge_length,
 		total_V,
-		total_V / scalar(m_mesh.n_cells()),
+		total_V / scalar(m_mesh_io.mesh.n_cells()),
 		max_V,
 		min_V,
 		min_X);
@@ -104,8 +104,8 @@ int sgn(T val)
 
 void Matrix::solve()
 {
-	VectorX const & mat_fixed_dof = ([&attrs = m_attrs,
-											  rows = static_cast<Eigen::Index>(m_mesh.n_vertices()),
+	VectorX const & mat_fixed_dof = ([&attrs = m_mesh_io.attrs,
+											  rows = static_cast<Eigen::Index>(m_mesh_io.mesh.n_vertices()),
 											  cols = static_cast<Eigen::Index>(Node::dim)]() {
 		EigenMapTensorVerticesConst const & map{attrs.fixed_dof[Vtxh{0}].data(), rows, cols};
 		// Copy to remove per-row alignment.
@@ -114,7 +114,7 @@ void Matrix::solve()
 	})();
 	VectorX const one_minus_fixed_dof = VectorX::Ones(mat_fixed_dof.size()) - mat_fixed_dof;
 
-	auto const num_vertices = static_cast<Eigen::Index>(m_mesh.n_vertices());
+	auto const num_vertices = static_cast<Eigen::Index>(m_mesh_io.mesh.n_vertices());
 	auto const num_dofs = static_cast<Eigen::Index>(Node::dim) * num_vertices;
 
 	constexpr std::size_t step_target = 5;
@@ -122,8 +122,8 @@ void Matrix::solve()
 	Scalar const residual_epsilon = find_approx_min_edge_length() * 1e-3;
 	Scalar const s2_epsilon = std::pow(residual_epsilon, 2) * 1e-1;
 
-	VerticesMatrix const mat_X = as_matrix(m_attrs.X);
-	auto mat_x = as_matrix(m_attrs.x);
+	VerticesMatrix const mat_X = as_matrix(m_mesh_io.attrs.X);
+	auto mat_x = as_matrix(m_mesh_io.attrs.x);
 	VectorX vec_F{num_dofs};
 	VectorX vec_R{num_dofs};
 	MatrixX mat_K{num_dofs, num_dofs};
@@ -235,7 +235,7 @@ void Matrix::solve()
 				residual_norm,
 				mat_K_LU.rcond(),
 				mat_K_LU.determinant());
-			log_xs(m_mesh, m_attrs);
+			log_xs(m_mesh_io.mesh, m_mesh_io.attrs);
 
 			stats.residual_norm = residual_norm;
 
@@ -316,15 +316,15 @@ void Matrix::assemble(
 	vec_F.setZero();
 	mat_K.setZero();
 
-	for (auto vtxh : boost::make_iterator_range(m_mesh.vertices()))
+	for (auto vtxh : boost::make_iterator_range(m_mesh_io.mesh.vertices()))
 	{
 		auto const vtx_idx = vtxh.idx();
-		for (auto cellh : boost::make_iterator_range(m_mesh.vertex_cells(vtxh)))
+		for (auto cellh : boost::make_iterator_range(m_mesh_io.mesh.vertex_cells(vtxh)))
 		{
-			auto const & cell_vtxhs = m_attrs.vtxhs[cellh];
+			auto const & cell_vtxhs = m_mesh_io.attrs.vtxhs[cellh];
 			auto const & cell_vtx_idx = index_of<Eigen::Index>(cell_vtxhs, vtxh);
-			auto const & cell_R = m_attrs.R[cellh];
-			auto const & cell_F = m_attrs.F[cellh];
+			auto const & cell_R = m_mesh_io.attrs.R[cellh];
+			auto const & cell_F = m_mesh_io.attrs.F[cellh];
 
 			// Residual force for node `a`.
 			auto const & Ra = EigenConstTensorMap<4, 3>{cell_R.data()}.block<1, 3>(cell_vtx_idx, 0);
@@ -336,7 +336,7 @@ void Matrix::assemble(
 	}
 
 	auto const update_submatrix =
-		[&mat_K, &attrs = m_attrs](auto const vtxh_src, auto const vtxh_dst, auto const cellh_)
+		[&mat_K, &attrs = m_mesh_io.attrs](auto const vtxh_src, auto const vtxh_dst, auto const cellh_)
 	{
 		auto const & cell_K = attrs.K[cellh_];
 		auto const & cell_vtxhs = attrs.vtxhs[cellh_];
@@ -351,17 +351,17 @@ void Matrix::assemble(
 		mat_K.block<3, 3>(3 * a, 3 * b) += EigenConstTensorMap<3, 3>{Kab.data()};
 	};
 
-	for (auto vtxh : boost::make_iterator_range(m_mesh.vertices()))
+	for (auto vtxh : boost::make_iterator_range(m_mesh_io.mesh.vertices()))
 	{
-		for (auto cellh : boost::make_iterator_range(m_mesh.vertex_cells(vtxh)))
+		for (auto cellh : boost::make_iterator_range(m_mesh_io.mesh.vertex_cells(vtxh)))
 			update_submatrix(vtxh, vtxh, cellh);
 	}
-	for (auto heh : boost::make_iterator_range(m_mesh.halfedges()))
+	for (auto heh : boost::make_iterator_range(m_mesh_io.mesh.halfedges()))
 	{
-		auto const & halfedge = m_mesh.halfedge(heh);
+		auto const & halfedge = m_mesh_io.mesh.halfedge(heh);
 		auto const & vtxh_src = halfedge.from_vertex();
 		auto const & vtxh_dst = halfedge.to_vertex();
-		for (auto cellh : boost::make_iterator_range(m_mesh.halfedge_cells(heh)))
+		for (auto cellh : boost::make_iterator_range(m_mesh_io.mesh.halfedge_cells(heh)))
 			update_submatrix(vtxh_src, vtxh_dst, cellh);
 	}
 
@@ -421,10 +421,10 @@ void Gauss::solve()
 	Scalar const epsilon = find_approx_min_edge_length() * 1e-5;
 	using Tensor::Func::all;
 
-	std::vector<Node::Pos> u(m_mesh.n_vertices(), {0, 0, 0});
+	std::vector<Node::Pos> u(m_mesh_io.mesh.n_vertices(), {0, 0, 0});
 	Scalar max_norm = 0;
 
-	Node::Force const force_increment = m_attrs.forces->F_by_m / m_params.num_force_increments;
+	Node::Force const force_increment = m_mesh_io.attrs.forces->F_by_m / m_params.num_force_increments;
 	m_attrs.forces->F_by_m = 0;
 
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
@@ -445,40 +445,40 @@ void Gauss::solve()
 			max_norm = 0;
 			for (auto & u_a : u) u_a *= 0.99;  //.zeros();
 
-			FE_PARALLEL(shared(m_mesh, m_attrs, u, force_increment) reduction(max : max_norm))
-			for (Tensor::Index a = 0; a < m_mesh.n_vertices(); a++)
+			FE_PARALLEL(shared(m_mesh_io.mesh, m_mesh_io.attrs, u, force_increment) reduction(max : max_norm))
+			for (Tensor::Index a = 0; a < m_mesh_io.mesh.n_vertices(); a++)
 			{
 				Vtxh vtxh_src{static_cast<int>(a)};
-				auto const & fixed_dof = m_attrs.fixed_dof[vtxh_src];
+				auto const & fixed_dof = m_mesh_io.attrs.fixed_dof[vtxh_src];
 				if (Tensor::Func::all_of(fixed_dof != 0))
 					continue;
 
 				Node::Force Ra = 0;
 				Tensor::Matrix<3> Kaa = 0;
 				Node::Force Ka_u = 0;
-				for (auto cellh : boost::make_iterator_range(m_mesh.vertex_cells(vtxh_src)))
+				for (auto cellh : boost::make_iterator_range(m_mesh_io.mesh.vertex_cells(vtxh_src)))
 				{
-					auto const & cell_vtxhs = m_attrs.vtxhs[cellh];
+					auto const & cell_vtxhs = m_mesh_io.attrs.vtxhs[cellh];
 					auto const & cell_a = index_of(cell_vtxhs, vtxh_src);
-					auto const & cell_R = m_attrs.R[cellh];
-					auto const & cell_K = m_attrs.K[cellh];
+					auto const & cell_R = m_mesh_io.attrs.R[cellh];
+					auto const & cell_K = m_mesh_io.attrs.K[cellh];
 
 					Ra += cell_R(cell_a, all);
 					Kaa += cell_K(cell_a, all, cell_a, all);
 				}
 				//			diag(Kaa) += penalty * fixed_dof;
 
-				for (auto heh : boost::make_iterator_range(m_mesh.outgoing_halfedges(vtxh_src)))
+				for (auto heh : boost::make_iterator_range(m_mesh_io.mesh.outgoing_halfedges(vtxh_src)))
 				{
 					Tensor::Multi<Node::dim, Node::dim> Kab = 0;
-					auto const & halfedge = m_mesh.halfedge(heh);
+					auto const & halfedge = m_mesh_io.mesh.halfedge(heh);
 					auto const & vtxh_dst = halfedge.to_vertex();
 					auto const b = static_cast<Tensor::Index>(vtxh_dst.idx());
 
-					for (auto cellh : boost::make_iterator_range(m_mesh.halfedge_cells(heh)))
+					for (auto cellh : boost::make_iterator_range(m_mesh_io.mesh.halfedge_cells(heh)))
 					{
-						auto const & cell_K = m_attrs.K[cellh];
-						auto const & cell_vtxhs = m_attrs.vtxhs[cellh];
+						auto const & cell_K = m_mesh_io.attrs.K[cellh];
+						auto const & cell_vtxhs = m_mesh_io.attrs.vtxhs[cellh];
 						auto const cell_a = index_of(cell_vtxhs, vtxh_src);
 						auto const cell_b = index_of(cell_vtxhs, vtxh_dst);
 						Kab += cell_K(cell_a, all, cell_b, all);
@@ -498,7 +498,7 @@ void Gauss::solve()
 			SPDLOG_DEBUG("Max norm: {}", max_norm);
 			stats.residual_norm = max_norm;
 
-			log_xs(m_mesh, m_attrs);
+			log_xs(m_mesh_io.mesh, m_mesh_io.attrs);
 
 			if (max_norm < epsilon)
 				break;

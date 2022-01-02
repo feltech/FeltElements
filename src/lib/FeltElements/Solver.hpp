@@ -8,6 +8,7 @@
 #include <boost/preprocessor/cat.hpp>
 #include <eigen3/Eigen/Core>
 
+#include "MeshIO.hpp"
 #include "Typedefs.hpp"
 
 namespace FeltElements
@@ -32,8 +33,8 @@ struct Stats
 class Base
 {
 public:
-	Base(Mesh & mesh, Attributes & attrs, Params params) noexcept
-		: m_mesh{mesh}, m_attrs{attrs}, m_params{std::move(params)}
+	Base(Mesh const & mesh, Attributes & attrs, Params params) noexcept
+		: m_mesh_io{mesh, attrs}, m_attrs{attrs}, m_params{params}
 	{
 	}
 	virtual ~Base() = default;
@@ -80,7 +81,7 @@ protected:
 	};
 
 	void update_elements_stiffness_and_residual(Scalar lambda = 1.0);
-	Scalar find_approx_min_edge_length() const;
+	[[nodiscard]] Scalar find_approx_min_edge_length() const;
 
 public:
 	using Unpauser = Pauser::Unpauser;
@@ -88,8 +89,9 @@ public:
 	Stats stats{};
 
 protected:
-	Mesh & m_mesh;
+	MeshIO const m_mesh_io;
 	Attributes & m_attrs;
+
 	Params m_params;
 };
 
