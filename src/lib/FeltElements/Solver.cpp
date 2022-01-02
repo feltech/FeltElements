@@ -12,7 +12,7 @@
 
 #include "Attributes.hpp"
 #include "Derivatives.hpp"
-#include "MeshFacade.hpp"
+#include "MeshIO.hpp"
 #include "internal/Format.hpp"	// For logging
 
 #ifdef NDEBUG
@@ -56,7 +56,7 @@ Scalar Base::find_approx_min_edge_length() const
 	Scalar max_V = 0;
 	Element::NodePositions min_X;
 
-	for (auto const & X : MeshIters{m_mesh, m_attrs}.Xs())
+	for (auto const & X : MeshIO{m_mesh, m_attrs}.Xs())
 	{
 		auto const V = Derivatives::V(X);
 		total_V += V;
@@ -87,8 +87,8 @@ void log_xs(Mesh const & mesh, Attributes const & attrs)
 {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
 	std::string xs_str;
-	for (auto const & x : MeshIters{mesh, attrs}.xs()) xs_str += fmt::format("{}\n", x);
-		spdlog::debug(xs_str);
+	for (auto const & x : MeshIO{mesh, attrs}.xs()) { xs_str += fmt::format("{}\n", x); }
+	spdlog::debug(xs_str);
 #else
 	(void)mesh;
 	(void)attrs;
@@ -193,7 +193,7 @@ void Matrix::solve()
 					vec_delta_x_ = vec_delta_x2;
 				}
 			};
-		  	return gamma;
+			return gamma;
 		};
 
 		State const state = [&]

@@ -4,7 +4,7 @@
 
 #include <OpenVolumeMesh/FileManager/FileManager.hh>
 
-#include <FeltElements/MeshFacade.hpp>
+#include <FeltElements/MeshIO.hpp>
 
 namespace FeltElements::Test
 {

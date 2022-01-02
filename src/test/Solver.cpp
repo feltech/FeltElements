@@ -7,7 +7,7 @@
 
 #include <FeltElements/Attributes.hpp>
 #include <FeltElements/Derivatives.hpp>
-#include <FeltElements/MeshFacade.hpp>
+#include <FeltElements/MeshIO.hpp>
 #include "util/Assert.hpp"
 #include "util/IO.hpp"
 
@@ -2161,15 +2161,17 @@ void check_solvers(
 	Scalar const expected_volume,
 	std::vector<OvmScalar> const & expected_positions)
 {
-	auto const total_volume = [&attrs, &mesh]()
+	MeshIO const mesh_io{mesh, attrs};
+
+	auto const total_volume = [&attrs, &mesh_io]()
 	{
 		auto const add = [&attrs](auto const total, auto const & cellh)
 		{ return total + Derivatives::V(attrs.x.for_element(attrs.vtxhs[cellh])); };
-		return boost::accumulate(FeltElements::MeshIters{mesh, attrs}.cells, scalar(0.0), add);
+		return boost::accumulate(mesh_io.cells(), scalar(0.0), add);
 	};
 
 	auto const material_volume = total_volume();
-	MeshIO{mesh, attrs}.toFile(fmt::format("{}_initial_deformed", file_name_prefix));
+	mesh_io.toFile(fmt::format("{}_initial_deformed", file_name_prefix));
 
 	CAPTURE(attrs.material->rho, attrs.material->lambda, attrs.material->mu, material_volume);
 
@@ -2207,7 +2209,7 @@ void check_solvers(
 		solver.solve();
 		std::size_t const final_increment = solver.stats.force_increment_counter.load();
 		std::size_t const final_step = solver.stats.step_counter.load();
-		MeshIO{mesh, attrs}.toFile(
+		mesh_io.toFile(
 			fmt::format("{}_matrix_{}_{}", file_name_prefix, final_increment, final_step));
 
 		THEN("solution converges to deformed mesh")
@@ -2224,7 +2226,7 @@ void check_solvers(
 		Solver::Gauss solver(mesh, attrs, {max_guass_steps + 1, 1});
 		solver.solve();
 		std::size_t const final_step = solver.stats.step_counter.load();
-		MeshIO{mesh, attrs}.toFile(fmt::format("{}_gauss_{}", file_name_prefix, final_step));
+		mesh_io.toFile(fmt::format("{}_gauss_{}", file_name_prefix, final_step));
 
 		THEN("solution converges to deformed mesh")
 		{

@@ -1,4 +1,4 @@
-#include "MeshFacade.hpp"
+#include "MeshIO.hpp"
 
 #include <filesystem>
 
@@ -27,7 +27,7 @@ void MeshIO::toFile(std::string const & file_path) const
 	Mesh out{mesh};
 	OpenVolumeMesh::IO::FileManager file_manager{};
 
-	for (auto const & vtxh : MeshIters{mesh, attrs}.vertices)
+	for (auto const & vtxh : vertices())
 	{
 		auto const & x = attrs.x[vtxh];
 		out.set_vertex(vtxh, {x(0), x(1), x(2)});

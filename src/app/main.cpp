@@ -12,7 +12,7 @@
 #include <boost/program_options.hpp>
 
 #include <FeltElements/Attributes.hpp>
-#include <FeltElements/MeshFacade.hpp>
+#include <FeltElements/MeshIO.hpp>
 #include <FeltElements/Solver.hpp>
 #include <FeltElements/internal/Format.hpp>	 // Format vectors
 #include "vec_semantic.hpp"
@@ -107,7 +107,7 @@ int execute(
 	auto const height = constraint_plane(3);
 	std::size_t num_constrained_vtxs = 0;
 	// TODO: add to FixedDOF as a method
-	for (auto const & vtxh : MeshIters{mesh, attrs}.vertices)
+	for (auto const & vtxh : MeshIO{mesh, attrs}.vertices())
 	{
 		Tensor::ConstMap<3> const vec{mesh.vertex(vtxh).data()};
 		if (Tensor::Func::inner(norm, vec) > height)
