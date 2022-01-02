@@ -121,6 +121,29 @@ public:
 	void solve() final;
 
 private:
+	enum class IncrementState
+	{
+		arc,
+		increment,
+		done
+	};
+
+	IncrementState increment(
+		VectorX const & one_minus_fixed_dof,
+		Scalar residual_epsilon,
+		Scalar s2_epsilon,
+		std::size_t increment_num,
+		std::size_t step_target,
+		std::size_t & step,
+		EigenMapTensorVertices & mat_x,
+		VectorX & vec_uR,
+		VectorX & vec_F,
+		VectorX & vec_delta_x,
+		MatrixX & mat_K,
+		VectorX & vec_R,
+		Scalar & lambda,
+		Scalar & s2);
+
 	void assemble(
 		MatrixX & mat_K,
 		VectorX & vec_R,

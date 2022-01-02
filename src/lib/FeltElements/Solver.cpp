@@ -142,79 +142,26 @@ void Matrix::solve()
 		++stats.force_increment_counter;
 		++stats.step_counter;
 
-		enum class State
-		{
-			arc,
-			increment,
-			done
-		};
+		IncrementState const state = increment(
+			one_minus_fixed_dof,
+			residual_epsilon,
+			s2_epsilon,
+			increment_num,
+			step_target,
+			step,
+			mat_x,
+			vec_uR,
+			vec_F,
+			vec_delta_x,
+			mat_K,
+			vec_R,
+			lambda,
+			s2);
 
-		State const state = [&]
-		{
-			lambda = std::min(lambda, scalar(1));
-
-			update_elements_stiffness_and_residual(lambda);
-			assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
-			vec_F /= lambda;
-
-			auto const mat_K_LU = mat_K.partialPivLu();
-			vec_uR = mat_K_LU.solve(-vec_R);
-
-			if (lambda != 1)
-			{
-				// Increase/decrease arc length if below/above step target.
-				s2 *= 2 * scalar(step_target) / scalar(step + step_target);
-				// Initial optimistic assumption that next increment needs no arc length refinement.
-				step = step_target;
-				// Initialise displacement to uncorrected solution.
-				vec_delta_x = vec_uR;
-				mat_x += as_matrix(vec_delta_x);
-			}
-			else
-			{
-				// If lambda is 1 then revert to standard non-arc-length solution.
-				mat_x += as_matrix(vec_uR);
-			}
-
-			Scalar const residual_norm = vec_uR.squaredNorm();
-
-			SPDLOG_DEBUG(
-				"increment = {}; total steps = {}; lambda = {}; s2 = {}; max_norm = "
-				"{}; rcond = {}; det(K) = {}",
-				increment_num,
-				stats.step_counter.load(),
-				lambda,
-				s2,
-				residual_norm,
-				mat_K_LU.rcond(),
-				mat_K_LU.determinant());
-			log_xs(m_mesh_io.mesh, m_mesh_io.attrs);
-
-			stats.residual_norm = residual_norm;
-
-			if (residual_norm > residual_epsilon)
-			{
-				if (s2 > s2_epsilon)
-					// Try next arc direction.
-					return State::arc;
-			}
-			else if (lambda == 1)
-			{
-				// Finished.
-				return State::done;
-			}
-
-			// Next load increment.
-			Scalar const uF2 = mat_K_LU.solve(vec_F).squaredNorm();
-			Scalar const gamma = std::sqrt(s2 / uF2);
-			lambda = std::min(lambda + gamma, scalar(1));
-			return State::increment;
-		}();
-
-		if (state == State::increment)
+		if (state == IncrementState::increment)
 			continue;
 
-		if (state == State::done)
+		if (state == IncrementState::done)
 			break;
 
 		[&]
@@ -260,6 +207,82 @@ void Matrix::solve()
 			}
 		}();
 	}
+}
+
+Matrix::IncrementState Matrix::increment(
+	VectorX const & one_minus_fixed_dof,
+	Scalar const residual_epsilon,
+	Scalar const s2_epsilon,
+	std::size_t const increment_num,
+	std::size_t const step_target,
+	std::size_t & step,
+	EigenMapTensorVertices & mat_x,
+	VectorX & vec_uR,
+	VectorX & vec_F,
+	VectorX & vec_delta_x,
+	MatrixX & mat_K,
+	VectorX & vec_R,
+	Scalar & lambda,
+	Scalar & s2)
+{
+	lambda = std::min(lambda, scalar(1));
+
+	update_elements_stiffness_and_residual(lambda);
+	assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+	vec_F /= lambda;
+
+	auto const mat_K_LU = mat_K.partialPivLu();
+	vec_uR = mat_K_LU.solve(-vec_R);
+
+	if (lambda != 1)
+	{
+		// Increase/decrease arc length if below/above step target.
+		s2 *= 2 * scalar(step_target) / scalar(step + step_target);
+		// Initial optimistic assumption that next increment needs no arc length refinement.
+		step = step_target;
+		// Initialise displacement to uncorrected solution.
+		vec_delta_x = vec_uR;
+		mat_x += as_matrix(vec_delta_x);
+	}
+	else
+	{
+		// If lambda is 1 then revert to standard non-arc-length solution.
+		mat_x += as_matrix(vec_uR);
+	}
+
+	Scalar const residual_norm = vec_uR.squaredNorm();
+
+	SPDLOG_DEBUG(
+		"increment = {}; total steps = {}; lambda = {}; s2 = {}; max_norm = {}; rcond = {};"
+		" det(K) = {}",
+		increment_num,
+		stats.step_counter.load(),
+		lambda,
+		s2,
+		residual_norm,
+		mat_K_LU.rcond(),
+		mat_K_LU.determinant());
+	log_xs(m_mesh_io.mesh, m_mesh_io.attrs);
+
+	stats.residual_norm = residual_norm;
+
+	if (residual_norm > residual_epsilon)
+	{
+		if (s2 > s2_epsilon)
+			// Try next arc direction.
+			return IncrementState::arc;
+	}
+	else if (lambda == 1)
+	{
+		// Finished.
+		return IncrementState::done;
+	}
+
+	// Next load increment.
+	Scalar const uF2 = mat_K_LU.solve(vec_F).squaredNorm();
+	Scalar const gamma = std::sqrt(s2 / uF2);
+	lambda = std::min(lambda + gamma, scalar(1));
+	return IncrementState::increment;
 }
 
 void Matrix::assemble(
