@@ -101,13 +101,14 @@ class Matrix : public Base
 	template <int rows, int cols>
 	using EigenConstTensorMap =
 		Eigen::Map<Eigen::Matrix<Scalar, rows, cols, Eigen::RowMajor> const, EIGEN_FASTOR_ALIGN>;
-	using VerticesMatrix = Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
 	using OvmVtxMatrix = Eigen::Matrix<OvmScalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
 
 public:
+	using Index = Eigen::Index;
 	using VectorX = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
 	using MatrixX = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
 	using EigenMapOvmVertices = Eigen::Map<OvmVtxMatrix const>;
+	using VerticesMatrix = Eigen::Matrix<Scalar, Eigen::Dynamic, 3, Eigen::RowMajor>;
 	using EigenMapTensorVerticesConst = Eigen::Map<
 		VerticesMatrix const,
 		Eigen::Unaligned,
@@ -128,12 +129,31 @@ private:
 		done
 	};
 
+	struct Constants
+	{
+		std::size_t const step_target;
+		Scalar const psi2;
+		Scalar const residual_epsilon;
+		Scalar const s2_epsilon;
+	};
+
+	struct Dofs
+	{
+		explicit Dofs(MeshIO const & mesh_io);
+
+		Index const num_dofs;
+		VectorX const fixed_dof;
+		VectorX const one_minus_fixed_dof;
+
+	private:
+		static Index calc_num_dofs(const MeshIO & mesh_io);
+		static VectorX calc_fixed_dof(const MeshIO & mesh_io);
+	};
+
 	IncrementState increment(
-		VectorX const & one_minus_fixed_dof,
-		Scalar residual_epsilon,
-		Scalar s2_epsilon,
+		Constants const & consts,
+		Dofs const & dofs,
 		std::size_t increment_num,
-		std::size_t step_target,
 		std::size_t & step,
 		EigenMapTensorVertices & mat_x,
 		VectorX & vec_uR,
@@ -145,10 +165,9 @@ private:
 		Scalar & s2);
 
 	void correction(
-		VectorX const & one_minus_fixed_dof,
-		Scalar residual_epsilon,
+		Constants const & consts,
+		Dofs const & dofs,
 		std::size_t increment_num,
-		Scalar psi2,
 		std::size_t & step,
 		EigenMapTensorVertices & mat_x,
 		VectorX & vec_u,
@@ -168,7 +187,7 @@ private:
 		VectorX & vec_F,
 		VectorX const & one_minus_fixed_dof) const;
 
-	Scalar arc_length(
+	static Scalar arc_length(
 		VectorX const & vec_uF,
 		VectorX const & vec_uR,
 		VectorX const & vec_F,
@@ -194,12 +213,12 @@ private:
 	as_matrix(T & prop)
 	{
 		auto & vec = prop.data_vector();
-		return {vec[0].data(), static_cast<Eigen::Index>(vec.size()), Node::dim};
+		return {vec[0].data(), static_cast<Index>(vec.size()), Node::dim};
 	}
 
 	static Eigen::Map<VerticesMatrix const> as_matrix(VectorX const & vec)
 	{
-		return {vec.data(), vec.size() / static_cast<Eigen::Index>(Node::dim), Node::dim};
+		return {vec.data(), vec.size() / static_cast<Index>(Node::dim), Node::dim};
 	}
 
 };	// namespace Matrix

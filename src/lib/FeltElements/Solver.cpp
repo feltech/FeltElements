@@ -104,37 +104,31 @@ int sgn(T val)
 
 void Matrix::solve()
 {
-	VectorX const & mat_fixed_dof = ([&attrs = m_mesh_io.attrs,
-											  rows = static_cast<Eigen::Index>(m_mesh_io.mesh.n_vertices()),
-											  cols = static_cast<Eigen::Index>(Node::dim)]() {
-		EigenMapTensorVerticesConst const & map{attrs.fixed_dof[Vtxh{0}].data(), rows, cols};
-		// Copy to remove per-row alignment.
-		VectorX vec = Eigen::Map<VectorX>{VerticesMatrix{map}.data(), rows * cols};
-		return vec;
-	})();
-	VectorX const one_minus_fixed_dof = VectorX::Ones(mat_fixed_dof.size()) - mat_fixed_dof;
+	auto const consts = [&]() -> Constants
+	{
+		constexpr std::size_t step_target = 5;
+		constexpr Scalar psi2 = 0;
+		Scalar const residual_epsilon = find_approx_min_edge_length() * 1e-3;
+		Scalar const s2_epsilon = std::pow(residual_epsilon, 2) * 1e-1;
 
-	auto const num_vertices = static_cast<Eigen::Index>(m_mesh_io.mesh.n_vertices());
-	auto const num_dofs = static_cast<Eigen::Index>(Node::dim) * num_vertices;
+		return {step_target, psi2, residual_epsilon, s2_epsilon};
+	}();
 
-	constexpr std::size_t step_target = 5;
-	constexpr Scalar psi2 = 0;
-	Scalar const residual_epsilon = find_approx_min_edge_length() * 1e-3;
-	Scalar const s2_epsilon = std::pow(residual_epsilon, 2) * 1e-1;
+	Dofs dofs{m_mesh_io};
 
 	VerticesMatrix const mat_X = as_matrix(m_mesh_io.attrs.X);
 	auto mat_x = as_matrix(m_mesh_io.attrs.x);
-	VectorX vec_F{num_dofs};
-	VectorX vec_R{num_dofs};
-	MatrixX mat_K{num_dofs, num_dofs};
-	VectorX vec_u{num_dofs};
-	VectorX vec_uF{num_dofs};
-	VectorX vec_uR{num_dofs};
-	VectorX vec_delta_x{num_dofs};
+	VectorX vec_F{dofs.num_dofs};
+	VectorX vec_R{dofs.num_dofs};
+	MatrixX mat_K{dofs.num_dofs, dofs.num_dofs};
+	VectorX vec_u{dofs.num_dofs};
+	VectorX vec_uF{dofs.num_dofs};
+	VectorX vec_uR{dofs.num_dofs};
+	VectorX vec_delta_x{dofs.num_dofs};
 	Scalar delta_lambda = 0;
 	Scalar lambda = scalar(1e-1);
-	std::size_t step = step_target;
-	Scalar s2 = std::pow(residual_epsilon, 2);
+	std::size_t step = consts.step_target;
+	Scalar s2 = std::pow(consts.residual_epsilon, 2);
 
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
 		 increment_num++)
@@ -143,11 +137,9 @@ void Matrix::solve()
 		++stats.step_counter;
 
 		IncrementState const state = increment(
-			one_minus_fixed_dof,
-			residual_epsilon,
-			s2_epsilon,
+			consts,
+			dofs,
 			increment_num,
-			step_target,
 			step,
 			mat_x,
 			vec_uR,
@@ -165,10 +157,9 @@ void Matrix::solve()
 			break;
 
 		correction(
-			one_minus_fixed_dof,
-			residual_epsilon,
+			consts,
+			dofs,
 			increment_num,
-			psi2,
 			step,
 			mat_x,
 			vec_u,
@@ -185,11 +176,9 @@ void Matrix::solve()
 }
 
 Matrix::IncrementState Matrix::increment(
-	VectorX const & one_minus_fixed_dof,
-	Scalar const residual_epsilon,
-	Scalar const s2_epsilon,
+	Constants const & consts,
+	Dofs const & dofs,
 	std::size_t const increment_num,
-	std::size_t const step_target,
 	std::size_t & step,
 	EigenMapTensorVertices & mat_x,
 	VectorX & vec_uR,
@@ -203,7 +192,7 @@ Matrix::IncrementState Matrix::increment(
 	lambda = std::min(lambda, scalar(1));
 
 	update_elements_stiffness_and_residual(lambda);
-	assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+	assemble(mat_K, vec_R, vec_F, dofs.one_minus_fixed_dof);
 	vec_F /= lambda;
 
 	auto const mat_K_LU = mat_K.partialPivLu();
@@ -212,9 +201,9 @@ Matrix::IncrementState Matrix::increment(
 	if (lambda != 1)
 	{
 		// Increase/decrease arc length if below/above step target.
-		s2 *= 2 * scalar(step_target) / scalar(step + step_target);
+		s2 *= 2 * scalar(consts.step_target) / scalar(step + consts.step_target);
 		// Initial optimistic assumption that next increment needs no arc length refinement.
-		step = step_target;
+		step = consts.step_target;
 		// Initialise displacement to uncorrected solution.
 		vec_delta_x = vec_uR;
 		mat_x += as_matrix(vec_delta_x);
@@ -241,9 +230,9 @@ Matrix::IncrementState Matrix::increment(
 
 	stats.residual_norm = residual_norm;
 
-	if (residual_norm > residual_epsilon)
+	if (residual_norm > consts.residual_epsilon)
 	{
-		if (s2 > s2_epsilon)
+		if (s2 > consts.s2_epsilon)
 			// Try next arc direction.
 			return IncrementState::arc;
 	}
@@ -261,10 +250,9 @@ Matrix::IncrementState Matrix::increment(
 }
 
 void Matrix::correction(
-	Matrix::VectorX const & one_minus_fixed_dof,
-	Scalar const residual_epsilon,
+	Constants const & consts,
+	Dofs const & dofs,
 	std::size_t const increment_num,
-	Scalar const psi2,
 	size_t & step,
 	Matrix::EigenMapTensorVertices & mat_x,
 	Matrix::VectorX & vec_u,
@@ -283,7 +271,7 @@ void Matrix::correction(
 		++stats.step_counter;
 
 		update_elements_stiffness_and_residual(lambda);
-		assemble(mat_K, vec_R, vec_F, one_minus_fixed_dof);
+		assemble(mat_K, vec_R, vec_F, dofs.one_minus_fixed_dof);
 		vec_F /= lambda;
 
 		auto const mat_K_LU = mat_K.partialPivLu();
@@ -293,11 +281,11 @@ void Matrix::correction(
 		Scalar const residual_norm = vec_R.squaredNorm();
 
 		stats.residual_norm = residual_norm;
-		if (residual_norm < residual_epsilon)
+		if (residual_norm < consts.residual_epsilon)
 			return;
 
 		Scalar const gamma =
-			arc_length(vec_uF, vec_uR, vec_F, delta_lambda, psi2, vec_delta_x, vec_u, s2);
+			arc_length(vec_uF, vec_uR, vec_F, delta_lambda, consts.psi2, vec_delta_x, vec_u, s2);
 
 		SPDLOG_DEBUG(
 			"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
@@ -332,7 +320,7 @@ void Matrix::assemble(
 		for (auto cellh : m_mesh_io.vertex_cells(vtxh))
 		{
 			auto const & cell_vtxhs = m_mesh_io.attrs.vtxhs[cellh];
-			auto const & cell_vtx_idx = index_of<Eigen::Index>(cell_vtxhs, vtxh);
+			auto const & cell_vtx_idx = index_of<Index>(cell_vtxhs, vtxh);
 			auto const & cell_R = m_mesh_io.attrs.R[cellh];
 			auto const & cell_F = m_mesh_io.attrs.F[cellh];
 
@@ -471,6 +459,32 @@ std::tuple<Scalar, Scalar> Matrix::arc_length_multipliers(
 	auto const gamma2 = (-b - sqrt_discriminant) / (2 * a);
 
 	return {gamma1, gamma2};
+}
+
+Matrix::Index Matrix::Dofs::calc_num_dofs(const MeshIO & mesh_io)
+{
+	auto const num_vertices = static_cast<Index>(mesh_io.mesh.n_vertices());
+	return static_cast<Index>(Node::dim) * num_vertices;
+}
+
+Matrix::VectorX Matrix::Dofs::calc_fixed_dof(const MeshIO & mesh_io)
+{
+	auto const rows = static_cast<Index>(mesh_io.mesh.n_vertices());
+	constexpr auto cols = static_cast<Index>(Node::dim);
+
+	Matrix::EigenMapTensorVerticesConst const & map{
+		mesh_io.attrs.fixed_dof[Vtxh{0}].data(), rows, cols};
+	// Copy to remove per-row alignment.
+	Matrix::VectorX vec =
+		Eigen::Map<Matrix::VectorX>{Matrix::VerticesMatrix{map}.data(), rows * cols};
+	return vec;
+}
+
+Matrix::Dofs::Dofs(const MeshIO & mesh_io)
+	: num_dofs{calc_num_dofs(mesh_io)},
+	  fixed_dof{calc_fixed_dof(mesh_io)},
+	  one_minus_fixed_dof{VectorX::Ones(fixed_dof.size()) - fixed_dof}
+{
 }
 
 void Gauss::solve()
