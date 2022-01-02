@@ -127,14 +127,24 @@ private:
 		VectorX & vec_F,
 		VectorX const & one_minus_fixed_dof) const;
 
-	std::tuple<Scalar, Scalar> arc_length_multipliers(
+	Scalar arc_length(
+		VectorX const & vec_uF,
+		VectorX const & vec_uR,
+		VectorX const & vec_F,
+		Scalar delta_lambda,
+		Scalar psi2,
+		VectorX & vec_delta_x,
+		VectorX & vec_u,
+		Scalar & s2);
+
+	static std::tuple<Scalar, Scalar> arc_length_multipliers(
 		VectorX const & vec_uF,
 		VectorX const & vec_uR,
 		VectorX const & vec_F,
 		VectorX const & vec_delta_x,
-		Scalar const delta_lambda,
+		Scalar delta_lambda,
 		Scalar s2,
-		Scalar const psi2);
+		Scalar psi2);
 
 	template <typename T>
 	static std::enable_if_t<

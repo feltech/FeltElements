@@ -148,53 +148,6 @@ void Matrix::solve()
 			increment,
 			done
 		};
-		auto const arc_length = [this](
-									VectorX & vec_delta_x_,
-									VectorX & vec_u_,
-									Scalar & s2_,
-									VectorX const & vec_uR_,
-									VectorX const & vec_uF_,
-									VectorX const & vec_F_,
-									Scalar const delta_lambda_)
-		{
-			// Clamp arc length to minimum allowed radius.
-			{
-				VectorX const delta_xu = vec_delta_x_ + vec_uR_;
-				VectorX const n = vec_uF_.normalized();
-				VectorX const vec_s_min = delta_xu - n * n.dot(delta_xu);
-				Scalar const s2_min = vec_s_min.squaredNorm() * scalar(2);
-				if (s2_ < s2_min)
-					s2_ = s2_min;
-			}
-
-			Scalar gamma;
-			// Choose arc direction solution most aligned to current displacement direction.
-			{
-				auto [gamma1, gamma2] = arc_length_multipliers(
-					vec_uF_, vec_uR_, vec_F_, vec_delta_x_, delta_lambda_, s2_, psi2);
-
-				auto const vec_u1 = vec_uR_ + gamma1 * vec_uF_;
-				auto const vec_u2 = vec_uR_ + gamma2 * vec_uF_;
-				auto const vec_delta_x1 = vec_delta_x_ + vec_u1;
-				auto const vec_delta_x2 = vec_delta_x_ + vec_u2;
-				auto const x1_proj = vec_delta_x_.dot(vec_delta_x1);
-				auto const x2_proj = vec_delta_x_.dot(vec_delta_x2);
-
-				if (x1_proj > x2_proj)
-				{
-					gamma = gamma1;
-					vec_u_ = vec_u1;
-					vec_delta_x_ = vec_delta_x1;
-				}
-				else
-				{
-					gamma = gamma2;
-					vec_u_ = vec_u2;
-					vec_delta_x_ = vec_delta_x2;
-				}
-			};
-			return gamma;
-		};
 
 		State const state = [&]
 		{
@@ -285,7 +238,7 @@ void Matrix::solve()
 					return;
 
 				Scalar const gamma =
-					arc_length(vec_delta_x, vec_u, s2, vec_uR, vec_uF, vec_F, delta_lambda);
+					arc_length(vec_uF, vec_uR, vec_F, delta_lambda, psi2, vec_delta_x, vec_u, s2);
 
 				SPDLOG_DEBUG(
 					"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
@@ -384,13 +337,61 @@ void Matrix::assemble(
 	//	mat_K += penalty * fixed_dof.asDiagonal();
 }
 
+Scalar Matrix::arc_length(
+	VectorX const & vec_uF,
+	VectorX const & vec_uR,
+	VectorX const & vec_F,
+	Scalar delta_lambda,
+	Scalar psi2,
+	VectorX & vec_delta_x,
+	VectorX & vec_u,
+	Scalar & s2)
+{
+	// Clamp arc length to minimum allowed radius.
+	VectorX const delta_xu = vec_delta_x + vec_uR;
+	VectorX const n = vec_uF.normalized();
+	VectorX const vec_s_min = delta_xu - n * n.dot(delta_xu);
+	Scalar const s2_min = vec_s_min.squaredNorm() * scalar(2);
+	if (s2 < s2_min)
+		s2 = s2_min;
+
+	// Solve quadratic, giving two potential solutions.
+
+	auto [gamma1, gamma2] =
+		arc_length_multipliers(vec_uF, vec_uR, vec_F, vec_delta_x, delta_lambda, s2, psi2);
+
+	// Choose arc direction solution most aligned to current displacement direction.
+
+	auto const vec_u1 = vec_uR + gamma1 * vec_uF;
+	auto const vec_u2 = vec_uR + gamma2 * vec_uF;
+	auto const vec_delta_x1 = vec_delta_x + vec_u1;
+	auto const vec_delta_x2 = vec_delta_x + vec_u2;
+	auto const x1_proj = vec_delta_x.dot(vec_delta_x1);
+	auto const x2_proj = vec_delta_x.dot(vec_delta_x2);
+
+	Scalar gamma;
+	if (x1_proj > x2_proj)
+	{
+		gamma = gamma1;
+		vec_u = vec_u1;
+		vec_delta_x = vec_delta_x1;
+	}
+	else
+	{
+		gamma = gamma2;
+		vec_u = vec_u2;
+		vec_delta_x = vec_delta_x2;
+	}
+	return gamma;
+}
+
 std::tuple<Scalar, Scalar> Matrix::arc_length_multipliers(
 	VectorX const & vec_uF,
 	VectorX const & vec_uR,
 	VectorX const & vec_F,
 	VectorX const & vec_delta_x,
 	Scalar const delta_lambda,
-	Scalar s2,
+	Scalar const s2,
 	Scalar const psi2)
 {
 	Scalar const uF2 = vec_uF.squaredNorm();
