@@ -143,6 +143,7 @@ void Matrix::solve()
 			step,
 			mat_x,
 			vec_uR,
+			vec_uF,
 			vec_F,
 			vec_delta_x,
 			mat_K,
@@ -182,6 +183,7 @@ Matrix::IncrementState Matrix::increment(
 	std::size_t & step,
 	EigenMapTensorVertices & mat_x,
 	VectorX & vec_uR,
+	VectorX & vec_uF,
 	VectorX & vec_F,
 	VectorX & vec_delta_x,
 	MatrixX & mat_K,
@@ -243,7 +245,9 @@ Matrix::IncrementState Matrix::increment(
 	}
 
 	// Next load increment.
-	Scalar const uF2 = mat_K_LU.solve(vec_F).squaredNorm();
+	vec_uF = mat_K_LU.solve(vec_F);
+	Scalar const uF2 = vec_uF.squaredNorm();
+	// Estimate next lambda.
 	Scalar const gamma = std::sqrt(s2 / uF2);
 	lambda = std::min(lambda + gamma, scalar(1));
 

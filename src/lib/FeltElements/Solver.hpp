@@ -157,6 +157,7 @@ private:
 		std::size_t & step,
 		EigenMapTensorVertices & mat_x,
 		VectorX & vec_uR,
+		VectorX & vec_uF,
 		VectorX & vec_F,
 		VectorX & vec_delta_x,
 		MatrixX & mat_K,
