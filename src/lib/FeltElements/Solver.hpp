@@ -124,8 +124,8 @@ public:
 private:
 	enum class IncrementState
 	{
-		arc,
-		increment,
+		correction_is_needed,
+		increment_is_needed,
 		done
 	};
 

@@ -150,7 +150,7 @@ void Matrix::solve()
 			lambda,
 			s2);
 
-		if (state == IncrementState::increment)
+		if (state == IncrementState::increment_is_needed)
 			continue;
 
 		if (state == IncrementState::done)
@@ -234,7 +234,7 @@ Matrix::IncrementState Matrix::increment(
 	{
 		if (s2 > consts.s2_epsilon)
 			// Try next arc direction.
-			return IncrementState::arc;
+			return IncrementState::correction_is_needed;
 	}
 	else if (lambda == 1)
 	{
@@ -246,7 +246,8 @@ Matrix::IncrementState Matrix::increment(
 	Scalar const uF2 = mat_K_LU.solve(vec_F).squaredNorm();
 	Scalar const gamma = std::sqrt(s2 / uF2);
 	lambda = std::min(lambda + gamma, scalar(1));
-	return IncrementState::increment;
+
+	return IncrementState::increment_is_needed;
 }
 
 void Matrix::correction(
