@@ -83,11 +83,11 @@ Scalar Base::find_approx_min_edge_length() const
 
 namespace
 {
-void log_xs(Mesh const & mesh, Attributes const & attrs)
+void log_xs(MeshIO const & mesh_io)
 {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
 	std::string xs_str;
-	for (auto const & x : MeshIO{mesh, attrs}.xs()) { xs_str += fmt::format("{}\n", x); }
+	for (auto const & x : mesh_io.xs()) { xs_str += fmt::format("{}\n", x); }
 	spdlog::debug(xs_str);
 #else
 	(void)mesh;
@@ -226,7 +226,7 @@ Matrix::IncrementState Matrix::increment(
 		residual_norm,
 		mat_K_LU.rcond(),
 		mat_K_LU.determinant());
-	log_xs(m_mesh_io.mesh, m_mesh_io.attrs);
+	log_xs(m_mesh_io);
 
 	stats.residual_norm = residual_norm;
 
@@ -571,7 +571,7 @@ void Gauss::solve()
 			SPDLOG_DEBUG("Max norm: {}", max_norm);
 			stats.residual_norm = max_norm;
 
-			log_xs(m_mesh_io.mesh, m_mesh_io.attrs);
+			log_xs(m_mesh_io);
 
 			if (max_norm < epsilon)
 				break;
