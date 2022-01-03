@@ -25,3 +25,10 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
 		message(STATUS "IPO / LTO not supported: <${error}>")
 	endif()
 endif()
+
+# Set default spdlog logging level.
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+	target_compile_definitions(feltelements.app PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO)
+else()
+	target_compile_definitions(feltelements.app PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
+endif()

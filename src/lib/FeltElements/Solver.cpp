@@ -28,7 +28,7 @@ void Base::update_elements_stiffness_and_residual(Scalar const lambda)
 {
 	auto const num_cells = static_cast<int>(m_mesh_io.mesh.n_cells());
 
-	FE_PARALLEL(shared(num_cells, m_mesh_io.attrs, lambda))
+	FE_PARALLEL(shared(num_cells, m_mesh_io, lambda))
 	for (int cell_idx = 0; cell_idx < num_cells; cell_idx++)
 	{
 		Cellh cellh{cell_idx};
@@ -83,15 +83,12 @@ Scalar Base::find_approx_min_edge_length() const
 
 namespace
 {
-void log_xs(MeshIO const & mesh_io)
+void log_xs([[maybe_unused]] MeshIO const & mesh_io)
 {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
 	std::string xs_str;
 	for (auto const & x : mesh_io.xs()) { xs_str += fmt::format("{}\n", x); }
 	spdlog::debug(xs_str);
-#else
-	(void)mesh;
-	(void)attrs;
 #endif
 }
 
@@ -126,6 +123,7 @@ void Matrix::solve()
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
 		 increment_num++)
 	{
+		pauser.wait_while_paused();
 		++stats.force_increment_counter;
 		++stats.step_counter;
 
@@ -144,10 +142,11 @@ void Matrix::solve()
 
 		last_num_steps = correction(increment_num, consts, soln);
 	}
+	pauser.wait_while_paused();
 }
 
 Matrix::IncrementState Matrix::increment(
-	std::size_t const increment_num,
+	[[maybe_unused]] std::size_t const increment_num,
 	std::size_t const last_num_steps,
 	Constants const & consts,
 	Solution & soln)
@@ -215,11 +214,12 @@ Matrix::IncrementState Matrix::increment(
 }
 
 std::size_t Matrix::correction(
-	std::size_t const increment_num, Constants const & consts, Solution & soln)
+	[[maybe_unused]] std::size_t const increment_num, Constants const & consts, Solution & soln)
 {
 	std::size_t step = 0;
 	for (; step < m_params.num_steps; ++step)
 	{
+		pauser.wait_while_paused();
 		++stats.step_counter;
 
 		update_elements_stiffness_and_residual(soln.lambda);

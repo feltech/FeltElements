@@ -59,6 +59,11 @@ protected:
 			Pauser & pause;
 		};
 
+		Pauser()
+		{
+			lock.lock();
+		}
+
 		Unpauser scoped_pause() noexcept
 		{
 			flag.test_and_set();
