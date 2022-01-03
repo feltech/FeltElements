@@ -43,9 +43,9 @@ void Base::update_elements_stiffness_and_residual(Scalar const lambda)
 			*m_mesh_io.attrs.material,
 			*m_mesh_io.attrs.forces,
 			lambda);
-		m_attrs.F[cellh] = F;
-		m_attrs.R[cellh] = R;
-		m_attrs.K[cellh] = K;
+		m_mesh_attrs.F[cellh] = F;
+		m_mesh_attrs.R[cellh] = R;
+		m_mesh_attrs.K[cellh] = K;
 	}
 }
 
@@ -497,12 +497,12 @@ void Gauss::solve()
 
 	Node::Force const force_increment =
 		m_mesh_io.attrs.forces->F_by_m / m_params.num_force_increments;
-	m_attrs.forces->F_by_m = 0;
+	m_mesh_attrs.forces->F_by_m = 0;
 
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
 		 increment_num++)
 	{
-		m_attrs.forces->F_by_m += force_increment;
+		m_mesh_attrs.forces->F_by_m += force_increment;
 		stats.force_increment_counter++;
 
 		for (std::size_t step = 0; step < m_params.num_steps; step++)
@@ -517,7 +517,8 @@ void Gauss::solve()
 			max_norm = 0;
 			for (auto & u_a : u) u_a *= 0.99;  //.zeros();
 
-			FE_PARALLEL(shared(m_mesh_io, m_attrs, u, force_increment) reduction(max : max_norm))
+			FE_PARALLEL(shared(m_mesh_io, m_mesh_attrs, u, force_increment) reduction(max
+																					  : max_norm))
 			for (Tensor::Index a = 0; a < m_mesh_io.mesh.n_vertices(); a++)
 			{
 				Vtxh vtxh_src{static_cast<int>(a)};
@@ -560,7 +561,7 @@ void Gauss::solve()
 
 				using Tensor::Func::inv;
 				u[a] = inv(Kaa) % (-Ra - Ka_u) * (1.0 - fixed_dof);
-				m_attrs.x[vtxh_src] += u[a];
+				m_mesh_attrs.x[vtxh_src] += u[a];
 				using Tensor::Func::abs;
 				using Tensor::Func::max;
 				// Note: double-reduction in case OpenMP disabled.

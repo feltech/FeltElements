@@ -34,7 +34,7 @@ class Base
 {
 public:
 	Base(Mesh const & mesh, Attributes & attrs, Params params) noexcept
-		: m_mesh_io{mesh, attrs}, m_attrs{attrs}, m_params{params}
+		: m_mesh_io{mesh, attrs}, m_mesh_attrs{attrs}, m_params{params}
 	{
 	}
 	virtual ~Base() = default;
@@ -90,7 +90,7 @@ public:
 
 protected:
 	MeshIO const m_mesh_io;
-	Attributes & m_attrs;
+	Attributes & m_mesh_attrs;
 
 	Params m_params;
 };
