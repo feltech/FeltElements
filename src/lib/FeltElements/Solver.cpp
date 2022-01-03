@@ -121,7 +121,7 @@ void Matrix::solve()
 		return {Dofs{m_mesh_io}, as_matrix(m_mesh_io.attrs.x), lambda, s2};
 	}();
 
-	std::size_t step = consts.step_target;
+	std::size_t last_num_steps = consts.step_target;
 
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
 		 increment_num++)
@@ -129,22 +129,28 @@ void Matrix::solve()
 		++stats.force_increment_counter;
 		++stats.step_counter;
 
-		IncrementState const state = increment(increment_num, step, consts, soln);
+		IncrementState const state = increment(increment_num, last_num_steps, consts, soln);
 
 		if (state == IncrementState::increment_is_needed)
 		{
+			// Pretend arc correction happened and took exactly the desired number of steps.
+			last_num_steps = consts.step_target;
+			// Skip arc correction.
 			continue;
 		}
 
 		if (state == IncrementState::done)
 			break;
 
-		correction(increment_num, step, consts, soln);
+		last_num_steps = correction(increment_num, consts, soln);
 	}
 }
 
 Matrix::IncrementState Matrix::increment(
-	std::size_t const increment_num, std::size_t & step, Constants const & consts, Solution & soln)
+	std::size_t const increment_num,
+	std::size_t const last_num_steps,
+	Constants const & consts,
+	Solution & soln)
 {
 	soln.lambda = std::min(soln.lambda, scalar(1));
 
@@ -158,9 +164,7 @@ Matrix::IncrementState Matrix::increment(
 	if (soln.lambda != 1)
 	{
 		// Increase/decrease arc length if below/above step target.
-		soln.s2 *= 2 * scalar(consts.step_target) / scalar(step + consts.step_target);
-		// Initial optimistic assumption that next increment needs no arc length refinement.
-		step = consts.step_target;
+		soln.s2 *= 2 * scalar(consts.step_target) / scalar(last_num_steps + consts.step_target);
 		// Initialise displacement to uncorrected solution.
 		soln.vec_delta_x = soln.vec_uR;
 		soln.mat_x += as_matrix(soln.vec_delta_x);
@@ -192,6 +196,8 @@ Matrix::IncrementState Matrix::increment(
 		if (soln.s2 > consts.s2_epsilon)
 			// Try next arc direction.
 			return IncrementState::correction_is_needed;
+		// Otherwise, not met stopping condition, and insufficient available arc radius for a
+		// correction, so go on to next increment.
 	}
 	else if (soln.lambda == 1)
 	{
@@ -210,10 +216,11 @@ Matrix::IncrementState Matrix::increment(
 	return IncrementState::increment_is_needed;
 }
 
-void Matrix::correction(
-	std::size_t const increment_num, size_t & step, Constants const & consts, Solution & soln)
+std::size_t Matrix::correction(
+	std::size_t const increment_num, Constants const & consts, Solution & soln)
 {
-	for (step = 0; step < m_params.num_steps; ++step)
+	std::size_t step = 0;
+	for (; step < m_params.num_steps; ++step)
 	{
 		++stats.step_counter;
 
@@ -229,7 +236,7 @@ void Matrix::correction(
 
 		stats.residual_norm = residual_norm;
 		if (residual_norm < consts.residual_epsilon)
-			return;
+			break;
 
 		Scalar const gamma = arc_length(
 			soln.vec_uF,
@@ -259,6 +266,7 @@ void Matrix::correction(
 		soln.lambda += gamma;
 		soln.mat_x += as_matrix(soln.vec_delta_delta_x);
 	}
+	return step;
 }
 
 void Matrix::assemble(

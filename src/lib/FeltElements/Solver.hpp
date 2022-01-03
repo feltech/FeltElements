@@ -171,13 +171,12 @@ private:
 
 	IncrementState increment(
 		std::size_t increment_num,
-		std::size_t & step,
+		std::size_t last_num_steps,
 		Constants const & consts,
 		Solution& soln);
 
-	void correction(
+	std::size_t correction(
 		std::size_t increment_num,
-		std::size_t & step,
 		Constants const & consts,
 		Solution& soln);
 
