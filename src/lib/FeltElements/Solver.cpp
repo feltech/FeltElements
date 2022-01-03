@@ -158,24 +158,22 @@ Matrix::IncrementState Matrix::increment(
 	assemble(soln.mat_K, soln.vec_R, soln.vec_F, soln.dofs.one_minus_fixed_dof);
 	soln.vec_F /= soln.lambda;
 
+	// Solve the standard linear problem, K u = R
 	auto const mat_K_LU = soln.mat_K.partialPivLu();
 	soln.vec_uR = mat_K_LU.solve(-soln.vec_R);
+
+	// Initial (uncorrected) solution.
+	soln.mat_x += as_matrix(soln.vec_uR);
+
+	Scalar const residual_norm = soln.vec_uR.squaredNorm();
 
 	if (soln.lambda != 1)
 	{
 		// Increase/decrease arc length if below/above step target.
 		soln.s2 *= 2 * scalar(consts.step_target) / scalar(last_num_steps + consts.step_target);
-		// Initialise displacement to uncorrected solution.
+		// Initialise correction to be modified by arc length method.
 		soln.vec_delta_x = soln.vec_uR;
-		soln.mat_x += as_matrix(soln.vec_delta_x);
 	}
-	else
-	{
-		// If lambda is 1 then revert to standard non-arc-length solution.
-		soln.mat_x += as_matrix(soln.vec_uR);
-	}
-
-	Scalar const residual_norm = soln.vec_uR.squaredNorm();
 
 	SPDLOG_DEBUG(
 		"increment = {}; total steps = {}; lambda = {}; s2 = {}; max_norm = {}; rcond = {};"
