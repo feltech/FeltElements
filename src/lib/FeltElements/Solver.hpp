@@ -150,37 +150,36 @@ private:
 		static VectorX calc_fixed_dof(const MeshIO & mesh_io);
 	};
 
+	struct Solution
+	{
+		// Solution scope.
+		Dofs dofs;
+		EigenMapTensorVertices mat_x;
+		Scalar lambda;
+		Scalar s2;
+		// Step scope.
+		VectorX vec_F{dofs.num_dofs};
+		VectorX vec_R{dofs.num_dofs};
+		MatrixX mat_K{dofs.num_dofs, dofs.num_dofs};
+		VectorX vec_delta_x{dofs.num_dofs};
+		Scalar delta_lambda{0};
+		// Transients.
+		VectorX vec_uR{dofs.num_dofs};
+		VectorX vec_uF{dofs.num_dofs};
+		VectorX vec_delta_delta_x{dofs.num_dofs};
+	};
+
 	IncrementState increment(
-		Constants const & consts,
-		Dofs const & dofs,
 		std::size_t increment_num,
 		std::size_t & step,
-		EigenMapTensorVertices & mat_x,
-		VectorX & vec_uR,
-		VectorX & vec_uF,
-		VectorX & vec_F,
-		VectorX & vec_delta_x,
-		MatrixX & mat_K,
-		VectorX & vec_R,
-		Scalar & lambda,
-		Scalar & s2);
+		Constants const & consts,
+		Solution& soln);
 
 	void correction(
-		Constants const & consts,
-		Dofs const & dofs,
 		std::size_t increment_num,
 		std::size_t & step,
-		EigenMapTensorVertices & mat_x,
-		VectorX & vec_delta_delta_x,
-		VectorX & vec_uR,
-		VectorX & vec_uF,
-		VectorX & vec_F,
-		VectorX & vec_delta_x,
-		MatrixX & mat_K,
-		VectorX & vec_R,
-		Scalar & lambda,
-		Scalar & delta_lambda,
-		Scalar & s2);
+		Constants const & consts,
+		Solution& soln);
 
 	void assemble(
 		MatrixX & mat_K,

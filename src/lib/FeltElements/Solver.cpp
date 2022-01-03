@@ -114,21 +114,14 @@ void Matrix::solve()
 		return {step_target, psi2, residual_epsilon, s2_epsilon};
 	}();
 
-	Dofs dofs{m_mesh_io};
+	auto soln = [&]() -> Solution
+	{
+		Scalar const lambda = scalar(1e-1);
+		Scalar const s2 = std::pow(consts.residual_epsilon, 2);
+		return {Dofs{m_mesh_io}, as_matrix(m_mesh_io.attrs.x), lambda, s2};
+	}();
 
-	VerticesMatrix const mat_X = as_matrix(m_mesh_io.attrs.X);
-	auto mat_x = as_matrix(m_mesh_io.attrs.x);
-	VectorX vec_F{dofs.num_dofs};
-	VectorX vec_R{dofs.num_dofs};
-	MatrixX mat_K{dofs.num_dofs, dofs.num_dofs};
-	VectorX vec_u{dofs.num_dofs};
-	VectorX vec_uF{dofs.num_dofs};
-	VectorX vec_uR{dofs.num_dofs};
-	VectorX vec_delta_x{dofs.num_dofs};
-	Scalar delta_lambda = 0;
-	Scalar lambda = scalar(1e-1);
 	std::size_t step = consts.step_target;
-	Scalar s2 = std::pow(consts.residual_epsilon, 2);
 
 	for (std::size_t increment_num = 0; increment_num < m_params.num_force_increments;
 		 increment_num++)
@@ -136,95 +129,57 @@ void Matrix::solve()
 		++stats.force_increment_counter;
 		++stats.step_counter;
 
-		IncrementState const state = increment(
-			consts,
-			dofs,
-			increment_num,
-			step,
-			mat_x,
-			vec_uR,
-			vec_uF,
-			vec_F,
-			vec_delta_x,
-			mat_K,
-			vec_R,
-			lambda,
-			s2);
+		IncrementState const state = increment(increment_num, step, consts, soln);
 
 		if (state == IncrementState::increment_is_needed)
+		{
 			continue;
+		}
 
 		if (state == IncrementState::done)
 			break;
 
-		correction(
-			consts,
-			dofs,
-			increment_num,
-			step,
-			mat_x,
-			vec_u,
-			vec_uR,
-			vec_uF,
-			vec_F,
-			vec_delta_x,
-			mat_K,
-			vec_R,
-			lambda,
-			delta_lambda,
-			s2);
+		correction(increment_num, step, consts, soln);
 	}
 }
 
 Matrix::IncrementState Matrix::increment(
-	Constants const & consts,
-	Dofs const & dofs,
-	std::size_t const increment_num,
-	std::size_t & step,
-	EigenMapTensorVertices & mat_x,
-	VectorX & vec_uR,
-	VectorX & vec_uF,
-	VectorX & vec_F,
-	VectorX & vec_delta_x,
-	MatrixX & mat_K,
-	VectorX & vec_R,
-	Scalar & lambda,
-	Scalar & s2)
+	std::size_t const increment_num, std::size_t & step, Constants const & consts, Solution & soln)
 {
-	lambda = std::min(lambda, scalar(1));
+	soln.lambda = std::min(soln.lambda, scalar(1));
 
-	update_elements_stiffness_and_residual(lambda);
-	assemble(mat_K, vec_R, vec_F, dofs.one_minus_fixed_dof);
-	vec_F /= lambda;
+	update_elements_stiffness_and_residual(soln.lambda);
+	assemble(soln.mat_K, soln.vec_R, soln.vec_F, soln.dofs.one_minus_fixed_dof);
+	soln.vec_F /= soln.lambda;
 
-	auto const mat_K_LU = mat_K.partialPivLu();
-	vec_uR = mat_K_LU.solve(-vec_R);
+	auto const mat_K_LU = soln.mat_K.partialPivLu();
+	soln.vec_uR = mat_K_LU.solve(-soln.vec_R);
 
-	if (lambda != 1)
+	if (soln.lambda != 1)
 	{
 		// Increase/decrease arc length if below/above step target.
-		s2 *= 2 * scalar(consts.step_target) / scalar(step + consts.step_target);
+		soln.s2 *= 2 * scalar(consts.step_target) / scalar(step + consts.step_target);
 		// Initial optimistic assumption that next increment needs no arc length refinement.
 		step = consts.step_target;
 		// Initialise displacement to uncorrected solution.
-		vec_delta_x = vec_uR;
-		mat_x += as_matrix(vec_delta_x);
+		soln.vec_delta_x = soln.vec_uR;
+		soln.mat_x += as_matrix(soln.vec_delta_x);
 	}
 	else
 	{
 		// If lambda is 1 then revert to standard non-arc-length solution.
-		mat_x += as_matrix(vec_uR);
+		soln.mat_x += as_matrix(soln.vec_uR);
 	}
 
-	Scalar const residual_norm = vec_uR.squaredNorm();
+	Scalar const residual_norm = soln.vec_uR.squaredNorm();
 
 	SPDLOG_DEBUG(
 		"increment = {}; total steps = {}; lambda = {}; s2 = {}; max_norm = {}; rcond = {};"
 		" det(K) = {}",
 		increment_num,
 		stats.step_counter.load(),
-		lambda,
-		s2,
+		soln.lambda,
+		soln.s2,
 		residual_norm,
 		mat_K_LU.rcond(),
 		mat_K_LU.determinant());
@@ -234,81 +189,75 @@ Matrix::IncrementState Matrix::increment(
 
 	if (residual_norm > consts.residual_epsilon)
 	{
-		if (s2 > consts.s2_epsilon)
+		if (soln.s2 > consts.s2_epsilon)
 			// Try next arc direction.
 			return IncrementState::correction_is_needed;
 	}
-	else if (lambda == 1)
+	else if (soln.lambda == 1)
 	{
 		// Finished.
 		return IncrementState::done;
 	}
 
 	// Next load increment.
-	vec_uF = mat_K_LU.solve(vec_F);
-	Scalar const uF2 = vec_uF.squaredNorm();
+
+	soln.vec_uF = mat_K_LU.solve(soln.vec_F);
+	Scalar const uF2 = soln.vec_uF.squaredNorm();
 	// Estimate next lambda.
-	Scalar const gamma = std::sqrt(s2 / uF2);
-	lambda = std::min(lambda + gamma, scalar(1));
+	Scalar const gamma = std::sqrt(soln.s2 / uF2);
+	soln.lambda = std::min(soln.lambda + gamma, scalar(1));
 
 	return IncrementState::increment_is_needed;
 }
 
 void Matrix::correction(
-	Constants const & consts,
-	Dofs const & dofs,
-	std::size_t const increment_num,
-	size_t & step,
-	Matrix::EigenMapTensorVertices & mat_x,
-	Matrix::VectorX & vec_delta_delta_x,
-	Matrix::VectorX & vec_uR,
-	Matrix::VectorX & vec_uF,
-	Matrix::VectorX & vec_F,
-	Matrix::VectorX & vec_delta_x,
-	Matrix::MatrixX & mat_K,
-	Matrix::VectorX & vec_R,
-	Scalar & lambda,
-	Scalar & delta_lambda,
-	Scalar & s2)
+	std::size_t const increment_num, size_t & step, Constants const & consts, Solution & soln)
 {
 	for (step = 0; step < m_params.num_steps; ++step)
 	{
 		++stats.step_counter;
 
-		update_elements_stiffness_and_residual(lambda);
-		assemble(mat_K, vec_R, vec_F, dofs.one_minus_fixed_dof);
-		vec_F /= lambda;
+		update_elements_stiffness_and_residual(soln.lambda);
+		assemble(soln.mat_K, soln.vec_R, soln.vec_F, soln.dofs.one_minus_fixed_dof);
+		soln.vec_F /= soln.lambda;
 
-		auto const mat_K_LU = mat_K.partialPivLu();
-		vec_uR = mat_K_LU.solve(-vec_R);
-		vec_uF = mat_K_LU.solve(vec_F);
+		auto const mat_K_LU = soln.mat_K.partialPivLu();
+		soln.vec_uR = mat_K_LU.solve(-soln.vec_R);
+		soln.vec_uF = mat_K_LU.solve(soln.vec_F);
 
-		Scalar const residual_norm = vec_R.squaredNorm();
+		Scalar const residual_norm = soln.vec_R.squaredNorm();
 
 		stats.residual_norm = residual_norm;
 		if (residual_norm < consts.residual_epsilon)
 			return;
 
 		Scalar const gamma = arc_length(
-			vec_uF, vec_uR, vec_F, delta_lambda, consts.psi2, vec_delta_x, vec_delta_delta_x, s2);
+			soln.vec_uF,
+			soln.vec_uR,
+			soln.vec_F,
+			soln.delta_lambda,
+			consts.psi2,
+			soln.vec_delta_x,
+			soln.vec_delta_delta_x,
+			soln.s2);
 
 		SPDLOG_DEBUG(
 			"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
 			"{}; norm = {}; rcond = {}; det(K) = {}; delta_x2 = {}",
 			increment_num,
 			step,
-			lambda,
-			delta_lambda,
+			soln.lambda,
+			soln.delta_lambda,
 			gamma,
-			s2,
+			soln.s2,
 			residual_norm,
 			mat_K_LU.rcond(),
 			mat_K_LU.determinant(),
-			vec_delta_x.squaredNorm());
+			soln.vec_delta_x.squaredNorm());
 
-		delta_lambda += gamma;
-		lambda += gamma;
-		mat_x += as_matrix(vec_delta_delta_x);
+		soln.delta_lambda += gamma;
+		soln.lambda += gamma;
+		soln.mat_x += as_matrix(soln.vec_delta_delta_x);
 	}
 }
 
