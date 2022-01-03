@@ -178,18 +178,11 @@ private:
 		std::size_t increment_num,
 		std::size_t last_num_steps,
 		Constants const & consts,
-		Solution& soln);
+		Solution & soln);
 
-	std::size_t correction(
-		std::size_t increment_num,
-		Constants const & consts,
-		Solution& soln);
+	std::size_t correction(std::size_t increment_num, Constants const & consts, Solution & soln);
 
-	void assemble(
-		MatrixX & mat_K,
-		VectorX & vec_R,
-		VectorX & vec_F,
-		VectorX const & one_minus_fixed_dof) const;
+	void assemble(Dofs const & dofs, MatrixX & mat_K, VectorX & vec_R, VectorX & vec_F) const;
 
 	static Scalar arc_length(
 		VectorX const & vec_uF,

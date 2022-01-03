@@ -154,7 +154,7 @@ Matrix::IncrementState Matrix::increment(
 	soln.lambda = std::min(soln.lambda, scalar(1));
 
 	update_elements_stiffness_and_residual(soln.lambda);
-	assemble(soln.mat_K, soln.vec_R, soln.vec_F, soln.dofs.one_minus_fixed_dof);
+	assemble(soln.dofs, soln.mat_K, soln.vec_R, soln.vec_F);
 	soln.vec_F /= soln.lambda;
 
 	// Solve the standard linear problem, K u = R
@@ -223,7 +223,7 @@ std::size_t Matrix::correction(
 		++stats.step_counter;
 
 		update_elements_stiffness_and_residual(soln.lambda);
-		assemble(soln.mat_K, soln.vec_R, soln.vec_F, soln.dofs.one_minus_fixed_dof);
+		assemble(soln.dofs, soln.mat_K, soln.vec_R, soln.vec_F);
 		soln.vec_F /= soln.lambda;
 
 		auto const mat_K_LU = soln.mat_K.partialPivLu();
@@ -267,8 +267,7 @@ std::size_t Matrix::correction(
 	return step;
 }
 
-void Matrix::assemble(
-	MatrixX & mat_K, VectorX & vec_R, VectorX & vec_F, VectorX const & one_minus_fixed_dof) const
+void Matrix::assemble(Dofs const & dofs, MatrixX & mat_K, VectorX & vec_R, VectorX & vec_F) const
 {
 	vec_R.setZero();
 	vec_F.setZero();
@@ -323,23 +322,21 @@ void Matrix::assemble(
 	}
 
 	// Zero-out penalised degrees of freedom.
-	vec_R.array() *= one_minus_fixed_dof.array();
-	vec_F.array() *= one_minus_fixed_dof.array();
-	VectorX const fixed_dof =
-		VectorX::Constant(one_minus_fixed_dof.size(), 1.0) - one_minus_fixed_dof;
+	vec_R.array() *= dofs.one_minus_fixed_dof.array();
+	vec_F.array() *= dofs.one_minus_fixed_dof.array();
 
-	mat_K.array().colwise() *= one_minus_fixed_dof.array();
-	mat_K.array().rowwise() *= one_minus_fixed_dof.transpose().array();
+	mat_K.array().colwise() *= dofs.one_minus_fixed_dof.array();
+	mat_K.array().rowwise() *= dofs.one_minus_fixed_dof.transpose().array();
 	// Set non-zero fixed DOFs on diagonal to absolute row sums, to hopefully ensure K is diagonally
 	// dominant and thus non-singular.
-	mat_K.diagonal() += fixed_dof.transpose() +
-		(fixed_dof.asDiagonal() * mat_K).array().abs().colwise().sum().matrix();
+	mat_K.diagonal() += dofs.fixed_dof.transpose() +
+		(dofs.fixed_dof.asDiagonal() * mat_K).array().abs().colwise().sum().matrix();
 
-	//	// Inspect matrix to calculate penalty of relative size.
-	//	Scalar const penalty = pow(10, std::floor(std::log10(mat_K.lpNorm<Eigen::Infinity>()))) *
-	// 1e1;
-	//	// Set penalised degrees of freedom to penalty value.
-	//	mat_K += penalty * fixed_dof.asDiagonal();
+	//		// Inspect matrix to calculate penalty of relative size.
+	//		Scalar const penalty = pow(10, std::floor(std::log10(mat_K.lpNorm<Eigen::Infinity>()))) *
+	//1e1;
+	//		// Set penalised degrees of freedom to penalty value.
+	//		mat_K += penalty * dofs.fixed_dof.asDiagonal();
 }
 
 Scalar Matrix::arc_length(
