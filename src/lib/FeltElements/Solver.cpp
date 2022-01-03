@@ -256,7 +256,7 @@ void Matrix::correction(
 	std::size_t const increment_num,
 	size_t & step,
 	Matrix::EigenMapTensorVertices & mat_x,
-	Matrix::VectorX & vec_u,
+	Matrix::VectorX & vec_delta_delta_x,
 	Matrix::VectorX & vec_uR,
 	Matrix::VectorX & vec_uF,
 	Matrix::VectorX & vec_F,
@@ -285,8 +285,8 @@ void Matrix::correction(
 		if (residual_norm < consts.residual_epsilon)
 			return;
 
-		Scalar const gamma =
-			arc_length(vec_uF, vec_uR, vec_F, delta_lambda, consts.psi2, vec_delta_x, vec_u, s2);
+		Scalar const gamma = arc_length(
+			vec_uF, vec_uR, vec_F, delta_lambda, consts.psi2, vec_delta_x, vec_delta_delta_x, s2);
 
 		SPDLOG_DEBUG(
 			"increment = {}; step = {}; lambda = {}; delta_lambda = {}; gamma = {}; s2 = "
@@ -304,7 +304,7 @@ void Matrix::correction(
 
 		delta_lambda += gamma;
 		lambda += gamma;
-		mat_x += as_matrix(vec_u);
+		mat_x += as_matrix(vec_delta_delta_x);
 	}
 }
 
@@ -390,7 +390,7 @@ Scalar Matrix::arc_length(
 	Scalar delta_lambda,
 	Scalar psi2,
 	VectorX & vec_delta_x,
-	VectorX & vec_u,
+	VectorX & vec_delta_delta_x,
 	Scalar & s2)
 {
 	// Clamp arc length to minimum allowed radius.
@@ -419,13 +419,13 @@ Scalar Matrix::arc_length(
 	if (x1_proj > x2_proj)
 	{
 		gamma = gamma1;
-		vec_u = vec_u1;
+		vec_delta_delta_x = vec_u1;
 		vec_delta_x = vec_delta_x1;
 	}
 	else
 	{
 		gamma = gamma2;
-		vec_u = vec_u2;
+		vec_delta_delta_x = vec_u2;
 		vec_delta_x = vec_delta_x2;
 	}
 	return gamma;

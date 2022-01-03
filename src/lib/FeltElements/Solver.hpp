@@ -170,7 +170,7 @@ private:
 		std::size_t increment_num,
 		std::size_t & step,
 		EigenMapTensorVertices & mat_x,
-		VectorX & vec_u,
+		VectorX & vec_delta_delta_x,
 		VectorX & vec_uR,
 		VectorX & vec_uF,
 		VectorX & vec_F,
@@ -194,7 +194,7 @@ private:
 		Scalar delta_lambda,
 		Scalar psi2,
 		VectorX & vec_delta_x,
-		VectorX & vec_u,
+		VectorX & vec_delta_delta_x,
 		Scalar & s2);
 
 	static std::tuple<Scalar, Scalar> arc_length_multipliers(
